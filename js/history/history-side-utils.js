@@ -1,9 +1,7 @@
 window.CR = window.CR || {};
 
 (() => {
-  const CR = window.CR;
-
-  const LEGACY_SIDES = ['Aaron', 'Julie'];
+  const SIDE_KEYS = ['first', 'second'];
 
   function compact(value) {
     return String(value || '').trim();
@@ -12,11 +10,11 @@ window.CR = window.CR || {};
   function sideIndex(sideOrIndex) {
     if (typeof sideOrIndex === 'number') return sideOrIndex === 1 ? 1 : 0;
     const text = compact(sideOrIndex).toLowerCase();
-    return text === 'julie' || text === '2' || text === 'second' ? 1 : 0;
+    return ['1', 'second', 'player-2', 'player 2'].includes(text) ? 1 : 0;
   }
 
   function sideName(index) {
-    return LEGACY_SIDES[sideIndex(index)] || LEGACY_SIDES[0];
+    return SIDE_KEYS[sideIndex(index)] || SIDE_KEYS[0];
   }
 
   function userForSide(users = [], sideOrIndex = 0) {
@@ -32,10 +30,6 @@ window.CR = window.CR || {};
       user.user_id,
       user.scoreKey,
       user.score_key,
-      user.legacyOwner,
-      user.legacy_owner,
-      user.legacyOwnerKey,
-      user.legacy_owner_key,
       user.username,
       user.displayName,
       user.display_name,
@@ -54,8 +48,9 @@ window.CR = window.CR || {};
   }
 
   function scoreKeysForSide(users = [], sideOrIndex = 0) {
-    const legacyKey = sideIndex(sideOrIndex) === 1 ? 'julieScore' : 'aaronScore';
-    return pickKeysForSide(users, sideOrIndex).map(camelScoreKey).filter(Boolean).concat(legacyKey);
+    const index = sideIndex(sideOrIndex);
+    const genericKey = index === 1 ? 'secondScore' : 'firstScore';
+    return pickKeysForSide(users, sideOrIndex).map(camelScoreKey).filter(Boolean).concat(genericKey);
   }
 
   function sideScore(row = {}, sideOrIndex = 0, users = []) {
@@ -77,8 +72,6 @@ window.CR = window.CR || {};
       if (keys.includes(text)) return sideName(index);
     }
 
-    if (text === 'aaron') return 'Aaron';
-    if (text === 'julie') return 'Julie';
     return '';
   }
 
@@ -88,13 +81,13 @@ window.CR = window.CR || {};
 
     const first = sideScore(game, 0, users);
     const second = sideScore(game, 1, users);
-    if (first > second) return 'Aaron';
-    if (second > first) return 'Julie';
+    if (first > second) return sideName(0);
+    if (second > first) return sideName(1);
     return 'Tie';
   }
 
-  CR.historySideUtils = {
-    LEGACY_SIDES,
+  window.CR.historySideUtils = {
+    SIDE_KEYS,
     sideIndex,
     sideName,
     userForSide,
