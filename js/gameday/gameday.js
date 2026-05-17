@@ -248,8 +248,8 @@ window.CR = window.CR || {};
       CR.ui?.setActionBusy?.(button, true, { label: 'Undoing…' });
       await CR.gameDaySaveService?.undoLastDraftPick?.(CR.gameDay.currentGameId);
       CR.gameDayEdit?.clearEditing?.();
+      setModalOpen(false);
       await refreshGameDayData({ flash: true });
-      renderManageSheet();
       CR.showToast?.('Last draft pick undone');
     } catch (error) {
       console.error('Draft undo failed', error);
