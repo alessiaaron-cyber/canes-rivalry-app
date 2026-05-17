@@ -2,7 +2,7 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const OWNERS = ['Aaron', 'Julie'];
+  const FALLBACK_OWNER_NAMES = ['Aaron', 'Julie'];
 
   function hasScheduledGame() {
     const game = CR.gameDay?.game || {};
@@ -14,26 +14,62 @@ window.CR = window.CR || {};
   }
 
   function normalizeName(value) {
-    return String(value || '').trim().toLowerCase();
+    return CR.profileScoreUtils?.normalizeText?.(value) || String(value || '').trim().toLowerCase();
+  }
+
+  function fallbackUsers() {
+    return FALLBACK_OWNER_NAMES.map((name, index) => ({
+      id: '',
+      username: name.toLowerCase(),
+      displayName: name,
+      display_name: name,
+      legacyOwner: name,
+      legacy_owner_key: name,
+      rivalrySlot: index + 1,
+      rivalry_slot: index + 1
+    }));
   }
 
   function users() {
     return Array.isArray(CR.gameDay?.users) && CR.gameDay.users.length
       ? CR.gameDay.users
-      : OWNERS.map((name) => ({ id: '', displayName: name, username: name.toLowerCase() }));
+      : fallbackUsers();
+  }
+
+  function profileOwner(profile = {}) {
+    return CR.profileScoreUtils?.ownerKey?.(profile) || profile.legacyOwner || profile.legacy_owner_key || profile.displayName || profile.display_name || '';
+  }
+
+  function profileDisplayName(profile = {}) {
+    return CR.profileScoreUtils?.displayName?.(profile) || profile.displayName || profile.display_name || profile.username || profileOwner(profile);
   }
 
   function profileByDisplayName(name) {
-    return users().find((user) => normalizeName(user.displayName) === normalizeName(name));
+    const lookup = normalizeName(name);
+    return users().find((user) => [profileDisplayName(user), user.displayName, user.display_name, user.username, profileOwner(user)]
+      .some((value) => normalizeName(value) === lookup));
+  }
+
+  function profileById(id) {
+    const lookup = String(id || '').trim();
+    if (!lookup) return null;
+    return users().find((user) => String(user.id || '').trim() === lookup) || null;
   }
 
   function firstPickerProfile() {
-    const firstPicker = CR.gameDay?.draft?.firstPicker || CR.gameDay?.draft?.currentPicker?.displayName || OWNERS[0];
-    return profileByDisplayName(firstPicker) || users()[0] || null;
+    const draft = CR.gameDay?.draft || {};
+    const firstPicker = draft.firstPicker || draft.currentPicker?.id || draft.currentPicker?.displayName || profileOwner(users()[0]);
+    return profileById(firstPicker) || profileByDisplayName(firstPicker) || users()[0] || null;
   }
 
   function otherProfile(firstProfile) {
-    return users().find((user) => user.displayName !== firstProfile?.displayName) || users()[1] || null;
+    const firstId = String(firstProfile?.id || '').trim();
+    const firstOwner = normalizeName(profileOwner(firstProfile));
+    return users().find((user) => {
+      const userId = String(user.id || '').trim();
+      if (firstId && userId) return userId !== firstId;
+      return normalizeName(profileOwner(user)) !== firstOwner;
+    }) || users()[1] || null;
   }
 
   function draftTurnProfile(pickNumber = 1) {
@@ -76,11 +112,12 @@ window.CR = window.CR || {};
     };
   }
 
-  function rowForSlot(gameId, owner, pickSlot, playerName = '') {
+  function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '') {
+    const owner = profileOwner(ownerProfile);
     return {
       game_id: gameId,
       owner,
-      owner_user_id: profileByDisplayName(owner)?.id || null,
+      owner_user_id: ownerProfile?.id || null,
       pick_slot: pickSlot,
       player_name: playerName || '',
       original_pick_text: playerName || null,
@@ -94,7 +131,10 @@ window.CR = window.CR || {};
   }
 
   function rowsFromPregameState(gameId, pregame = {}) {
-    return OWNERS.flatMap((owner) => [0, 1].map((index) => rowForSlot(gameId, owner, index + 1, pregame[owner]?.[index] || '')));
+    return users().flatMap((profile) => {
+      const owner = profileOwner(profile);
+      return [0, 1].map((index) => rowForSlot(gameId, profile, index + 1, pregame[owner]?.[index] || ''));
+    });
   }
 
   async function savePregamePicks(gameId, pregame) {
@@ -129,8 +169,8 @@ window.CR = window.CR || {};
     const ownerProfile = draftTurnProfile(pickNumber);
     const userId = currentUserId();
 
-    if (!ownerProfile?.displayName) throw new Error('Could not determine current picker.');
-    if (!userId || ownerProfile.id !== userId) throw new Error(`It is ${ownerProfile.displayName}'s turn to pick.`);
+    if (!profileDisplayName(ownerProfile)) throw new Error('Could not determine current picker.');
+    if (!userId || ownerProfile.id !== userId) throw new Error(`It is ${profileDisplayName(ownerProfile)}'s turn to pick.`);
 
     const db = await CR.getSupabase();
 
@@ -146,7 +186,7 @@ window.CR = window.CR || {};
     if ((existingRes.data || []).length) throw new Error('That player has already been picked.');
 
     const slot = draftPickSlot(pickNumber);
-    const row = rowForSlot(gameId, ownerProfile.displayName, slot, playerName);
+    const row = rowForSlot(gameId, ownerProfile, slot, playerName);
     row.picked_by_user_id = userId;
 
     const upsertRes = await db
@@ -179,15 +219,16 @@ window.CR = window.CR || {};
 
     const ownerProfile = draftTurnProfile(undoPickNumber);
     const slot = draftPickSlot(undoPickNumber);
+    const owner = profileOwner(ownerProfile);
 
-    if (!ownerProfile?.displayName) throw new Error('Could not determine pick to undo.');
+    if (!profileDisplayName(ownerProfile)) throw new Error('Could not determine pick to undo.');
 
     const db = await CR.getSupabase();
     const existingRes = await db
       .from('picks')
       .select('*')
       .eq('game_id', gameId)
-      .eq('owner', ownerProfile.displayName)
+      .eq('owner', owner)
       .eq('pick_slot', slot)
       .maybeSingle();
 
@@ -196,7 +237,7 @@ window.CR = window.CR || {};
       throw new Error('There is no drafted player in the last pick slot.');
     }
 
-    const clearPatch = rowForSlot(gameId, ownerProfile.displayName, slot, '');
+    const clearPatch = rowForSlot(gameId, ownerProfile, slot, '');
 
     const pickUpdateRes = await db
       .from('picks')
