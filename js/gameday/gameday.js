@@ -287,8 +287,9 @@ window.CR = window.CR || {};
     else CR.ui?.unlockBodyScroll?.('manage-sheet-open');
   }
 
-  function updateGlobalLiveIndicator() {
+  function updateGlobalIndicators() {
     $('#globalLiveIndicator')?.classList.toggle('is-hidden', CR.gameDay.mode !== 'live');
+    $('#globalMockIndicator')?.classList.toggle('is-hidden', !CR.gameDayMockService?.isEnabled?.());
   }
 
   function renderHero() {
@@ -409,7 +410,7 @@ window.CR = window.CR || {};
     $('#phaseSwitcher')?.querySelectorAll('button').forEach((button) => button.classList.toggle('active', button.dataset.phase === mode));
     $('#modeSwitcher')?.querySelectorAll('button').forEach((button) => button.classList.toggle('active', button.dataset.playoffMode === CR.gameDay.playoffMode));
     $('#carryoverSwitcher')?.querySelectorAll('button').forEach((button) => button.classList.toggle('active', (button.dataset.carryover === 'on') === Boolean(CR.gameDay.carryover?.active)));
-    updateGlobalLiveIndicator();
+    updateGlobalIndicators();
     bindInteractions();
   };
 
