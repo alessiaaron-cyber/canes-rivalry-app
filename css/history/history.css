@@ -479,7 +479,7 @@
 .history-season-overview-score { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); display: grid; grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr); align-items: end; column-gap: 10px; }
 .history-season-overview-side { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; }
 .history-season-overview-side.is-right { text-align: center; }
-.history-season-overview-name { font-size: 12px; font-weight: var(--font-strong, 800); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.history-season-overview-name { font-size: 12px; font-weight: var(--font-strong, 800); text-transform: none; letter-spacing: 0.02em; color: var(--text-secondary); }
 .history-season-overview-divider { display: flex; align-items: center; justify-content: center; height: 36px; color: var(--text-tertiary); font-size: 20px; line-height: 1; font-weight: var(--font-heavy, 900); transform: translateY(1px); }
 
 .history-admin-sheet { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)); background: rgba(15, 23, 42, 0.24); z-index: 5002; }
