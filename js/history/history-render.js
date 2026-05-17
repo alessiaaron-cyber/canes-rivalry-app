@@ -36,10 +36,10 @@ window.CR = window.CR || {};
     };
   }
 
-  function seasonScores(data, season) {
+  function rowScores(data, row) {
     return {
-      first: Number(season?.totalsByUserId?.[userId(data, 0)] ?? season?.scoresByUserId?.[userId(data, 0)] ?? 0),
-      second: Number(season?.totalsByUserId?.[userId(data, 1)] ?? season?.scoresByUserId?.[userId(data, 1)] ?? 0)
+      first: Number(row?.firstScore ?? row?.totalsByUserId?.[userId(data, 0)] ?? row?.scoresByUserId?.[userId(data, 0)] ?? 0),
+      second: Number(row?.secondScore ?? row?.totalsByUserId?.[userId(data, 1)] ?? row?.scoresByUserId?.[userId(data, 1)] ?? 0)
     };
   }
 
@@ -180,11 +180,16 @@ window.CR = window.CR || {};
   }
 
   function renderSeasonCard(data, summary) {
-    const season = (data.seasons || []).find((item) => item.id === summary.seasonId);
-    const games = data.seasonGames?.[summary.seasonId] || [];
+    const seasonId = String(summary?.seasonId || summary?.id || '').trim();
+    const season = (data.seasons || []).find((item) => String(item.id) === seasonId) || null;
+    const games = data.seasonGames?.[seasonId] || [];
+    const summaryTotals = rowScores(data, summary);
     const gameTotals = games.reduce((acc, game) => { const scores = gameScores(data, game); acc.first += scores.first; acc.second += scores.second; return acc; }, { first: 0, second: 0 });
-    const seasonTotal = seasonScores(data, season);
-    const totals = { first: gameTotals.first || seasonTotal.first, second: gameTotals.second || seasonTotal.second };
+    const seasonTotals = rowScores(data, season);
+    const totals = {
+      first: summaryTotals.first || gameTotals.first || seasonTotals.first,
+      second: summaryTotals.second || gameTotals.second || seasonTotals.second
+    };
     const winner = seasonWinner(data, totals);
     const winnerClass = winnerThemeClass(data, winner);
     const leaderClass = leaderClassFromRecord(data, summary.recordText);
@@ -192,7 +197,7 @@ window.CR = window.CR || {};
     const featuredResult = seasonFeaturedResult(data, summary, games);
     const isCurrent = Boolean(season?.isCurrent || summary.isCurrent);
     const completionClass = isCurrent ? 'is-current' : 'is-complete';
-    return `<button class="history-season-overview-card ${winnerClass} ${completionClass}" type="button" data-history-open-season="${escapeHtml(summary.seasonId)}" aria-label="View ${escapeHtml(summary.label || season?.label || summary.seasonId)} season details"><div class="history-season-overview-topline"><div><div class="eyebrow">${escapeHtml(isCurrent ? 'Current season' : 'Completed season')}</div><h3>${escapeHtml(summary.label || season?.label || summary.seasonId)}</h3></div><span class="history-outcome-pill ${winnerClass}">${escapeHtml(seasonOutcomeText(data, winner, isCurrent))}</span></div><div class="history-season-overview-score"><div class="history-season-overview-side"><span class="history-season-overview-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(totals.first))}</strong></div><div class="history-season-overview-divider" aria-hidden="true">—</div><div class="history-season-overview-side is-right"><span class="history-season-overview-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(totals.second))}</strong></div></div><div class="history-season-overview-meta"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(summary.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(String(games.length))} games</span><span class="history-meta-pill">${escapeHtml(playoffCount ? `${playoffCount} playoff games` : 'No playoff games')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</button>`;
+    return `<button class="history-season-overview-card ${winnerClass} ${completionClass}" type="button" data-history-open-season="${escapeHtml(seasonId)}" aria-label="View ${escapeHtml(summary.label || season?.label || seasonId)} season details"><div class="history-season-overview-topline"><div><div class="eyebrow">${escapeHtml(isCurrent ? 'Current season' : 'Completed season')}</div><h3>${escapeHtml(summary.label || season?.label || seasonId)}</h3></div><span class="history-outcome-pill ${winnerClass}">${escapeHtml(seasonOutcomeText(data, winner, isCurrent))}</span></div><div class="history-season-overview-score"><div class="history-season-overview-side"><span class="history-season-overview-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(totals.first))}</strong></div><div class="history-season-overview-divider" aria-hidden="true">—</div><div class="history-season-overview-side is-right"><span class="history-season-overview-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(totals.second))}</strong></div></div><div class="history-season-overview-meta"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(summary.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(String(games.length))} games</span><span class="history-meta-pill">${escapeHtml(playoffCount ? `${playoffCount} playoff games` : 'No playoff games')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</button>`;
   }
 
   function renderSeasonsOverview(data) {
