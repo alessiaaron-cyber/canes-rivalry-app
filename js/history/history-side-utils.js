@@ -1,0 +1,109 @@
+window.CR = window.CR || {};
+
+(() => {
+  const CR = window.CR;
+
+  const LEGACY_SIDES = ['Aaron', 'Julie'];
+
+  function compact(value) {
+    return String(value || '').trim();
+  }
+
+  function sideIndex(sideOrIndex) {
+    if (typeof sideOrIndex === 'number') return sideOrIndex === 1 ? 1 : 0;
+    const text = compact(sideOrIndex).toLowerCase();
+    return text === 'julie' || text === '2' || text === 'second' ? 1 : 0;
+  }
+
+  function sideName(index) {
+    return LEGACY_SIDES[sideIndex(index)] || LEGACY_SIDES[0];
+  }
+
+  function userForSide(users = [], sideOrIndex = 0) {
+    return users[sideIndex(sideOrIndex)] || {};
+  }
+
+  function profileLookupKeys(user = {}, sideOrIndex = 0) {
+    const index = sideIndex(sideOrIndex);
+    return [
+      user.profileKey,
+      user.profile_key,
+      user.id,
+      user.user_id,
+      user.scoreKey,
+      user.score_key,
+      user.legacyOwner,
+      user.legacy_owner,
+      user.legacyOwnerKey,
+      user.legacy_owner_key,
+      user.username,
+      user.displayName,
+      user.display_name,
+      sideName(index)
+    ].filter(Boolean);
+  }
+
+  function pickKeysForSide(users = [], sideOrIndex = 0) {
+    return profileLookupKeys(userForSide(users, sideOrIndex), sideOrIndex);
+  }
+
+  function camelScoreKey(value) {
+    const text = compact(value);
+    if (!text) return '';
+    return `${text.charAt(0).toLowerCase()}${text.slice(1)}Score`;
+  }
+
+  function scoreKeysForSide(users = [], sideOrIndex = 0) {
+    const legacyKey = sideIndex(sideOrIndex) === 1 ? 'julieScore' : 'aaronScore';
+    return pickKeysForSide(users, sideOrIndex).map(camelScoreKey).filter(Boolean).concat(legacyKey);
+  }
+
+  function sideScore(row = {}, sideOrIndex = 0, users = []) {
+    const key = scoreKeysForSide(users, sideOrIndex).find((candidate) => row?.[candidate] !== undefined && row?.[candidate] !== null);
+    return Number(row?.[key] ?? 0);
+  }
+
+  function picksForSide(game = {}, sideOrIndex = 0, users = []) {
+    const key = pickKeysForSide(users, sideOrIndex).find((candidate) => Array.isArray(game.picks?.[candidate]));
+    return game.picks?.[key] || [];
+  }
+
+  function ownerForWinner(winner, users = []) {
+    const text = compact(winner).toLowerCase();
+    if (!text || text === 'tie') return text ? 'Tie' : '';
+
+    for (let index = 0; index < 2; index += 1) {
+      const keys = pickKeysForSide(users, index).map((key) => compact(key).toLowerCase());
+      if (keys.includes(text)) return sideName(index);
+    }
+
+    if (text === 'aaron') return 'Aaron';
+    if (text === 'julie') return 'Julie';
+    return '';
+  }
+
+  function scoreWinner(game = {}, users = []) {
+    const normalized = ownerForWinner(game?.winner, users);
+    if (normalized) return normalized;
+
+    const first = sideScore(game, 0, users);
+    const second = sideScore(game, 1, users);
+    if (first > second) return 'Aaron';
+    if (second > first) return 'Julie';
+    return 'Tie';
+  }
+
+  CR.historySideUtils = {
+    LEGACY_SIDES,
+    sideIndex,
+    sideName,
+    userForSide,
+    profileLookupKeys,
+    pickKeysForSide,
+    scoreKeysForSide,
+    sideScore,
+    picksForSide,
+    ownerForWinner,
+    scoreWinner
+  };
+})();
