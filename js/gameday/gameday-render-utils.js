@@ -21,7 +21,7 @@ window.CR = window.CR || {};
 
   function legacyOwner(index) {
     const profileUser = user(index);
-    return profileUser.legacyOwner || profileUser.legacy_owner || (index === 0 ? 'Aaron' : 'Julie');
+    return profileUser.legacyOwner || profileUser.legacy_owner || profileUser.legacy_owner_key || (index === 0 ? 'Aaron' : 'Julie');
   }
 
   function ownerClass(index) {
@@ -53,7 +53,20 @@ window.CR = window.CR || {};
   }
 
   function lookupKeys(index) {
-    return [scoreKey(index), legacyOwner(index), user(index).username, userName(index), index === 0 ? 'Aaron' : 'Julie'].filter(Boolean);
+    const profileUser = user(index);
+    return [
+      profileUser.id,
+      profileUser.user_id,
+      scoreKey(index),
+      profileUser.scoreKey,
+      profileUser.score_key,
+      legacyOwner(index),
+      profileUser.username,
+      profileUser.displayName,
+      profileUser.display_name,
+      userName(index),
+      index === 0 ? 'Aaron' : 'Julie'
+    ].filter(Boolean);
   }
 
   function getUserPicks(users, index) {
