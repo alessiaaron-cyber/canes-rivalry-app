@@ -23,24 +23,40 @@ window.CR = window.CR || {};
 
   function scoreFor(row = {}, users = [], index = 0) {
     const id = userId(users, index);
-    return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id]);
+    return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id] ?? row.firstScore);
+  }
+
+  function scoreForSide(row = {}, users = [], index = 0) {
+    const id = userId(users, index);
+    const sideValue = index === 1 ? row.secondScore : row.firstScore;
+    return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id] ?? sideValue);
+  }
+
+  function resolveSeasonId(value) {
+    return String(value || '').trim();
+  }
+
+  function findSeason(model, seasonId) {
+    const lookup = resolveSeasonId(seasonId);
+    return (model.seasons || []).find((season) => resolveSeasonId(season.id) === lookup) || null;
   }
 
   function canonicalGames(model, seasonId = '') {
     const games = model.games || [];
-    if (!seasonId) return games;
-    return games.filter((game) => String(game.seasonId || game.season_id || '') === String(seasonId));
+    const lookup = resolveSeasonId(seasonId);
+    if (!lookup) return games;
+    return games.filter((game) => resolveSeasonId(game.seasonId || game.season_id) === lookup);
   }
 
   function scoreTotal(games, index, users) {
-    return games.reduce((total, game) => total + scoreFor(game, users, index), 0);
+    return games.reduce((total, game) => total + scoreForSide(game, users, index), 0);
   }
 
   function seasonTotals(season, seasonGames, users) {
     const gameFirst = scoreTotal(seasonGames, 0, users);
     const gameSecond = scoreTotal(seasonGames, 1, users);
-    const seasonFirst = scoreFor(season, users, 0);
-    const seasonSecond = scoreFor(season, users, 1);
+    const seasonFirst = scoreForSide(season, users, 0);
+    const seasonSecond = scoreForSide(season, users, 1);
     return {
       first: gameFirst || seasonFirst,
       second: gameSecond || seasonSecond,
@@ -64,7 +80,7 @@ window.CR = window.CR || {};
   }
 
   function hasRealScore(game, users) {
-    return scoreFor(game, users, 0) + scoreFor(game, users, 1) > 0;
+    return scoreForSide(game, users, 0) + scoreForSide(game, users, 1) > 0;
   }
 
   function scoredGames(games = [], users) {
@@ -74,8 +90,8 @@ window.CR = window.CR || {};
   function scoreWinner(game, users) {
     const winnerId = String(game?.winnerUserId || game?.winner_user_id || '').trim();
     if (winnerId) return winnerId;
-    const first = scoreFor(game, users, 0);
-    const second = scoreFor(game, users, 1);
+    const first = scoreForSide(game, users, 0);
+    const second = scoreForSide(game, users, 1);
     if (first > second) return userId(users, 0);
     if (second > first) return userId(users, 1);
     return 'Tie';
@@ -176,7 +192,7 @@ window.CR = window.CR || {};
       } else {
         current = { owner: '', count: 0 };
       }
-      const margin = Math.abs(scoreFor(game, users, 0) - scoreFor(game, users, 1));
+      const margin = Math.abs(scoreForSide(game, users, 0) - scoreForSide(game, users, 1));
       if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game) };
       const scorer = firstGoalScorer(game, users);
       if (scorer && scorer !== '—') firstGoalCounts.set(scorer, (firstGoalCounts.get(scorer) || 0) + 1);
@@ -217,10 +233,11 @@ window.CR = window.CR || {};
   }
 
   function buildSeasonScopedData(model, seasonId) {
-    const selectedSeason = model.seasons.find((season) => season.id === seasonId) || model.seasons[0] || null;
-    const resolvedSeasonId = selectedSeason?.id || seasonId;
+    const requestedId = resolveSeasonId(seasonId || model.currentSeasonId);
+    const selectedSeason = findSeason(model, requestedId) || findSeason(model, model.currentSeasonId) || model.seasons[0] || null;
+    const resolvedSeasonId = resolveSeasonId(selectedSeason?.id || requestedId);
     const selectedGames = canonicalGames(model, resolvedSeasonId);
-    const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
+    const selectedSummary = (model.seasonSummaries || []).find((season) => resolveSeasonId(season.seasonId || season.id) === resolvedSeasonId) || null;
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
     const seasonHighlights = buildHighlights(gameLog, users);
@@ -237,8 +254,8 @@ window.CR = window.CR || {};
 
   function scoreSignature(model = {}) {
     return canonicalGames(model).map((game) => {
-      const first = scoreFor(game, model.users || [], 0);
-      const second = scoreFor(game, model.users || [], 1);
+      const first = scoreForSide(game, model.users || [], 0);
+      const second = scoreForSide(game, model.users || [], 1);
       return `${game.id}:${game.seasonId || game.season_id || ''}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
     }).join('|');
   }
@@ -338,7 +355,7 @@ window.CR = window.CR || {};
       CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
       CR.historyCache = { staticData: null, seasons: {}, signature: '' };
       CR.historyPanelKeys = { hq: '', seasons: '', all_games: '', admin: '' };
-      const validSeason = CR.historyData.seasons?.some((season) => season.id === previousState.seasonId);
+      const validSeason = CR.historyData.seasons?.some((season) => String(season.id) === String(previousState.seasonId));
       CR.historyState = { seasonId: validSeason ? previousState.seasonId : CR.historyData.currentSeasonId, view: previousState.view || 'hq', previousView: previousState.previousView || 'hq', returnView: previousState.returnView || 'hq', sheet: previousState.sheet?.open && !options.closeSheet ? previousState.sheet : { open: false } };
       CR.historyNeedsRefresh = false;
       renderHistory();
