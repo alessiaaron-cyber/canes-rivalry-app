@@ -146,12 +146,12 @@ window.CR = window.CR || {};
     return Array.from(byPlayer.values()).sort((a, b) => b.totalPoints - a.totalPoints || b.gamesPicked - a.gamesPicked).slice(0, 3);
   }
 
-  function buildRecentTen(gameLog, users) {
-    return scoredGames(gameLog, users).slice(0, 10);
+  function buildRecentTen(gameLog) {
+    return (gameLog || []).slice(0, 10);
   }
 
   function buildRecentRecord(games, users) {
-    return buildRecentTen(games, users).reduce((acc, game) => {
+    return buildRecentTen(games).reduce((acc, game) => {
       const winner = scoreWinner(game, users);
       if (winner === 'Aaron') acc.aaron += 1;
       else if (winner === 'Julie') acc.julie += 1;
@@ -216,7 +216,7 @@ window.CR = window.CR || {};
   }
 
   function buildMomentum(gameLog, users) {
-    return buildRecentTen(gameLog, users).map((game) => ({ winner: scoreWinner(game, users), playoff: Boolean(game.playoff), id: game.id }));
+    return buildRecentTen(gameLog).map((game) => ({ winner: scoreWinner(game, users), playoff: Boolean(game.playoff), id: game.id }));
   }
 
   function gameSortValue(game) {
@@ -249,7 +249,7 @@ window.CR = window.CR || {};
     return {
       firstTenModelGames: (model.games || []).slice(0, 10).map((game) => debugGameRow(game, users)),
       firstTenGlobalLog: globalLog.slice(0, 10).map((game) => debugGameRow(game, users)),
-      firstTenAfterScoreFilter: buildRecentTen(globalLog, users).map((game) => debugGameRow(game, users)),
+      firstTenAfterScoreFilter: buildRecentTen(globalLog).map((game) => debugGameRow(game, users)),
       hqMomentum: (hqSeasonData?.momentum || []).map((item) => ({ id: item.id, winner: item.winner, playoff: item.playoff })),
       seasonRecentCards: (seasonGameLog || []).slice(0, 10).map((game) => debugGameRow(game, users))
     };
@@ -259,7 +259,7 @@ window.CR = window.CR || {};
     const totals = seasonTotals(season, gameLog, users);
     const aaron = totals.aaron;
     const julie = totals.julie;
-    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog, users)[0]?.title || '' };
+    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
@@ -270,7 +270,7 @@ window.CR = window.CR || {};
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
     const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames, users), users);
-    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog, users).slice(0, 4), gameLog, playerSpotlights };
+    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog).slice(0, 4), gameLog, playerSpotlights };
   }
 
   function buildHqSeasonData(model, seasonId) {
