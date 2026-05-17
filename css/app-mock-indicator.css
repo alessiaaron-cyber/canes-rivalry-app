@@ -1,0 +1,29 @@
+.global-live-indicator,
+.global-mock-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 13px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: var(--font-heavy);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.global-mock-indicator {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid rgba(194, 65, 12, 0.14);
+  box-shadow: 0 10px 22px rgba(194, 65, 12, 0.10);
+}
+
+.global-live-indicator.is-hidden,
+.global-mock-indicator.is-hidden {
+  display: none;
+}
