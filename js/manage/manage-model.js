@@ -22,9 +22,9 @@ window.CR = window.CR || {};
     { label: 'Deep Violet', hex: '#581c87', family: 'purple' }
   ];
 
-  const FALLBACK_USERS = [
-    { id: 'aaron', username: 'Aaron', displayName: 'Aaron', legacyOwner: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', colorHex: '#c8102e', colorLabel: 'Canes Red' },
-    { id: 'julie', username: 'Julie', displayName: 'Julie', legacyOwner: 'Julie', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie', colorHex: '#111827', colorLabel: 'Graphite' }
+  const DEFAULT_USERS = [
+    { id: 'player-1', username: 'player-1', displayName: 'Player 1', themeClass: 'owner-primary', avatarClass: 'avatar-primary', profileKey: 'player-1', colorHex: '#c8102e', colorLabel: 'Canes Red' },
+    { id: 'player-2', username: 'player-2', displayName: 'Player 2', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', profileKey: 'player-2', colorHex: '#111827', colorLabel: 'Graphite' }
   ];
 
   const MOCK_ROSTER = [
@@ -37,23 +37,22 @@ window.CR = window.CR || {};
 
   function getManageUsers() {
     const identityUsers = CR.identity?.getUsers?.();
-    const source = Array.isArray(identityUsers) && identityUsers.length ? identityUsers : FALLBACK_USERS;
-    return source.map((user, index) => {
-      const fallback = FALLBACK_USERS[index] || FALLBACK_USERS[0];
-      const displayName = user.displayName || user.display_name || user.username || `Player ${index + 1}`;
+    const source = Array.isArray(identityUsers) && identityUsers.length ? identityUsers : DEFAULT_USERS;
+    return source.slice(0, 2).map((user, index) => {
+      const fallback = DEFAULT_USERS[index] || DEFAULT_USERS[0];
+      const displayName = user.displayName || user.display_name || user.username || fallback.displayName;
       const username = user.username || fallback.username || displayName;
-      const legacyOwner = user.legacyOwner || user.legacy_owner || fallback.legacyOwner || fallback.scoreKey;
-      const scoreKey = user.scoreKey || user.score_key || legacyOwner || username;
+      const profileKey = user.profileKey || user.profile_key || user.id || fallback.profileKey || username;
 
       return {
-        id: user.id || `user-${index + 1}`,
+        id: user.id || fallback.id || `player-${index + 1}`,
         username,
         displayName,
         label: displayName,
-        legacyOwner,
-        themeClass: user.themeClass || (index === 0 ? 'owner-primary' : 'owner-secondary'),
-        avatarClass: user.avatarClass || (index === 0 ? 'avatar-primary' : 'avatar-secondary'),
-        scoreKey,
+        profileKey,
+        profile_key: profileKey,
+        themeClass: user.themeClass || user.theme_class || fallback.themeClass || (index === 0 ? 'owner-primary' : 'owner-secondary'),
+        avatarClass: user.avatarClass || user.avatar_class || fallback.avatarClass || (index === 0 ? 'avatar-primary' : 'avatar-secondary'),
         colorHex: user.colorHex || user.color_hex || fallback.colorHex || '#111827',
         colorLabel: user.colorLabel || user.color_label || fallback.colorLabel || 'Profile color'
       };
