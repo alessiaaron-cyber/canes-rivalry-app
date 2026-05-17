@@ -5,8 +5,8 @@ window.CR = window.CR || {};
   const pointsForPick = (pick) => ((pick.goals || 0) * 2) + (pick.assists || 0) + (pick.firstGoal ? 2 : 0);
 
   const FALLBACK_USERS = [
-    { username: 'Aaron', displayName: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', profileKey: 'Aaron' },
-    { username: 'Julie', displayName: 'Julie', themeClass: 'owner-secondary', avatarClass: 'owner-secondary', scoreKey: 'Julie', profileKey: 'Julie' }
+    { username: 'player-1', displayName: 'Player 1', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'player-1', profileKey: 'player-1' },
+    { username: 'player-2', displayName: 'Player 2', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'player-2', profileKey: 'player-2' }
   ];
 
   function clone(value) {
@@ -22,20 +22,25 @@ window.CR = window.CR || {};
     return source.map((user, index) => ({
       ...user,
       username: user.username || user.displayName || FALLBACK_USERS[index]?.username || `Player ${index + 1}`,
-      displayName: user.displayName || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
+      displayName: user.displayName || user.display_name || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
+      display_name: user.displayName || user.display_name || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
       themeClass: user.themeClass || user.theme_class || FALLBACK_USERS[index]?.themeClass || (index === 0 ? 'owner-primary' : 'owner-secondary'),
       avatarClass: user.avatarClass || user.avatar_class || FALLBACK_USERS[index]?.avatarClass || (index === 0 ? 'avatar-primary' : 'avatar-secondary'),
-      scoreKey: user.scoreKey || user.score_key || user.username || FALLBACK_USERS[index]?.scoreKey || `Player ${index + 1}`,
-      profileKey: user.profileKey || user.profile_key || user.id || user.displayName || user.username || FALLBACK_USERS[index]?.profileKey || `Player ${index + 1}`,
-      profile_key: user.profileKey || user.profile_key || user.id || user.displayName || user.username || FALLBACK_USERS[index]?.profileKey || `Player ${index + 1}`
+      scoreKey: user.scoreKey || user.score_key || user.id || user.username || FALLBACK_USERS[index]?.scoreKey || `player-${index + 1}`,
+      profileKey: user.profileKey || user.profile_key || user.id || FALLBACK_USERS[index]?.profileKey || `player-${index + 1}`,
+      profile_key: user.profileKey || user.profile_key || user.id || FALLBACK_USERS[index]?.profileKey || `player-${index + 1}`
     }));
   }
 
   function scoreFor(game, users, index) {
+    if (index === 0 && game?.firstScore !== undefined) return Number(game.firstScore || 0);
+    if (index === 1 && game?.secondScore !== undefined) return Number(game.secondScore || 0);
     const user = users[index] || FALLBACK_USERS[index];
-    const scoreKey = `${String(user.scoreKey || user.username || '').toLowerCase()}Score`;
-    const legacyKey = index === 0 ? 'aaronScore' : 'julieScore';
-    return Number(game?.[scoreKey] ?? game?.[legacyKey] ?? 0);
+    const userId = String(user?.id || '').trim();
+    const profileKey = String(user?.profileKey || user?.profile_key || '').trim();
+    if (userId && game?.scoresByUserId?.[userId] !== undefined) return Number(game.scoresByUserId[userId] || 0);
+    if (profileKey && game?.scoresByUserId?.[profileKey] !== undefined) return Number(game.scoresByUserId[profileKey] || 0);
+    return 0;
   }
 
   function pickKeyOptions(user, index) {
@@ -48,11 +53,14 @@ window.CR = window.CR || {};
       user?.username,
       user?.displayName,
       user?.display_name,
-      index === 0 ? 'Aaron' : 'Julie'
+      index === 0 ? 'first' : 'second'
     ].filter(Boolean);
   }
 
   function winner(game, users = FALLBACK_USERS) {
+    if (String(game?.winner || '').toLowerCase() === 'tie') return 'Tie';
+    const matched = users.find((user, index) => pickKeyOptions(user, index).map((key) => String(key).toLowerCase()).includes(String(game?.winner || '').toLowerCase()));
+    if (matched) return matched.displayName || matched.username || 'Player';
     const firstScore = scoreFor(game, users, 0);
     const secondScore = scoreFor(game, users, 1);
     if (firstScore > secondScore) return users[0]?.displayName || users[0]?.username || 'Player 1';
@@ -75,7 +83,7 @@ window.CR = window.CR || {};
       const sourceKey = pickKeyOptions(user, index).find((key) => Array.isArray(game.picks?.[key]));
 
       acc[targetKey] = (game.picks?.[sourceKey] || []).map((pick) => {
-        const player = map.get(pick.playerId) || { name: pick.playerId, position: '—', vibe: '' };
+        const player = map.get(pick.playerId) || { name: pick.playerName || pick.playerId, position: '—', vibe: '' };
         return {
           ...pick,
           playerName: player.name,
@@ -94,6 +102,8 @@ window.CR = window.CR || {};
 
     return {
       ...game,
+      firstScore,
+      secondScore,
       playoff: isPlayoffGame(game),
       winner: gameWinner,
       margin: Math.abs(firstScore - secondScore),
@@ -120,7 +130,7 @@ window.CR = window.CR || {};
     });
 
     const bestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(b, users, 0) - scoreFor(b, users, 1)) - Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)))[0] || null;
-    const closestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)) - Math.abs(scoreFor(b, users, 0) - scoreFor(b, users, 1)))[0] || null;
+    const closestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)) - Math.abs(scoreFor(b, users, 0) - Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1))))[0] || null;
 
     return {
       seasonId: season.id,
