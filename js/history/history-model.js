@@ -40,7 +40,27 @@ window.CR = window.CR || {};
   function scoreFor(row, users, index) {
     const user = userAt(users, index);
     const sideValue = index === 1 ? row?.secondScore : row?.firstScore;
-    return toNumber(row?.scoresByUserId?.[user.id] ?? row?.totalsByUserId?.[user.id] ?? sideValue);
+    return toNumber(row?.totalsByUserId?.[user.id] ?? row?.scoresByUserId?.[user.id] ?? sideValue);
+  }
+
+  function normalizeSeason(season, users) {
+    const firstUser = userAt(users, 0);
+    const secondUser = userAt(users, 1);
+    const sourceTotals = season.totalsByUserId || season.scoresByUserId || {};
+    const firstScore = toNumber(sourceTotals[firstUser.id] ?? season.firstScore);
+    const secondScore = toNumber(sourceTotals[secondUser.id] ?? season.secondScore);
+    const totalsByUserId = {
+      [firstUser.id]: firstScore,
+      [secondUser.id]: secondScore
+    };
+    return {
+      ...season,
+      id: normalizeId(season.id),
+      firstScore,
+      secondScore,
+      totalsByUserId,
+      scoresByUserId: totalsByUserId
+    };
   }
 
   function scoreMapFromPicks(picks, users) {
@@ -92,10 +112,11 @@ window.CR = window.CR || {};
     }, {});
     const derivedScores = scoreMapFromPicks(picks, users);
     const sourceScores = game.scoresByUserId || {};
-    const scoresByUserId = users.reduce((acc, user) => {
-      const sourceValue = toNumber(sourceScores[user.id]);
-      const derivedValue = toNumber(derivedScores[user.id]);
-      acc[user.id] = sourceValue || derivedValue;
+    const scoresByUserId = users.reduce((acc, user, index) => {
+      const sideValue = index === 1 ? game.secondScore : game.firstScore;
+      const hasSource = Object.prototype.hasOwnProperty.call(sourceScores, user.id);
+      const hasDerived = Object.prototype.hasOwnProperty.call(derivedScores, user.id);
+      acc[user.id] = hasSource ? toNumber(sourceScores[user.id]) : hasDerived ? toNumber(derivedScores[user.id]) : toNumber(sideValue);
       return acc;
     }, {});
     const firstScore = toNumber(scoresByUserId[userAt(users, 0).id]);
@@ -123,8 +144,8 @@ window.CR = window.CR || {};
   function buildSeasonSummary(season, seasonGames, users) {
     const first = userName(users, 0);
     const second = userName(users, 1);
-    const firstScore = seasonGames.reduce((total, game) => total + scoreFor(game, users, 0), 0) || scoreFor(season, users, 0);
-    const secondScore = seasonGames.reduce((total, game) => total + scoreFor(game, users, 1), 0) || scoreFor(season, users, 1);
+    const firstScore = scoreFor(season, users, 0) || seasonGames.reduce((total, game) => total + scoreFor(game, users, 0), 0);
+    const secondScore = scoreFor(season, users, 1) || seasonGames.reduce((total, game) => total + scoreFor(game, users, 1), 0);
     const totals = { first: 0, second: 0, playoffFirst: 0, playoffSecond: 0 };
     const moments = [];
 
@@ -148,6 +169,10 @@ window.CR = window.CR || {};
       note: season.note,
       firstScore,
       secondScore,
+      totalsByUserId: {
+        [userAt(users, 0).id]: firstScore,
+        [userAt(users, 1).id]: secondScore
+      },
       scoresByUserId: {
         [userAt(users, 0).id]: firstScore,
         [userAt(users, 1).id]: secondScore
@@ -170,7 +195,7 @@ window.CR = window.CR || {};
     build(rawInput) {
       const raw = clone(rawInput || CR.historyMockData || {});
       const users = getUsers(raw);
-      const seasons = (raw.seasons || []).map((season) => ({ ...season, id: normalizeId(season.id) }));
+      const seasons = (raw.seasons || []).map((season) => normalizeSeason(season, users));
       const players = raw.players || [];
       const map = playerMap(players);
       const games = (raw.games || []).map((game) => enrichGame(game, map, users)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
