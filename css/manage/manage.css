@@ -56,7 +56,9 @@
 .manage-dev-card { overflow: visible; }
 .manage-dev-section { margin-top: 16px; }
 .manage-dev-button-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; flex-wrap: wrap; }
-.manage-dev-button-row .cr-button { margin: 0 !important; min-height: 42px; padding: 0 18px; }
+.manage-dev-button-row .cr-button { margin: 0 !important; min-height: 42px; padding: 0 18px; width: auto; flex: 0 0 auto; }
+.manage-dev-button-row .cr-button.primary { min-width: 138px; background: var(--ui-primary); color: #fff; box-shadow: 0 10px 22px rgba(17, 24, 39, 0.14); }
+.manage-dev-button-row .cr-button.secondary { min-width: 96px; background: #eef2f6; color: var(--ink-strong); box-shadow: none; }
 .manage-segmented-control { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 9px; padding: 4px; border: 1px solid var(--border-subtle); border-radius: var(--radius-pill, 999px); background: #eef2f6; }
 .manage-segment-button { min-height: 34px; border: 0; border-radius: var(--radius-pill, 999px); background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: var(--font-strong, 800); transition: background var(--motion-fast, 140ms) ease, color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease; }
 .manage-segment-button.is-active { background: #fff; color: var(--ink-strong); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12); }
