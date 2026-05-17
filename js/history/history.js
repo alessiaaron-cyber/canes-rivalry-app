@@ -235,12 +235,26 @@ window.CR = window.CR || {};
     return { ...seasonData, seasonBoard: { ...seasonData.seasonBoard, recentText: recentRecordText(globalRecentGameLog, users) }, momentum: buildMomentum(globalRecentGameLog, users) };
   }
 
+  function scoreSignature(model = {}) {
+    return (model.games || []).map((game) => {
+      const first = scoreFor(game, model.users || [], 0);
+      const second = scoreFor(game, model.users || [], 1);
+      return `${game.id}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
+    }).join('|');
+  }
+
   function buildStaticHistoryData(model) {
-    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [] };
+    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [], scoreSignature: scoreSignature(model) };
   }
 
   function getScopedData(model, state) {
-    const cache = CR.historyCache || (CR.historyCache = { staticData: null, seasons: {} });
+    const cache = CR.historyCache || (CR.historyCache = { staticData: null, seasons: {}, signature: '' });
+    const signature = scoreSignature(model);
+    if (cache.signature !== signature) {
+      cache.staticData = null;
+      cache.seasons = {};
+      cache.signature = signature;
+    }
     const hqSeasonId = model.currentSeasonId || state.seasonId;
     if (!cache.staticData) cache.staticData = buildStaticHistoryData(model);
     if (!cache.seasons[state.seasonId]) cache.seasons[state.seasonId] = buildSeasonScopedData(model, state.seasonId);
@@ -296,12 +310,12 @@ window.CR = window.CR || {};
     ensureHistoryShell(root);
     const scoped = getScopedData(CR.historyData, CR.historyState);
     const hqMomentumKey = momentumSignature(scoped.hqSeasonData?.momentum || []);
-    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}`;
-    const seasonKey = `${CR.historyState.seasonId}`;
+    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}:${scoped.scoreSignature || ''}`;
+    const seasonKey = `${CR.historyState.seasonId}:${scoped.scoreSignature || ''}`;
     renderPanel('hq', `hq:${hqKey}`, CR.historyRender.renderHQ(scoped), CR.historyDom.hq);
-    renderPanel('seasons', 'seasons:static', CR.historyRender.renderSeasonsOverview(scoped), CR.historyDom.seasons);
+    renderPanel('seasons', `seasons:${scoped.scoreSignature || ''}`, CR.historyRender.renderSeasonsOverview(scoped), CR.historyDom.seasons);
     renderPanel('all_games', `all_games:${seasonKey}`, CR.historyRender.renderAllGames(scoped), CR.historyDom.allGames);
-    const sheetState = CR.historyState.sheet?.open ? `${CR.historyState.sheet.title}|${CR.historyState.sheet.message}|${CR.historyState.sheet.primaryAction}` : 'closed';
+    const sheetState = CR.historyState.sheet?.open ? `${CR.historyState.sheet.title}|${CR.historyState.sheet.message}|${CR.historyState.sheet.primaryAction}|${scoped.scoreSignature || ''}` : 'closed';
     renderPanel('admin', `admin:${sheetState}`, CR.historyRender.renderAdminSheet(CR.historyState), CR.historyDom.admin);
     syncPanelVisibility(CR.historyState.view);
     syncSheetScrollLock();
@@ -329,7 +343,7 @@ window.CR = window.CR || {};
       const source = await CR.historyDataService.fetchHistoryData();
       CR.historyData = CR.historyModel.build(source);
       CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
-      CR.historyCache = { staticData: null, seasons: {} };
+      CR.historyCache = { staticData: null, seasons: {}, signature: '' };
       CR.historyPanelKeys = { hq: '', seasons: '', all_games: '', admin: '' };
       const validSeason = CR.historyData.seasons?.some((season) => season.id === previousState.seasonId);
       CR.historyState = { seasonId: validSeason ? previousState.seasonId : CR.historyData.currentSeasonId, view: previousState.view || 'hq', previousView: previousState.previousView || 'hq', returnView: previousState.returnView || 'hq', sheet: previousState.sheet?.open && !options.closeSheet ? previousState.sheet : { open: false } };
@@ -343,7 +357,7 @@ window.CR = window.CR || {};
       const source = await CR.historyDataService.fetchHistoryData();
       CR.historyData = CR.historyModel.build(source);
       CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
-      CR.historyCache = { staticData: null, seasons: {} };
+      CR.historyCache = { staticData: null, seasons: {}, signature: '' };
       CR.historyDom = null;
       CR.historyEventsBound = false;
       CR.historyPanelKeys = { hq: '', seasons: '', all_games: '', admin: '' };
