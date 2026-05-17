@@ -20,10 +20,7 @@ const corsHeaders = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -41,13 +38,11 @@ async function isAuthorized(req: Request) {
   }
 
   const { data, error } = await authDb.auth.getUser(token);
-
   if (error || !data?.user) {
     return { ok: false, via: "auth", user: null, email: null, error: "Unauthorized", status: 401 };
   }
 
   const userEmail = String(data.user.email || "").toLowerCase().trim();
-
   if (!userEmail) {
     return { ok: false, via: "auth", user: data.user, email: null, error: "Missing user email", status: 401 };
   }
@@ -102,39 +97,60 @@ function pickPoints(playerName: string, goals: number, assists: number, firstGoa
   return g * 2 + a + bonus;
 }
 
-function winner(a: number, j: number) {
-  return a > j ? "Aaron" : j > a ? "Julie" : "Tie";
+function legacyScoreKey(profile: any) {
+  const key = String(profile?.legacy_owner_key || "").toLowerCase().trim();
+  if (key === "aaron") return "aaron";
+  if (key === "julie") return "julie";
+  return "";
 }
 
-function buildRecap(game: any, a: number, j: number) {
-  const w = winner(a, j);
+function legacyWinnerKey(winnerProfile: any | null) {
+  if (!winnerProfile) return "Tie";
+  return String(winnerProfile.legacy_owner_key || winnerProfile.display_name || "").trim();
+}
+
+function buildScoreLabel(slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
+  const name1 = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
+  const name2 = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
+  return `${name1} ${slot1Points} – ${name2} ${slot2Points}`;
+}
+
+function getWinnerProfile(slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
+  if (slot1Points > slot2Points) return slot1;
+  if (slot2Points > slot1Points) return slot2;
+  return null;
+}
+
+function buildRecap(game: any, winnerProfile: any | null, slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
   const matchup =
     game?.opponent && game.opponent !== "Next Game"
       ? `vs ${game.opponent}`
       : "Final Result";
 
-  if (w === "Tie") {
-    return `Tie ${a}-${j}. ${matchup}. Nobody gets bragging rights, which frankly feels illegal.`;
+  if (!winnerProfile) {
+    return `Tie ${slot1Points}-${slot2Points}. ${matchup}. Nobody gets bragging rights, which frankly feels illegal.`;
   }
 
-  const loser = w === "Aaron" ? "Julie" : "Aaron";
-  return `${w} wins ${a}-${j}. ${matchup}. ${loser} may file a formal complaint with the Department of Rivalry Affairs.`;
+  const winnerName = String(winnerProfile.display_name || winnerProfile.legacy_owner_key || "Winner").trim();
+  const loserProfile = winnerProfile.id === slot1.id ? slot2 : slot1;
+  const loserName = String(loserProfile.display_name || loserProfile.legacy_owner_key || "the loser").trim();
+
+  return `${winnerName} wins ${slot1Points}-${slot2Points}. ${matchup}. ${loserName} may file a formal complaint with the Department of Rivalry Affairs.`;
 }
 
-function buildFinalMessage(a: number, j: number) {
-  const w = winner(a, j);
-  const score = `Aaron ${a} – Julie ${j}`;
-
-  if (w === "Tie") {
+function buildFinalMessage(winnerProfile: any | null, scoreLabel: string) {
+  if (!winnerProfile) {
     return {
       title: "Final",
-      body: `Tie game. ${score}. Chaos.`,
+      body: `Tie game. ${scoreLabel}. Chaos.`,
     };
   }
 
+  const winnerName = String(winnerProfile.display_name || winnerProfile.legacy_owner_key || "Winner").trim();
+
   return {
     title: "Final",
-    body: `${w} takes it. ${score}.`,
+    body: `${winnerName} takes it. ${scoreLabel}.`,
   };
 }
 
@@ -195,14 +211,10 @@ async function enqueueFinalNotification(gameId: number, title: string, body: str
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   const auth = await isAuthorized(req);
-
   if (!auth.ok) {
     return json({ ok: false, error: auth.error || "Unauthorized" }, auth.status || 401);
   }
@@ -215,6 +227,21 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "Missing game_id" }, 400);
     }
 
+    const { data: profiles, error: profilesError } = await serviceDb
+      .from("user_profiles")
+      .select("id, display_name, legacy_owner_key, rivalry_slot")
+      .eq("is_active", true)
+      .order("rivalry_slot", { ascending: true });
+
+    if (profilesError) throw profilesError;
+
+    const slot1 = (profiles || []).find((p: any) => Number(p.rivalry_slot) === 1);
+    const slot2 = (profiles || []).find((p: any) => Number(p.rivalry_slot) === 2);
+
+    if (!slot1 || !slot2) {
+      return json({ ok: false, error: "Missing rivalry slot profiles" }, 500);
+    }
+
     const { data: game, error: gameError } = await serviceDb
       .from("games")
       .select("*")
@@ -225,16 +252,42 @@ Deno.serve(async (req) => {
     if (!game) return json({ ok: false, error: "Game not found" }, 404);
 
     if (game.status === "Final") {
+      const slot1Legacy = legacyScoreKey(slot1);
+      const slot2Legacy = legacyScoreKey(slot2);
+
+      const slot1Points =
+        slot1Legacy === "aaron"
+          ? Number(game.aaron_points || 0)
+          : slot1Legacy === "julie"
+            ? Number(game.julie_points || 0)
+            : 0;
+
+      const slot2Points =
+        slot2Legacy === "aaron"
+          ? Number(game.aaron_points || 0)
+          : slot2Legacy === "julie"
+            ? Number(game.julie_points || 0)
+            : 0;
+
+      const existingWinnerProfile = game.winner_user_id
+        ? (profiles || []).find((p: any) => p.id === game.winner_user_id) || null
+        : null;
+
       return json({
         ok: true,
         alreadyFinal: true,
         authorizedVia: auth.via,
         game_id: gameId,
         score: {
+          [slot1.id]: slot1Points,
+          [slot2.id]: slot2Points,
+        },
+        legacyScore: {
           Aaron: Number(game.aaron_points || 0),
           Julie: Number(game.julie_points || 0),
         },
-        winner: game.winner || winner(Number(game.aaron_points || 0), Number(game.julie_points || 0)),
+        winner_user_id: game.winner_user_id || null,
+        winner: game.winner || legacyWinnerKey(existingWinnerProfile),
         recap: game.recap || "",
         notification: {
           skipped: "already-final",
@@ -280,6 +333,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    const totalsByUserId = new Map<string, number>();
+    totalsByUserId.set(slot1.id, 0);
+    totalsByUserId.set(slot2.id, 0);
+
     let aaronPoints = 0;
     let juliePoints = 0;
 
@@ -300,20 +357,37 @@ Deno.serve(async (req) => {
         if (pickUpdateError) throw pickUpdateError;
       }
 
+      const ownerUserId = String(pick.owner_user_id || "").trim();
+
+      if (ownerUserId) {
+        totalsByUserId.set(ownerUserId, Number(totalsByUserId.get(ownerUserId) || 0) + points);
+      }
+
+      // v1 compatibility only
       if (pick.owner === "Aaron") aaronPoints += points;
       if (pick.owner === "Julie") juliePoints += points;
     }
 
-    const finalWinner = winner(aaronPoints, juliePoints);
-    const recap = buildRecap(game, aaronPoints, juliePoints);
+    const slot1Points = Number(totalsByUserId.get(slot1.id) || 0);
+    const slot2Points = Number(totalsByUserId.get(slot2.id) || 0);
+
+    const winnerProfile = getWinnerProfile(slot1, slot2, slot1Points, slot2Points);
+    const finalWinnerLegacy = legacyWinnerKey(winnerProfile);
+    const recap = buildRecap(game, winnerProfile, slot1, slot2, slot1Points, slot2Points);
 
     const { error: updateError } = await serviceDb
       .from("games")
       .update({
         status: "Final",
+
+        // v1 compatibility
         aaron_points: aaronPoints,
         julie_points: juliePoints,
-        winner: finalWinner,
+        winner: finalWinnerLegacy,
+
+        // v2 canonical winner
+        winner_user_id: winnerProfile?.id || null,
+
         recap,
         last_synced_at: new Date().toISOString(),
       })
@@ -322,7 +396,23 @@ Deno.serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    const finalMessage = buildFinalMessage(aaronPoints, juliePoints);
+    for (const [userId, totalPoints] of totalsByUserId.entries()) {
+      const { error: scoreError } = await serviceDb
+        .from("game_user_scores")
+        .upsert(
+          {
+            game_id: gameId,
+            user_id: userId,
+            points: totalPoints,
+          },
+          { onConflict: "game_id,user_id" },
+        );
+
+      if (scoreError) throw scoreError;
+    }
+
+    const scoreLabel = buildScoreLabel(slot1, slot2, slot1Points, slot2Points);
+    const finalMessage = buildFinalMessage(winnerProfile, scoreLabel);
     const notification = await enqueueFinalNotification(
       gameId,
       finalMessage.title,
@@ -334,8 +424,16 @@ Deno.serve(async (req) => {
       alreadyFinal: false,
       authorizedVia: auth.via,
       game_id: gameId,
-      score: { Aaron: aaronPoints, Julie: juliePoints },
-      winner: finalWinner,
+      score: {
+        [slot1.id]: slot1Points,
+        [slot2.id]: slot2Points,
+      },
+      legacyScore: {
+        Aaron: aaronPoints,
+        Julie: juliePoints,
+      },
+      winner_user_id: winnerProfile?.id || null,
+      winner: finalWinnerLegacy,
       recap,
       notification,
     });
