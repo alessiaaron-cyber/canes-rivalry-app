@@ -247,19 +247,45 @@ function bonusIncluded(playerName: string, goals: number, firstGoal: string) {
   return !!playerName && !!firstGoal && nameMatches(playerName, firstGoal) && Number(goals || 0) > 0;
 }
 
-function winner(a: number, j: number) {
-  return a > j ? "Aaron" : j > a ? "Julie" : "Tie";
+function winner(a: number, j: number, slot1?: any, slot2?: any) {
+
+  const slot1Name = String(
+
+    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
+
+  ).trim();
+
+  const slot2Name = String(
+
+    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
+
+  ).trim();
+
+  return a > j ? slot1Name : j > a ? slot2Name : "Tie";
 }
 
-function buildRecap(game: any, a: number, j: number) {
-  const w = winner(a, j);
-  const matchup = game?.opponent && game.opponent !== "Next Game" ? `vs ${game.opponent}` : "Final Result";
+function buildRecap(game: any, a: number, j: number, slot1?: any, slot2?: any) {
+  const w = winner(a, j, slot1, slot2);
+
+  const slot1Name = String(
+    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
+  ).trim();
+
+  const slot2Name = String(
+    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
+  ).trim();
+
+  const matchup =
+    game?.opponent && game.opponent !== "Next Game"
+      ? `vs ${game.opponent}`
+      : "Final Result";
 
   if (w === "Tie") {
     return `Tie ${a}-${j}. ${matchup}. Nobody gets bragging rights, which frankly feels illegal.`;
   }
 
-  const loser = w === "Aaron" ? "Julie" : "Aaron";
+  const loser = w === slot1Name ? slot2Name : slot1Name;
+
   return `${w} wins ${a}-${j}. ${matchup}. ${loser} may file a formal complaint with the Department of Rivalry Affairs.`;
 }
 
@@ -408,64 +434,131 @@ async function emitPushOnce(
 // =========================
 
 function buildNotification({
+
   changes,
+
   oldA,
+
   oldJ,
+
   newA,
+
   newJ,
+
   firstGoalBonusHit,
+
   state,
+
+  slot1,
+
+  slot2,
+
 }: {
+
   changes: string[];
+
   oldA: number;
+
   oldJ: number;
+
   newA: number;
+
   newJ: number;
+
   firstGoalBonusHit: boolean;
+
   state: string;
+
+  slot1: any;
+
+  slot2: any;
+
 }) {
-  const oldW = winner(oldA, oldJ);
-  const newW = winner(newA, newJ);
-  const score = `Aaron ${newA} – Julie ${newJ}`;
+
+  const oldW = winner(oldA, oldJ, slot1, slot2);
+
+  const newW = winner(newA, newJ, slot1, slot2);
+
+  const slot1Name = String(
+
+    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
+
+  ).trim();
+
+  const slot2Name = String(
+
+    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
+
+  ).trim();
+
+  const score = `${slot1Name} ${newA} – ${slot2Name} ${newJ}`;
 
   if (state === "FINAL" || state === "OFF") {
+
     if (newW === "Tie") {
+
       return {
+
         title: "Final",
+
         body: `Tie game. ${score}. Chaos.`,
+
       };
+
     }
 
     return {
+
       title: "Final",
+
       body: `${newW} takes it. ${score}.`,
+
     };
+
   }
 
   if (oldW !== newW && newW !== "Tie") {
+
     return {
+
       title: "LEAD CHANGE 👀",
+
       body: `${newW} takes it. ${score}.`,
+
     };
+
   }
 
   if (firstGoalBonusHit) {
+
     return {
+
       title: "FIRST GOAL BONUS 💰",
+
       body: `Bonus hits. ${score}.`,
+
     };
+
   }
 
   if (changes.length > 1) {
+
     return {
+
       title: "Rivalry Update 🔥",
+
       body: `${changes.join(" • ")}. ${score}.`,
+
     };
+
   }
 
   return {
+
     title: "Rivalry Update 🔥",
+
     body: `${changes[0] || "Score updated"}. ${score}.`,
+
   };
 }
 
@@ -768,7 +861,10 @@ Deno.serve(async (req) => {
         newJ,
         firstGoalBonusHit,
         state,
+        slot1,
+        slot2,
       });
+
 
       const updateKey = `update-${game.id}-${changedKeys.sort().join("|")}-${newA}-${newJ}`;
 
@@ -792,8 +888,14 @@ Deno.serve(async (req) => {
       changed,
       changes,
       firstGoalBonusHit,
-      oldScore: { Aaron: oldA, Julie: oldJ },
-      newScore: { Aaron: newA, Julie: newJ },
+      oldScore: {
+        [slot1.display_name]: oldA,
+        [slot2.display_name]: oldJ,
+      },
+      newScore: {
+        [slot1.display_name]: newA,
+        [slot2.display_name]: newJ,
+      },
       reminderNotification,
       notification,
       finalized,
