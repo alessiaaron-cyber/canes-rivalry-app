@@ -2,6 +2,7 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
+  const SIDES = [0, 1];
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -37,21 +38,39 @@ window.CR = window.CR || {};
     scrollHistoryToTop();
   }
 
-  function ownerClass(side) {
-    return side === 'Julie' ? 'owner-secondary' : 'owner-primary';
+  function sideUtils() {
+    return CR.historySideUtils || {};
   }
 
   function sideIndex(side) {
-    return side === 'Julie' ? 1 : 0;
+    return sideUtils().sideIndex?.(side) ?? (Number(side) === 1 ? 1 : 0);
+  }
+
+  function sideKey(side) {
+    return sideUtils().sideName?.(side) || (sideIndex(side) === 1 ? 'second' : 'first');
+  }
+
+  function sideUser(side) {
+    const index = sideIndex(side);
+    return CR.historyData?.users?.[index] || CR.identity?.getUser?.(index, CR.historyData) || {};
   }
 
   function sideDisplayName(side) {
     const index = sideIndex(side);
+    const user = sideUser(index);
     return CR.identity?.getDisplayName?.(index, CR.historyData)
-      || CR.identity?.getUser?.(index, CR.historyData)?.displayName
-      || CR.historyData?.users?.[index]?.displayName
-      || CR.historyData?.users?.[index]?.username
-      || side;
+      || user.displayName
+      || user.display_name
+      || user.username
+      || `Player ${index + 1}`;
+  }
+
+  function sideOwnerUserId(side) {
+    return String(sideUser(side)?.id || '').trim();
+  }
+
+  function ownerClass(side) {
+    return sideIndex(side) === 1 ? 'owner-secondary' : 'owner-primary';
   }
 
   function scoringRules(isPlayoff) {
@@ -60,18 +79,35 @@ window.CR = window.CR || {};
       : { goal: 1, assist: 1, firstGoalBonus: 1 };
   }
 
-  function win(aaron, julie) {
-    return Number(aaron) > Number(julie) ? 'Aaron' : Number(julie) > Number(aaron) ? 'Julie' : 'Tie';
-  }
-
   function normalizeGameType(value) {
     return value === 'playoffs' ? 'Playoffs' : 'Regular Season';
   }
 
+  function pickKeysForSide(game, side) {
+    const keys = sideUtils().pickKeysForSide?.(CR.historyData?.users || [], side) || [];
+    return keys.concat(sideKey(side));
+  }
+
+  function picksForSide(game, side) {
+    const key = pickKeysForSide(game, side).find((candidate) => Array.isArray(game.picks?.[candidate]));
+    return game.picks?.[key] || [];
+  }
+
+  function scoreForSide(game, side) {
+    if (sideIndex(side) === 0) return Number(game.firstScore || 0);
+    return Number(game.secondScore || 0);
+  }
+
+  function winnerUserIdForTotals(firstPoints, secondPoints) {
+    if (Number(firstPoints) > Number(secondPoints)) return sideOwnerUserId(0) || null;
+    if (Number(secondPoints) > Number(firstPoints)) return sideOwnerUserId(1) || null;
+    return null;
+  }
+
   function buildFirstGoalOptions(game) {
     const names = new Set();
-    ['Aaron', 'Julie'].forEach((side) => {
-      (game.picks?.[side] || []).forEach((pick) => names.add(pick.playerName));
+    SIDES.forEach((side) => {
+      picksForSide(game, side).forEach((pick) => names.add(pick.playerName));
     });
     (CR.historyData?.players || []).forEach((player) => {
       if (player?.name) names.add(player.name);
@@ -80,8 +116,8 @@ window.CR = window.CR || {};
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
 
-  function renderPickCards(picks, sideKey) {
-    const sideLabel = sideDisplayName(sideKey);
+  function renderPickCards(picks, side) {
+    const sideLabel = sideDisplayName(side);
     return (picks || []).map((pick, index) => `
       <article class="history-sheet-pick-card" data-history-pick-card="1" data-history-pick-slot="${index + 1}">
         <div class="history-sheet-pick-card-topline">
@@ -131,6 +167,15 @@ window.CR = window.CR || {};
     `).join('');
   }
 
+  function firstPickerDisplay(game) {
+    const users = CR.historyData?.users || [];
+    const hit = users.find((user) => String(user.id || '') === String(game.firstPick || ''));
+    if (hit) return hit.displayName || hit.display_name || hit.username || 'Player';
+    const sideHit = SIDES.find((side) => sideKey(side) === game.firstPick);
+    if (sideHit !== undefined) return sideDisplayName(sideHit);
+    return game.firstPick || '—';
+  }
+
   function openGameEditSheet(gameId, context) {
     const games = CR.historyData?.games || [];
     const game = games.find((item) => String(item.id) === String(gameId));
@@ -140,20 +185,22 @@ window.CR = window.CR || {};
     }
 
     const firstGoalOptions = buildFirstGoalOptions(game);
-    const firstLabel = sideDisplayName('Aaron');
-    const secondLabel = sideDisplayName('Julie');
-    const firstPickLabel = game.firstPick === 'Julie' ? secondLabel : game.firstPick === 'Aaron' ? firstLabel : game.firstPick || '—';
+    const firstLabel = sideDisplayName(0);
+    const secondLabel = sideDisplayName(1);
+    const firstUserId = sideOwnerUserId(0);
+    const secondUserId = sideOwnerUserId(1);
+    const firstPickValue = String(game.firstPick || '') === String(secondUserId) || game.firstPick === sideKey(1) ? sideKey(1) : sideKey(0);
 
     const detailsHtml = `
       <form class="history-sheet-form history-sheet-form-v2" data-history-edit-form="1" data-history-game-id="${escapeHtml(game.id)}" onsubmit="return false;">
         <div class="history-sheet-summary">
           <div>
-            <div class="history-sheet-summary-title">Game ${escapeHtml(String(game.displayNumber || ''))} • ${escapeHtml(game.playoff ? 'Playoffs' : 'Regular')}</div>
+            <div class="history-sheet-summary-title">${escapeHtml(game.title || `Game ${game.displayNumber || ''}`.trim() || 'Game')} • ${escapeHtml(game.playoff ? 'Playoffs' : 'Regular')}</div>
             <div class="history-sheet-summary-copy">${escapeHtml(game.date)} • ${escapeHtml(game.opponent || 'Opponent TBD')}</div>
-            <div class="history-sheet-summary-copy">First pick: ${escapeHtml(firstPickLabel)}</div>
+            <div class="history-sheet-summary-copy">First pick: ${escapeHtml(firstPickerDisplay(game))}</div>
             <div class="history-sheet-summary-copy">First goal: <span data-history-first-goal-readout="1">${escapeHtml(game.firstGoalScorer || '—')}</span></div>
-            <div class="history-sheet-summary-copy">${escapeHtml(firstLabel)}: ${(game.picks?.Aaron || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
-            <div class="history-sheet-summary-copy">${escapeHtml(secondLabel)}: ${(game.picks?.Julie || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
+            <div class="history-sheet-summary-copy">${escapeHtml(firstLabel)}: ${picksForSide(game, 0).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
+            <div class="history-sheet-summary-copy">${escapeHtml(secondLabel)}: ${picksForSide(game, 1).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
           </div>
         </div>
 
@@ -185,8 +232,8 @@ window.CR = window.CR || {};
             <label class="history-sheet-field">
               <span>First pick</span>
               <select class="history-sheet-select" data-history-first-picker="1" aria-label="First pick">
-                <option value="Aaron" ${game.firstPick === 'Aaron' ? 'selected' : ''}>${escapeHtml(firstLabel)}</option>
-                <option value="Julie" ${game.firstPick === 'Julie' ? 'selected' : ''}>${escapeHtml(secondLabel)}</option>
+                <option value="${escapeHtml(sideKey(0))}" ${firstPickValue === sideKey(0) ? 'selected' : ''}>${escapeHtml(firstLabel)}</option>
+                <option value="${escapeHtml(sideKey(1))}" ${firstPickValue === sideKey(1) ? 'selected' : ''}>${escapeHtml(secondLabel)}</option>
               </select>
             </label>
           </div>
@@ -198,8 +245,8 @@ window.CR = window.CR || {};
               <h3>${escapeHtml(firstLabel)} Picks</h3>
               <span class="history-sheet-ga-head">G / A</span>
             </div>
-            <div class="history-sheet-pick-stack" data-history-side="Aaron">
-              ${renderPickCards(game.picks?.Aaron, 'Aaron')}
+            <div class="history-sheet-pick-stack" data-history-side="${escapeHtml(sideKey(0))}">
+              ${renderPickCards(picksForSide(game, 0), 0)}
             </div>
           </div>
 
@@ -208,8 +255,8 @@ window.CR = window.CR || {};
               <h3>${escapeHtml(secondLabel)} Picks</h3>
               <span class="history-sheet-ga-head">G / A</span>
             </div>
-            <div class="history-sheet-pick-stack" data-history-side="Julie">
-              ${renderPickCards(game.picks?.Julie, 'Julie')}
+            <div class="history-sheet-pick-stack" data-history-side="${escapeHtml(sideKey(1))}">
+              ${renderPickCards(picksForSide(game, 1), 1)}
             </div>
           </div>
         </section>
@@ -225,12 +272,12 @@ window.CR = window.CR || {};
 
           <div class="history-sheet-score-preview-grid">
             <article class="history-sheet-score-preview-card">
-              <div class="eyebrow ${ownerClass('Aaron')}">${escapeHtml(firstLabel)}</div>
-              <div class="history-sheet-score-preview-value" data-history-side-total="Aaron">${escapeHtml(String(game.aaronScore || 0))}</div>
+              <div class="eyebrow ${ownerClass(0)}">${escapeHtml(firstLabel)}</div>
+              <div class="history-sheet-score-preview-value" data-history-side-total="${escapeHtml(sideKey(0))}">${escapeHtml(String(scoreForSide(game, 0)))}</div>
             </article>
             <article class="history-sheet-score-preview-card">
-              <div class="eyebrow ${ownerClass('Julie')}">${escapeHtml(secondLabel)}</div>
-              <div class="history-sheet-score-preview-value" data-history-side-total="Julie">${escapeHtml(String(game.julieScore || 0))}</div>
+              <div class="eyebrow ${ownerClass(1)}">${escapeHtml(secondLabel)}</div>
+              <div class="history-sheet-score-preview-value" data-history-side-total="${escapeHtml(sideKey(1))}">${escapeHtml(String(scoreForSide(game, 1)))}</div>
             </article>
           </div>
 
@@ -255,9 +302,11 @@ window.CR = window.CR || {};
   }
 
   function collectSheetPicks(form, side) {
-    return Array.from(form.querySelectorAll(`[data-history-side="${side}"] [data-history-pick-card="1"]`)).map((card, index) => ({
-      owner: side,
-      slot: Number(card.dataset.historyPickSlot || index + 1),
+    const index = sideIndex(side);
+    return Array.from(form.querySelectorAll(`[data-history-side="${sideKey(index)}"] [data-history-pick-card="1"]`)).map((card, cardIndex) => ({
+      ownerUserId: sideOwnerUserId(index),
+      ownerSide: sideKey(index),
+      slot: Number(card.dataset.historyPickSlot || cardIndex + 1),
       playerName: (card.querySelector('[data-history-pick-name="1"]')?.value || '').trim(),
       goals: parseNumber(card.querySelector('[data-history-goals="1"]')?.value),
       assists: parseNumber(card.querySelector('[data-history-assists="1"]')?.value),
@@ -278,7 +327,7 @@ window.CR = window.CR || {};
     const isPlayoff = form.querySelector('[data-history-game-type="1"]')?.value === 'playoffs';
     const rules = scoringRules(isPlayoff);
     const firstGoal = (form.querySelector('[data-history-first-goal="1"]')?.value || '').trim();
-    const picks = [...collectSheetPicks(form, 'Aaron'), ...collectSheetPicks(form, 'Julie')];
+    const picks = [...collectSheetPicks(form, sideKey(0)), ...collectSheetPicks(form, sideKey(1))];
     const chosen = picks.map((pick) => pick.playerName).filter(Boolean);
     if (new Set(chosen).size !== chosen.length) {
       throw new Error('Each player can only be picked once for a game.');
@@ -288,19 +337,21 @@ window.CR = window.CR || {};
       pick.points = calculatePickPoints(pick, firstGoal, rules);
     });
 
-    const aaronPoints = picks.filter((pick) => pick.owner === 'Aaron').reduce((total, pick) => total + pick.points, 0);
-    const juliePoints = picks.filter((pick) => pick.owner === 'Julie').reduce((total, pick) => total + pick.points, 0);
+    const firstPoints = picks.filter((pick) => pick.ownerSide === sideKey(0)).reduce((total, pick) => total + pick.points, 0);
+    const secondPoints = picks.filter((pick) => pick.ownerSide === sideKey(1)).reduce((total, pick) => total + pick.points, 0);
+    const firstPickerSide = form.querySelector('[data-history-first-picker="1"]')?.value || sideKey(0);
+    const firstPickerUserId = firstPickerSide === sideKey(1) ? sideOwnerUserId(1) : sideOwnerUserId(0);
 
     return {
       gameId: form.dataset.historyGameId,
       gameDate: (form.querySelector('[data-history-game-date="1"]')?.value || '').trim(),
       opponent: (form.querySelector('[data-history-game-opponent="1"]')?.value || '').trim(),
       gameType: normalizeGameType(form.querySelector('[data-history-game-type="1"]')?.value),
-      firstPicker: (form.querySelector('[data-history-first-picker="1"]')?.value || '').trim(),
+      firstPickerUserId,
       firstGoal,
-      aaronPoints,
-      juliePoints,
-      winner: win(aaronPoints, juliePoints),
+      firstPoints,
+      secondPoints,
+      winnerUserId: winnerUserIdForTotals(firstPoints, secondPoints),
       picks
     };
   }
@@ -308,18 +359,20 @@ window.CR = window.CR || {};
   async function upsertHistoryPick(db, gameId, pick) {
     const existing = (CR.historyRawPicks || []).find((row) =>
       String(row.game_id) === String(gameId) &&
-      row.owner === pick.owner &&
+      String(row.owner_user_id) === String(pick.ownerUserId) &&
       Number(row.pick_slot) === Number(pick.slot)
     );
 
     const row = {
       game_id: gameId,
-      owner: pick.owner,
+      owner_user_id: pick.ownerUserId || null,
       pick_slot: pick.slot,
       player_name: pick.playerName || null,
       goals: pick.playerName ? pick.goals : 0,
       assists: pick.playerName ? pick.assists : 0,
-      points: pick.playerName ? pick.points : 0
+      points: pick.playerName ? pick.points : 0,
+      updated_by_user_id: CR.currentUser?.id || CR.currentProfile?.id || null,
+      updated_at: new Date().toISOString()
     };
 
     if (existing?.id) {
@@ -328,7 +381,18 @@ window.CR = window.CR || {};
       return;
     }
 
-    const res = await db.from('picks').upsert(row, { onConflict: 'game_id,owner,pick_slot' });
+    const res = await db.from('picks').upsert(row, { onConflict: 'game_id,owner_user_id,pick_slot' });
+    if (res.error) throw res.error;
+  }
+
+  async function upsertGameUserScore(db, gameId, userId, points) {
+    if (!userId) return;
+    const res = await db.from('game_user_scores').upsert({
+      game_id: gameId,
+      user_id: userId,
+      points: Number(points || 0),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'game_id,user_id' });
     if (res.error) throw res.error;
   }
 
@@ -349,13 +413,11 @@ window.CR = window.CR || {};
       game_date: payload.gameDate || null,
       opponent: payload.opponent || null,
       game_type: payload.gameType,
-      first_picker: payload.firstPicker || null,
+      first_picker_user_id: payload.firstPickerUserId || null,
       status: 'Final',
       first_goal_scorer: payload.firstGoal || null,
-      aaron_points: payload.aaronPoints,
-      julie_points: payload.juliePoints,
-      winner: payload.winner,
-      recap: `Edited historical record. Aaron ${payload.aaronPoints}, Julie ${payload.juliePoints}.`
+      winner_user_id: payload.winnerUserId,
+      recap: `Edited historical record. ${sideDisplayName(0)} ${payload.firstPoints}, ${sideDisplayName(1)} ${payload.secondPoints}.`
     };
 
     const gameRes = await db.from('games').update(gamePatch).eq('id', payload.gameId);
@@ -364,6 +426,11 @@ window.CR = window.CR || {};
     for (const pick of payload.picks) {
       await upsertHistoryPick(db, payload.gameId, pick);
     }
+
+    await Promise.all([
+      upsertGameUserScore(db, payload.gameId, sideOwnerUserId(0), payload.firstPoints),
+      upsertGameUserScore(db, payload.gameId, sideOwnerUserId(1), payload.secondPoints)
+    ]);
 
     await reloadHistoryAfterSave();
     CR.historyState.sheet = { open: false };
@@ -376,24 +443,25 @@ window.CR = window.CR || {};
     const isPlayoff = form.querySelector('[data-history-game-type="1"]')?.value === 'playoffs';
     const rules = scoringRules(isPlayoff);
     const firstGoalName = (form.querySelector('[data-history-first-goal="1"]')?.value || '').trim().toLowerCase();
-    const totals = { Aaron: 0, Julie: 0 };
+    const totals = { [sideKey(0)]: 0, [sideKey(1)]: 0 };
 
-    ['Aaron', 'Julie'].forEach((side) => {
-      const stack = form.querySelector(`[data-history-side="${side}"]`);
+    SIDES.forEach((side) => {
+      const key = sideKey(side);
+      const stack = form.querySelector(`[data-history-side="${key}"]`);
       stack?.querySelectorAll('[data-history-pick-card="1"]').forEach((card) => {
         const goals = parseNumber(card.querySelector('[data-history-goals="1"]')?.value);
         const assists = parseNumber(card.querySelector('[data-history-assists="1"]')?.value);
         const playerName = (card.querySelector('[data-history-pick-name="1"]')?.value || '').trim().toLowerCase();
         let points = goals * rules.goal + assists * rules.assist;
         if (firstGoalName && playerName === firstGoalName && goals > 0) points += rules.firstGoalBonus;
-        totals[side] += points;
+        totals[key] += points;
         const pointNode = card.querySelector('[data-history-pick-points="1"]');
         if (pointNode) pointNode.textContent = `${points} pts`;
       });
     });
 
-    form.querySelector('[data-history-side-total="Aaron"]')?.replaceChildren(document.createTextNode(String(totals.Aaron)));
-    form.querySelector('[data-history-side-total="Julie"]')?.replaceChildren(document.createTextNode(String(totals.Julie)));
+    form.querySelector(`[data-history-side-total="${sideKey(0)}"]`)?.replaceChildren(document.createTextNode(String(totals[sideKey(0)])));
+    form.querySelector(`[data-history-side-total="${sideKey(1)}"]`)?.replaceChildren(document.createTextNode(String(totals[sideKey(1)])));
     form.querySelector('[data-history-first-goal-readout="1"]')?.replaceChildren(document.createTextNode(form.querySelector('[data-history-first-goal="1"]')?.value || '—'));
   }
 
