@@ -100,6 +100,10 @@ window.CR = window.CR || {};
     }, {});
   }
 
+  function hasAnyScore(scores = {}) {
+    return Object.values(scores).some((value) => toNumber(value) !== 0);
+  }
+
   function scoreForUser(scoresByUserId, user) {
     return toNumber(scoresByUserId?.[String(user?.id || '')]);
   }
@@ -174,6 +178,7 @@ window.CR = window.CR || {};
         if (!owner || !name) return acc;
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(String(pick.player_id || '')) || fallbackId;
+        const points = toNumber(pick.points, pickPoints(pick, game.first_goal_scorer));
         acc[owner.id] = acc[owner.id] || [];
         acc[owner.id].push({
           id: pick.id ? String(pick.id) : '',
@@ -185,7 +190,7 @@ window.CR = window.CR || {};
           goals: toNumber(pick.goals),
           assists: toNumber(pick.assists),
           firstGoal: Boolean(game.first_goal_scorer && name === game.first_goal_scorer && toNumber(pick.goals) > 0),
-          points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer)),
+          points,
           ownerUserId: owner.id,
           owner_user_id: owner.id
         });
@@ -193,11 +198,24 @@ window.CR = window.CR || {};
       }, emptyUserMap(users, () => []));
   }
 
+  function scoresFromPicks(picksByUserId = {}, users = []) {
+    return users.reduce((acc, user) => {
+      acc[user.id] = (picksByUserId[user.id] || []).reduce((total, pick) => total + toNumber(pick.points), 0);
+      return acc;
+    }, {});
+  }
+
+  function preferredScores(scoreRows = [], picksByUserId = {}, users = [], valueKey = 'points') {
+    const direct = scoreMap(scoreRows, valueKey);
+    return hasAnyScore(direct) ? direct : scoresFromPicks(picksByUserId, users);
+  }
+
   function mapGames(rows, picks, playerLookup, scoresByGame, users) {
     return sortGames(rows || [])
       .filter((row) => row && normalizeStatus(row.status) !== 'hidden' && isFinalGame(row))
       .map((row) => {
-        const scoresByUserId = scoreMap(scoresByGame[String(row.id)] || []);
+        const picksByUserId = mapPicksForGame(row, picks, playerLookup, users);
+        const scoresByUserId = preferredScores(scoresByGame[String(row.id)] || [], picksByUserId, users);
         const winnerUserId = winnerUserIdForGame(row, scoresByUserId, users);
         const winnerName = winnerUserId ? displayNameForUser(users, winnerUserId) : 'Tie';
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
@@ -222,7 +240,7 @@ window.CR = window.CR || {};
           game_type: gameType,
           playoff: isPlayoffGame(row),
           scoresByUserId,
-          picksByUserId: mapPicksForGame(row, picks, playerLookup, users),
+          picksByUserId,
           winnerUserId,
           winner_user_id: winnerUserId,
           winner: winnerUserId || 'Tie',
@@ -234,9 +252,22 @@ window.CR = window.CR || {};
       });
   }
 
-  function mapSeasons(rows, currentSeasonId, totalsBySeason, users) {
+  function seasonTotalsFromGames(games = [], seasonId, users = []) {
+    return games
+      .filter((game) => String(game.seasonId || game.season_id || '') === String(seasonId || ''))
+      .reduce((acc, game) => {
+        users.forEach((user) => {
+          acc[user.id] = toNumber(acc[user.id]) + toNumber(game.scoresByUserId?.[user.id]);
+        });
+        return acc;
+      }, emptyUserMap(users, () => 0));
+  }
+
+  function mapSeasons(rows, currentSeasonId, totalsBySeason, users, games = []) {
     return sortSeasons(rows || []).map((row) => {
-      const totalsByUserId = scoreMap(totalsBySeason[String(row.id)] || [], 'total_points');
+      const directTotals = scoreMap(totalsBySeason[String(row.id)] || [], 'total_points');
+      const derivedTotals = seasonTotalsFromGames(games, row.id, users);
+      const totalsByUserId = hasAnyScore(directTotals) ? directTotals : derivedTotals;
       return {
         id: String(row.id),
         label: seasonLabel(row),
@@ -293,14 +324,15 @@ window.CR = window.CR || {};
     const playerLookup = buildPlayerLookup(players);
     const scoresByGame = rowsByKey(gameScoresRes.data || [], 'game_id');
     const totalsBySeason = rowsByKey(seasonTotalsRes.data || [], 'season_id');
+    const games = mapGames(gamesRows, picksRows, playerLookup, scoresByGame, users);
 
     return {
       source: 'supabase',
       currentSeasonId,
       users,
-      seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason, users),
+      seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason, users, games),
       players,
-      games: mapGames(gamesRows, picksRows, playerLookup, scoresByGame, users)
+      games
     };
   }
 
