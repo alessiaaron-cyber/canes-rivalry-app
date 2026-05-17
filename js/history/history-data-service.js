@@ -55,18 +55,26 @@ window.CR = window.CR || {};
     return rows.slice().sort((a, b) => toNumber(a.pick_slot, 9999) - toNumber(b.pick_slot, 9999));
   }
 
-  function normalizedUsers() {
-    const source = CR.identity?.getUsers?.() || [];
-    const users = source.slice(0, 2).map((user, index) => ({
-      ...user,
-      id: String(user.id || '').trim(),
-      displayName: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
-      display_name: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
-      rivalrySlot: toNumber(user.rivalrySlot || user.rivalry_slot, index + 1),
-      rivalry_slot: toNumber(user.rivalrySlot || user.rivalry_slot, index + 1),
-      themeClass: user.themeClass || user.theme_class || (index === 0 ? 'owner-primary' : 'owner-secondary'),
-      avatarClass: user.avatarClass || user.avatar_class || (index === 0 ? 'avatar-primary' : 'avatar-secondary')
-    })).filter((user) => user.id);
+  function normalizeUsers(rows = []) {
+    const users = rows
+      .filter((user) => user?.is_active !== false && String(user?.id || '').trim())
+      .sort((a, b) => toNumber(a.rivalry_slot, 99) - toNumber(b.rivalry_slot, 99))
+      .slice(0, 2)
+      .map((user, index) => ({
+        id: String(user.id || '').trim(),
+        email: user.email || '',
+        username: user.username || '',
+        displayName: user.display_name || user.username || user.email || `Player ${index + 1}`,
+        display_name: user.display_name || user.username || user.email || `Player ${index + 1}`,
+        rivalrySlot: toNumber(user.rivalry_slot, index + 1),
+        rivalry_slot: toNumber(user.rivalry_slot, index + 1),
+        colorHex: user.color_hex || '',
+        color_hex: user.color_hex || '',
+        colorLabel: user.color_label || '',
+        color_label: user.color_label || '',
+        themeClass: index === 1 ? 'owner-secondary' : 'owner-primary',
+        avatarClass: index === 1 ? 'avatar-secondary' : 'avatar-primary'
+      }));
 
     return users.length ? users : [
       { id: 'player-1', displayName: 'Player 1', display_name: 'Player 1', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary' },
@@ -243,10 +251,17 @@ window.CR = window.CR || {};
 
   async function fetchHistoryData() {
     const db = await CR.getSupabase();
-    const users = normalizedUsers();
 
+    const profilesPromise = db
+      .from('user_profiles')
+      .select('id, email, username, display_name, role, is_active, color_hex, color_label, rivalry_slot')
+      .eq('is_active', true);
     const seasonsRes = await db.from('seasons').select('*');
     if (seasonsRes.error) throw seasonsRes.error;
+
+    const profilesRes = await profilesPromise;
+    if (profilesRes.error) throw profilesRes.error;
+    const users = normalizeUsers(profilesRes.data || []);
 
     const seasons = sortSeasons(seasonsRes.data || []);
     const activeSeason = seasons.find((season) => season.is_active) || seasons[seasons.length - 1] || null;
