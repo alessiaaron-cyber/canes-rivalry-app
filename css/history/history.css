@@ -604,7 +604,8 @@
   text-align: center;
 }
 
-.history-hq-card .history-season-score-grid .rivalry-score-card .eyebrow {
+.history-hq-card .history-season-score-grid .rivalry-score-card .eyebrow,
+.history-admin-sheet .history-sheet-score-preview-card .eyebrow {
   text-transform: none;
   letter-spacing: 0.02em;
 }
