@@ -2,70 +2,48 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const pointsForPick = (pick) => ((pick.goals || 0) * 2) + (pick.assists || 0) + (pick.firstGoal ? 2 : 0);
-
-  const FALLBACK_USERS = [
-    { username: 'player-1', displayName: 'Player 1', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'player-1', profileKey: 'player-1' },
-    { username: 'player-2', displayName: 'Player 2', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'player-2', profileKey: 'player-2' }
-  ];
+  const SIDES = [0, 1];
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function toNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function getUsers(raw) {
-    const identityUsers = CR.identity?.getUsers?.(raw);
-    const source = Array.isArray(identityUsers) && identityUsers.length
-      ? identityUsers
-      : (Array.isArray(raw?.users) && raw.users.length ? raw.users : FALLBACK_USERS);
-
-    return source.map((user, index) => ({
+    const source = Array.isArray(raw?.users) && raw.users.length ? raw.users : [];
+    return source.slice(0, 2).map((user, index) => ({
       ...user,
-      username: user.username || user.displayName || FALLBACK_USERS[index]?.username || `Player ${index + 1}`,
-      displayName: user.displayName || user.display_name || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
-      display_name: user.displayName || user.display_name || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
-      themeClass: user.themeClass || user.theme_class || FALLBACK_USERS[index]?.themeClass || (index === 0 ? 'owner-primary' : 'owner-secondary'),
-      avatarClass: user.avatarClass || user.avatar_class || FALLBACK_USERS[index]?.avatarClass || (index === 0 ? 'avatar-primary' : 'avatar-secondary'),
-      scoreKey: user.scoreKey || user.score_key || user.id || user.username || FALLBACK_USERS[index]?.scoreKey || `player-${index + 1}`,
-      profileKey: user.profileKey || user.profile_key || user.id || FALLBACK_USERS[index]?.profileKey || `player-${index + 1}`,
-      profile_key: user.profileKey || user.profile_key || user.id || FALLBACK_USERS[index]?.profileKey || `player-${index + 1}`
-    }));
+      id: String(user.id || '').trim(),
+      displayName: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
+      display_name: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
+      themeClass: user.themeClass || user.theme_class || (index === 0 ? 'owner-primary' : 'owner-secondary'),
+      avatarClass: user.avatarClass || user.avatar_class || (index === 0 ? 'avatar-primary' : 'avatar-secondary')
+    })).filter((user) => user.id);
   }
 
-  function scoreFor(game, users, index) {
-    if (index === 0 && game?.firstScore !== undefined) return Number(game.firstScore || 0);
-    if (index === 1 && game?.secondScore !== undefined) return Number(game.secondScore || 0);
-    const user = users[index] || FALLBACK_USERS[index];
-    const userId = String(user?.id || '').trim();
-    const profileKey = String(user?.profileKey || user?.profile_key || '').trim();
-    if (userId && game?.scoresByUserId?.[userId] !== undefined) return Number(game.scoresByUserId[userId] || 0);
-    if (profileKey && game?.scoresByUserId?.[profileKey] !== undefined) return Number(game.scoresByUserId[profileKey] || 0);
-    return 0;
+  function userAt(users, index) {
+    return users[index] || { id: `player-${index + 1}`, displayName: `Player ${index + 1}`, themeClass: index === 0 ? 'owner-primary' : 'owner-secondary' };
   }
 
-  function pickKeyOptions(user, index) {
-    return [
-      user?.profileKey,
-      user?.profile_key,
-      user?.id,
-      user?.scoreKey,
-      user?.score_key,
-      user?.username,
-      user?.displayName,
-      user?.display_name,
-      index === 0 ? 'first' : 'second'
-    ].filter(Boolean);
+  function userName(users, index) {
+    const user = userAt(users, index);
+    return user.displayName || user.display_name || user.username || `Player ${index + 1}`;
   }
 
-  function winner(game, users = FALLBACK_USERS) {
-    if (String(game?.winner || '').toLowerCase() === 'tie') return 'Tie';
-    const matched = users.find((user, index) => pickKeyOptions(user, index).map((key) => String(key).toLowerCase()).includes(String(game?.winner || '').toLowerCase()));
-    if (matched) return matched.displayName || matched.username || 'Player';
-    const firstScore = scoreFor(game, users, 0);
-    const secondScore = scoreFor(game, users, 1);
-    if (firstScore > secondScore) return users[0]?.displayName || users[0]?.username || 'Player 1';
-    if (secondScore > firstScore) return users[1]?.displayName || users[1]?.username || 'Player 2';
-    return 'Tie';
+  function scoreFor(row, users, index) {
+    const user = userAt(users, index);
+    return toNumber(row?.scoresByUserId?.[user.id] ?? row?.totalsByUserId?.[user.id]);
+  }
+
+  function winnerName(game, users) {
+    if (!game?.winnerUserId && !game?.winner_user_id) return 'Tie';
+    const id = String(game.winnerUserId || game.winner_user_id || '').trim();
+    const user = users.find((item) => item.id === id);
+    return user ? userName([user], 0) : 'Tie';
   }
 
   function isPlayoffGame(game) {
@@ -74,37 +52,36 @@ window.CR = window.CR || {};
   }
 
   function playerMap(players) {
-    return new Map((players || []).map((player) => [player.id, player]));
+    return new Map((players || []).map((player) => [String(player.id), player]));
+  }
+
+  function enrichPick(pick, map) {
+    const player = map.get(String(pick.playerId || pick.player_id || '')) || { name: pick.playerName || pick.player || '—', position: pick.position || '—', vibe: pick.vibe || '' };
+    return {
+      ...pick,
+      playerName: pick.playerName || pick.player || player.name,
+      position: pick.position || player.position || '—',
+      vibe: pick.vibe || player.vibe || '',
+      goals: toNumber(pick.goals),
+      assists: toNumber(pick.assists),
+      points: toNumber(pick.points)
+    };
   }
 
   function enrichGame(game, map, users) {
-    const picks = users.slice(0, 2).reduce((acc, user, index) => {
-      const targetKey = user.displayName || user.username || (index === 0 ? 'Player 1' : 'Player 2');
-      const sourceKey = pickKeyOptions(user, index).find((key) => Array.isArray(game.picks?.[key]));
-
-      acc[targetKey] = (game.picks?.[sourceKey] || []).map((pick) => {
-        const player = map.get(pick.playerId) || { name: pick.playerName || pick.playerId, position: '—', vibe: '' };
-        return {
-          ...pick,
-          playerName: player.name,
-          position: player.position,
-          vibe: player.vibe,
-          points: pointsForPick(pick)
-        };
-      });
-
+    const picks = users.reduce((acc, user) => {
+      acc[user.id] = (game.picksByUserId?.[user.id] || []).map((pick) => enrichPick(pick, map));
       return acc;
     }, {});
-
     const firstScore = scoreFor(game, users, 0);
     const secondScore = scoreFor(game, users, 1);
-    const gameWinner = winner(game, users);
+    const gameWinner = winnerName(game, users);
 
     return {
       ...game,
+      playoff: isPlayoffGame(game),
       firstScore,
       secondScore,
-      playoff: isPlayoffGame(game),
       winner: gameWinner,
       margin: Math.abs(firstScore - secondScore),
       picks,
@@ -115,13 +92,13 @@ window.CR = window.CR || {};
   }
 
   function buildSeasonSummary(season, seasonGames, users) {
-    const first = users[0]?.displayName || users[0]?.username || 'Player 1';
-    const second = users[1]?.displayName || users[1]?.username || 'Player 2';
+    const first = userName(users, 0);
+    const second = userName(users, 1);
     const totals = { first: 0, second: 0, playoffFirst: 0, playoffSecond: 0 };
     const moments = [];
 
     seasonGames.forEach((game) => {
-      const gameWinner = winner(game, users);
+      const gameWinner = winnerName(game, users);
       if (gameWinner === first) totals.first += 1;
       if (gameWinner === second) totals.second += 1;
       if (game.playoff && gameWinner === first) totals.playoffFirst += 1;
@@ -130,7 +107,7 @@ window.CR = window.CR || {};
     });
 
     const bestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(b, users, 0) - scoreFor(b, users, 1)) - Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)))[0] || null;
-    const closestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)) - Math.abs(scoreFor(b, users, 0) - Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1))))[0] || null;
+    const closestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)) - Math.abs(scoreFor(b, users, 0) - scoreFor(b, users, 1)))[0] || null;
 
     return {
       seasonId: season.id,
