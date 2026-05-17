@@ -43,6 +43,8 @@ window.CR = window.CR || {};
   function saveState() { try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState)); } catch (_) {} }
   function loadState() { try { const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null'); return parsed && parsed.source === 'mock' ? parsed : null; } catch (_) { return null; } }
 
+  function draftOrder() { return [key(0), key(1), key(0), key(1)]; }
+
   function normalizePregameBuckets(pregame = {}) {
     const normalized = { [key(0)]: [], [key(1)]: [] };
     [key(0), key(1)].forEach((bucketKey) => {
@@ -89,21 +91,37 @@ window.CR = window.CR || {};
   function clearMockOptions() { ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, '')); try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {} mockState = null; }
   function resetDraft() { mockState = buildState(currentMode()); saveState(); }
 
+  function pickCountByDraftOrder() {
+    ensureState();
+    const buckets = mockState.pregame || {};
+    const order = draftOrder();
+    let count = 0;
+    for (let i = 0; i < order.length; i += 1) {
+      const bucket = buckets[order[i]] || [];
+      const occurrence = order.slice(0, i + 1).filter((ownerKey) => ownerKey === order[i]).length;
+      if (bucket[occurrence - 1]) count += 1;
+      else break;
+    }
+    return count;
+  }
+
   function syncDraftState() {
     ensureState();
-    const total = (mockState.pregame[key(0)] || []).length + (mockState.pregame[key(1)] || []).length;
+    const total = pickCountByDraftOrder();
     const nextPick = total + 1;
-    const pickerIndex = total % 2;
+    const order = draftOrder();
+    const nextOwnerKey = order[total] || '';
+    const picker = mockUsers.find((user) => user.profileKey === nextOwnerKey);
     mockState.draft.currentPickNumber = Math.min(nextPick, 5);
     mockState.draft.status = nextPick > 4 ? 'complete' : 'open';
-    mockState.draft.currentPicker = nextPick > 4 ? { id: '', displayName: '', profileKey: '' } : { id: mockUsers[pickerIndex].id, displayName: mockUsers[pickerIndex].displayName, profileKey: key(pickerIndex) };
+    mockState.draft.currentPicker = nextPick > 4 || !picker ? { id: '', displayName: '', profileKey: '' } : { id: picker.id, displayName: picker.displayName, profileKey: picker.profileKey };
     saveState();
   }
 
   async function fetchGameDayData() { ensureState(); mockState.mode = currentMode(); mockState.playoffMode = isPlayoffs() ? 'playoffs' : 'regular'; mockState.carryover = { active: isCarryover() }; syncDraftState(); return clone(mockState); }
   async function savePregamePicks(gameId, pregame) { ensureState(); mockState.pregame = normalizePregameBuckets(pregame || {}); syncDraftState(); return { savedRows: [], mock: true }; }
-  async function saveDraftPick(gameId, playerName) { ensureState(); if (!playerName) throw new Error('Choose a player first.'); if ([key(0), key(1)].flatMap((bucketKey) => mockState.pregame[bucketKey] || []).includes(playerName)) throw new Error('That player has already been picked.'); syncDraftState(); const pickNumber = Number(mockState.draft.currentPickNumber || 1); if (pickNumber > 4) throw new Error('Draft is already complete.'); const bucket = key((pickNumber - 1) % 2); mockState.pregame[bucket].push(playerName); syncDraftState(); return { savedRow: null, game: mockState.game, mock: true }; }
-  async function undoLastDraftPick() { ensureState(); const order = [key(0), key(1), key(0), key(1)]; for (let i = 3; i >= 0; i -= 1) { const bucket = order[i]; if ((mockState.pregame[bucket] || []).length) { mockState.pregame[bucket].pop(); syncDraftState(); return { clearedRow: null, game: mockState.game, undonePickNumber: i + 1, mock: true }; } } throw new Error('There are no draft picks to undo.'); }
+  async function saveDraftPick(gameId, playerName) { ensureState(); if (!playerName) throw new Error('Choose a player first.'); if ([key(0), key(1)].flatMap((bucketKey) => mockState.pregame[bucketKey] || []).includes(playerName)) throw new Error('That player has already been picked.'); syncDraftState(); const pickNumber = Number(mockState.draft.currentPickNumber || 1); if (pickNumber > 4) throw new Error('Draft is already complete.'); const bucket = draftOrder()[pickNumber - 1]; mockState.pregame[bucket].push(playerName); syncDraftState(); return { savedRow: null, game: mockState.game, mock: true }; }
+  async function undoLastDraftPick() { ensureState(); const total = pickCountByDraftOrder(); if (!total) throw new Error('There are no draft picks to undo.'); const order = draftOrder(); const bucket = order[total - 1]; if (!(mockState.pregame[bucket] || []).length) throw new Error('There are no draft picks to undo.'); mockState.pregame[bucket].pop(); syncDraftState(); return { clearedRow: null, game: mockState.game, undonePickNumber: total, mock: true }; }
 
   CR.gameDayMockService = { isEnabled, currentMode, isPlayoffs, isCarryover, setMockOptions, clearMockOptions, resetDraft, fetchGameDayData, savePregamePicks, saveDraftPick, undoLastDraftPick, buildState };
 })();
