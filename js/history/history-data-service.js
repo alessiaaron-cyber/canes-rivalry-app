@@ -8,6 +8,10 @@ window.CR = window.CR || {};
     return Number.isFinite(n) ? n : fallback;
   }
 
+  function normalizeStatus(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
   function seasonLabel(row) {
     return row?.display_name || row?.label || row?.season_key || row?.name || String(row?.id || 'Season');
   }
@@ -28,7 +32,7 @@ window.CR = window.CR || {};
   }
 
   function isFinalGame(row) {
-    return String(row?.status || '').toLowerCase() === 'final';
+    return normalizeStatus(row?.status) === 'final';
   }
 
   function playerIdForName(name) {
@@ -51,59 +55,64 @@ window.CR = window.CR || {};
     return rows.slice().sort((a, b) => toNumber(a.pick_slot, 9999) - toNumber(b.pick_slot, 9999));
   }
 
-  function users() {
-    return CR.identity?.getUsers?.() || [
-      { id: 'player-1', username: 'player-1', displayName: 'Player 1', profileKey: 'player-1', scoreKey: 'player-1', themeClass: 'owner-primary', avatarClass: 'avatar-primary' },
-      { id: 'player-2', username: 'player-2', displayName: 'Player 2', profileKey: 'player-2', scoreKey: 'player-2', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary' }
+  function normalizedUsers() {
+    const source = CR.identity?.getUsers?.() || [];
+    const users = source.slice(0, 2).map((user, index) => ({
+      ...user,
+      id: String(user.id || '').trim(),
+      displayName: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
+      display_name: user.displayName || user.display_name || user.username || `Player ${index + 1}`,
+      rivalrySlot: toNumber(user.rivalrySlot || user.rivalry_slot, index + 1),
+      rivalry_slot: toNumber(user.rivalrySlot || user.rivalry_slot, index + 1),
+      themeClass: user.themeClass || user.theme_class || (index === 0 ? 'owner-primary' : 'owner-secondary'),
+      avatarClass: user.avatarClass || user.avatar_class || (index === 0 ? 'avatar-primary' : 'avatar-secondary')
+    })).filter((user) => user.id);
+
+    return users.length ? users : [
+      { id: 'player-1', displayName: 'Player 1', display_name: 'Player 1', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary' },
+      { id: 'player-2', displayName: 'Player 2', display_name: 'Player 2', rivalrySlot: 2, rivalry_slot: 2, themeClass: 'owner-secondary', avatarClass: 'avatar-secondary' }
     ];
   }
 
-  function profileKey(profile = {}, index = 0) {
-    return CR.profileScoreUtils?.profileKey?.(profile, index) || String(profile.profileKey || profile.profile_key || profile.id || `player-${index + 1}`).trim();
-  }
-
-  function displayName(profile = {}, index = 0) {
-    return CR.profileScoreUtils?.displayName?.(profile, `Player ${index + 1}`) || profile.displayName || profile.display_name || profile.username || `Player ${index + 1}`;
-  }
-
-  function scoreRowsByGameId(rows = []) {
+  function rowsByKey(rows = [], keyName) {
     return rows.reduce((acc, row) => {
-      const gameId = String(row.game_id || '');
-      if (!gameId) return acc;
-      acc[gameId] = acc[gameId] || [];
-      acc[gameId].push(row);
+      const key = String(row?.[keyName] || '');
+      if (!key) return acc;
+      acc[key] = acc[key] || [];
+      acc[key].push(row);
       return acc;
     }, {});
   }
 
-  function totalsRowsBySeasonId(rows = []) {
+  function scoreMap(rows = [], valueKey = 'points') {
     return rows.reduce((acc, row) => {
-      const seasonId = String(row.season_id || '');
-      if (!seasonId) return acc;
-      acc[seasonId] = acc[seasonId] || [];
-      acc[seasonId].push(row);
+      const userId = String(row.user_id || '').trim();
+      if (userId) acc[userId] = toNumber(row[valueKey]);
       return acc;
     }, {});
   }
 
-  function scoreForUser(profile, normalizedScores, index = 0) {
-    return CR.profileScoreUtils?.scoreForProfile?.({ profile, normalizedScores, index }) ?? 0;
+  function scoreForUser(scoresByUserId, user) {
+    return toNumber(scoresByUserId?.[String(user?.id || '')]);
   }
 
-  function winnerForScores(row, normalizedScores, activeUsers) {
-    const winnerProfile = row.winner_user_id ? activeUsers.find((user) => String(user.id) === String(row.winner_user_id)) : null;
-    if (winnerProfile) return profileKey(winnerProfile);
-    const first = scoreForUser(activeUsers[0], normalizedScores, 0);
-    const second = scoreForUser(activeUsers[1], normalizedScores, 1);
-    if (first > second) return profileKey(activeUsers[0], 0);
-    if (second > first) return profileKey(activeUsers[1], 1);
-    return 'Tie';
+  function userById(users, userId) {
+    const lookup = String(userId || '').trim();
+    return users.find((user) => String(user.id || '') === lookup) || null;
   }
 
-  function winnerLabel(winnerKey, activeUsers) {
-    if (String(winnerKey || '').toLowerCase() === 'tie') return 'Tie';
-    const winner = activeUsers.find((user, index) => profileKey(user, index) === winnerKey || String(user.id || '') === String(winnerKey || ''));
-    return winner ? displayName(winner) : String(winnerKey || 'Player');
+  function winnerUserIdForGame(row, scoresByUserId, users) {
+    if (row.winner_user_id && userById(users, row.winner_user_id)) return String(row.winner_user_id);
+    const first = scoreForUser(scoresByUserId, users[0]);
+    const second = scoreForUser(scoresByUserId, users[1]);
+    if (first > second) return users[0]?.id || '';
+    if (second > first) return users[1]?.id || '';
+    return '';
+  }
+
+  function displayNameForUser(users, userId) {
+    const user = userById(users, userId);
+    return user?.displayName || user?.display_name || user?.username || '';
   }
 
   function mapPlayers(rows) {
@@ -140,89 +149,101 @@ window.CR = window.CR || {};
     return (goals * 2) + assists + (firstGoal ? 2 : 0);
   }
 
-  function ownerKeyForPick(pick, activeUsers) {
-    const profile = activeUsers.find((user) => String(user.id || '') === String(pick.owner_user_id || ''));
-    return profile ? profileKey(profile) : '';
+  function emptyUserMap(users, valueFactory) {
+    return users.reduce((acc, user) => {
+      acc[user.id] = valueFactory();
+      return acc;
+    }, {});
   }
 
-  function mapPicksForGame(game, picks, playerLookup, activeUsers) {
+  function mapPicksForGame(game, picks, playerLookup, users) {
     return sortPicks(picks || [])
       .filter((pick) => Number(pick.game_id) === Number(game.id))
       .reduce((acc, pick) => {
-        const owner = ownerKeyForPick(pick, activeUsers);
+        const ownerUserId = String(pick.owner_user_id || '').trim();
+        const owner = userById(users, ownerUserId);
         const name = pick.player_name || '';
+        if (!owner || !name) return acc;
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(String(pick.player_id || '')) || fallbackId;
-        if (!owner || !name) return acc;
-
-        acc[owner] = acc[owner] || [];
-        acc[owner].push({
+        acc[owner.id] = acc[owner.id] || [];
+        acc[owner.id].push({
+          id: pick.id ? String(pick.id) : '',
+          pickSlot: toNumber(pick.pick_slot),
+          pick_slot: toNumber(pick.pick_slot),
           playerId,
           playerName: name,
           player: name,
           goals: toNumber(pick.goals),
           assists: toNumber(pick.assists),
           firstGoal: Boolean(game.first_goal_scorer && name === game.first_goal_scorer && toNumber(pick.goals) > 0),
-          points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer))
+          points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer)),
+          ownerUserId: owner.id,
+          owner_user_id: owner.id
         });
         return acc;
-      }, {});
+      }, emptyUserMap(users, () => []));
   }
 
-  function mapGames(rows, picks, playerLookup, scoresByGame, activeUsers) {
+  function mapGames(rows, picks, playerLookup, scoresByGame, users) {
     return sortGames(rows || [])
-      .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
+      .filter((row) => row && normalizeStatus(row.status) !== 'hidden' && isFinalGame(row))
       .map((row) => {
-        const normalizedScores = CR.profileScoreUtils?.normalizedScoreByUserId?.(scoresByGame[String(row.id)] || []) || {};
-        const firstScore = scoreForUser(activeUsers[0], normalizedScores, 0);
-        const secondScore = scoreForUser(activeUsers[1], normalizedScores, 1);
-        const winner = winnerForScores(row, normalizedScores, activeUsers);
-        const winnerName = winnerLabel(winner, activeUsers);
+        const scoresByUserId = scoreMap(scoresByGame[String(row.id)] || []);
+        const winnerUserId = winnerUserIdForGame(row, scoresByUserId, users);
+        const winnerName = winnerUserId ? displayNameForUser(users, winnerUserId) : 'Tie';
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
-        const resultTag = winner === 'Tie' ? 'Tie' : `${winnerName} win`;
         const gameType = row.game_type || 'Regular Season';
+        const title = gameTitle(row);
 
         return {
           id: String(row.id),
-          seasonId: String(row.season_id),
+          displayNumber: row.game_number ?? row.display_number ?? '',
+          display_number: row.game_number ?? row.display_number ?? '',
+          seasonId: String(row.season_id || ''),
+          season_id: String(row.season_id || ''),
           date: row.game_date || row.date || '',
           opponent: row.opponent || '',
-          firstPick: row.first_picker_user_id || '',
+          firstPickerUserId: String(row.first_picker_user_id || ''),
+          first_picker_user_id: String(row.first_picker_user_id || ''),
+          firstPick: String(row.first_picker_user_id || ''),
           firstGoalScorer: row.first_goal_scorer || '',
-          title: gameTitle(row),
+          first_goal_scorer: row.first_goal_scorer || '',
+          title,
           gameType,
           game_type: gameType,
           playoff: isPlayoffGame(row),
-          firstScore,
-          secondScore,
-          scoresByUserId: normalizedScores,
-          winner,
-          summary: `${gameTitle(row)} finished ${firstScore}-${secondScore}.`,
-          tags: [gameType, resultTag].filter(Boolean),
-          moments: firstGoal.length ? firstGoal : [`${winner === 'Tie' ? 'Tie game' : `${winnerName} took the result`}`],
-          picks: mapPicksForGame(row, picks, playerLookup, activeUsers)
+          scoresByUserId,
+          picksByUserId: mapPicksForGame(row, picks, playerLookup, users),
+          winnerUserId,
+          winner_user_id: winnerUserId,
+          winner: winnerUserId || 'Tie',
+          winnerDisplayName: winnerName,
+          summary: `${title} finished ${scoreForUser(scoresByUserId, users[0])}-${scoreForUser(scoresByUserId, users[1])}.`,
+          tags: [gameType, winnerUserId ? `${winnerName} win` : 'Tie'].filter(Boolean),
+          moments: firstGoal.length ? firstGoal : [`${winnerUserId ? `${winnerName} took the result` : 'Tie game'}`]
         };
       });
   }
 
-  function mapSeasons(rows, currentSeasonId, totalsBySeason, activeUsers) {
+  function mapSeasons(rows, currentSeasonId, totalsBySeason, users) {
     return sortSeasons(rows || []).map((row) => {
-      const normalizedTotals = CR.profileScoreUtils?.normalizedScoreByUserId?.(totalsBySeason[String(row.id)] || [], 'total_points') || {};
+      const totalsByUserId = scoreMap(totalsBySeason[String(row.id)] || [], 'total_points');
       return {
         id: String(row.id),
         label: seasonLabel(row),
         shortLabel: seasonShortLabel(row),
         isCurrent: String(row.id) === String(currentSeasonId),
         note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
-        firstScore: scoreForUser(activeUsers[0], normalizedTotals, 0),
-        secondScore: scoreForUser(activeUsers[1], normalizedTotals, 1),
-        scoresByUserId: normalizedTotals
+        totalsByUserId,
+        scoresByUserId: totalsByUserId
       };
     });
   }
 
   async function fetchHistoryData() {
     const db = await CR.getSupabase();
+    const users = normalizedUsers();
 
     const seasonsRes = await db.from('seasons').select('*');
     if (seasonsRes.error) throw seasonsRes.error;
@@ -243,7 +264,6 @@ window.CR = window.CR || {};
     if (gameScoresRes.error) throw gameScoresRes.error;
     if (seasonTotalsRes.error) throw seasonTotalsRes.error;
 
-    const activeUsers = users();
     const gamesRows = sortGames(gamesRes.data || []);
     let picksRows = [];
 
@@ -256,16 +276,16 @@ window.CR = window.CR || {};
 
     const players = mapPlayers(playersRes.data || []);
     const playerLookup = buildPlayerLookup(players);
-    const scoresByGame = scoreRowsByGameId(gameScoresRes.data || []);
-    const totalsBySeason = totalsRowsBySeasonId(seasonTotalsRes.data || []);
+    const scoresByGame = rowsByKey(gameScoresRes.data || [], 'game_id');
+    const totalsBySeason = rowsByKey(seasonTotalsRes.data || [], 'season_id');
 
     return {
       source: 'supabase',
       currentSeasonId,
-      users: activeUsers,
-      seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason, activeUsers),
+      users,
+      seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason, users),
       players,
-      games: mapGames(gamesRows, picksRows, playerLookup, scoresByGame, activeUsers)
+      games: mapGames(gamesRows, picksRows, playerLookup, scoresByGame, users)
     };
   }
 
