@@ -3,49 +3,28 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
 
+  function sideUtils() {
+    return CR.historySideUtils || {};
+  }
+
   function userForSide(users, side) {
-    const index = side === 'Julie' ? 1 : 0;
-    return users?.[index] || {};
+    return sideUtils().userForSide?.(users, side) || users?.[side === 'Julie' ? 1 : 0] || {};
   }
 
   function pickKeysForSide(users, side) {
-    const user = userForSide(users, side);
-    return [
-      user.scoreKey,
-      user.score_key,
-      user.legacyOwner,
-      user.legacy_owner,
-      user.legacyOwnerKey,
-      user.legacy_owner_key,
-      user.username,
-      user.displayName,
-      user.display_name,
-      side
-    ].filter(Boolean);
+    return sideUtils().pickKeysForSide?.(users, side) || [];
   }
 
   function scoreKeysForSide(users, side) {
-    const legacyKey = side === 'Julie' ? 'julieScore' : 'aaronScore';
-    return pickKeysForSide(users, side)
-      .map((key) => `${String(key).trim().toLowerCase()}Score`)
-      .concat(legacyKey);
+    return sideUtils().scoreKeysForSide?.(users, side) || [];
   }
 
   function sideScore(row, side, users) {
-    const key = scoreKeysForSide(users, side).find((candidate) => row?.[candidate] !== undefined && row?.[candidate] !== null);
-    return Number(row?.[key] ?? 0);
+    return sideUtils().sideScore?.(row, side, users) ?? 0;
   }
 
   function ownerForWinner(winner, users) {
-    const text = String(winner || '').trim().toLowerCase();
-    if (!text || text === 'tie') return text ? 'Tie' : '';
-    for (const side of ['Aaron', 'Julie']) {
-      const keys = pickKeysForSide(users, side).map((key) => String(key).trim().toLowerCase());
-      if (keys.includes(text)) return side;
-    }
-    if (text === 'aaron') return 'Aaron';
-    if (text === 'julie') return 'Julie';
-    return '';
+    return sideUtils().ownerForWinner?.(winner, users) || '';
   }
 
   function scoreTotal(games, side, users) {
@@ -67,8 +46,7 @@ window.CR = window.CR || {};
   }
 
   function picksForSide(game, side, users) {
-    const key = pickKeysForSide(users, side).find((candidate) => Array.isArray(game.picks?.[candidate]));
-    return game.picks?.[key] || [];
+    return sideUtils().picksForSide?.(game, side, users) || [];
   }
 
   function firstGoalScorer(game, users) {
@@ -89,13 +67,7 @@ window.CR = window.CR || {};
   }
 
   function scoreWinner(game, users) {
-    const normalized = ownerForWinner(game?.winner, users);
-    if (normalized) return normalized;
-    const aaron = sideScore(game, 'Aaron', users);
-    const julie = sideScore(game, 'Julie', users);
-    if (aaron > julie) return 'Aaron';
-    if (julie > aaron) return 'Julie';
-    return 'Tie';
+    return sideUtils().scoreWinner?.(game, users) || 'Tie';
   }
 
   function gameLabel(game) {
