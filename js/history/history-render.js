@@ -75,6 +75,25 @@ window.CR = window.CR || {};
     return CR.identity?.findUser?.(winner, data)?.displayName || winner;
   }
 
+  function highlightCopy(data, card) {
+    const owner = card.owner ? winnerDisplayName(data, card.owner) : '';
+    return owner ? `${owner} ${card.copy}` : card.copy;
+  }
+
+  function balancedPerformers(data, performers = []) {
+    const owners = [legacyOwner(data, 0), legacyOwner(data, 1)];
+    const selected = [];
+    owners.forEach((owner) => {
+      const match = performers.find((player) => String(player.owner || '').toLowerCase() === String(owner).toLowerCase());
+      if (match) selected.push(match);
+    });
+    performers.forEach((player) => {
+      if (selected.length >= 2) return;
+      if (!selected.some((item) => item.name === player.name)) selected.push(player);
+    });
+    return selected.slice(0, 2);
+  }
+
   function outcomeText(data, game) {
     if (String(game.winner || '').toLowerCase() === 'tie') return 'Even finish';
     return `${winnerDisplayName(data, game.winner)} won`;
@@ -142,10 +161,10 @@ window.CR = window.CR || {};
 
   function renderHighlights(data) {
     const seasonData = data.hqSeasonData || data;
-    const cards = (data.highlights?.cards || []).slice(0, 3);
-    const performers = (seasonData.playerSpotlights || []).slice(0, 2);
-    const performerCards = performers.map((player) => `<article class="rivalry-highlight-item history-highlight-performer"><div class="eyebrow ${userThemeClass(data, player.owner)}">${escapeHtml(player.position)} • ${escapeHtml(winnerDisplayName(data, player.owner))} lean</div><div class="rivalry-highlight-value">${escapeHtml(player.name)}</div><p>${escapeHtml(player.totalPoints)} pts • ${escapeHtml(player.clutch)}</p></article>`).join('');
-    return `<section class="panel-card rivalry-highlights-card"><div class="history-section-head"><div><div class="eyebrow">Highlights</div><h3>Rivalry notes</h3></div></div><div class="rivalry-highlight-grid compact-grid">${cards.map((card) => `<article class="rivalry-highlight-item panel-card"><div class="eyebrow">${escapeHtml(card.label)}</div><div class="rivalry-highlight-value">${escapeHtml(card.value)}</div><p>${escapeHtml(card.copy)}</p></article>`).join('')}${performerCards}</div></section>`;
+    const cards = (data.highlights?.cards || []).slice(0, 4);
+    const performers = balancedPerformers(data, seasonData.playerSpotlights || []);
+    const performerCards = performers.map((player) => `<article class="rivalry-highlight-item history-highlight-performer"><div class="eyebrow ${userThemeClass(data, player.owner)}">${escapeHtml(player.position || 'Player')} • ${escapeHtml(winnerDisplayName(data, player.owner))} lean</div><div class="rivalry-highlight-value">${escapeHtml(player.name)}</div><p>${escapeHtml(player.totalPoints)} pts • ${escapeHtml(player.clutch)}</p></article>`).join('');
+    return `<section class="panel-card rivalry-highlights-card"><div class="history-section-head"><div><div class="eyebrow">Highlights</div><h3>Rivalry notes</h3></div></div><div class="rivalry-highlight-grid compact-grid">${cards.map((card) => `<article class="rivalry-highlight-item panel-card"><div class="eyebrow ${card.owner ? userThemeClass(data, card.owner) : ''}">${escapeHtml(card.label)}</div><div class="rivalry-highlight-value">${escapeHtml(card.value)}</div><p>${escapeHtml(highlightCopy(data, card))}</p></article>`).join('')}${performerCards}</div></section>`;
   }
 
   function renderRecentGames(data) {
