@@ -65,6 +65,21 @@ window.CR = window.CR || {};
     };
   }
 
+  function recordForGames(games = [], users = []) {
+    return games.reduce((acc, game) => {
+      const winner = scoreWinner(game, users);
+      if (winner === userId(users, 0)) acc.first += 1;
+      else if (winner === userId(users, 1)) acc.second += 1;
+      else if (winner === 'Tie') acc.ties += 1;
+      return acc;
+    }, { first: 0, second: 0, ties: 0 });
+  }
+
+  function recordText(record = {}) {
+    const base = `${toNumber(record.first)}-${toNumber(record.second)}`;
+    return toNumber(record.ties) ? `${base}-${toNumber(record.ties)}` : base;
+  }
+
   function picksForUser(game = {}, users = [], index = 0) {
     const id = userId(users, index);
     return game.picks?.[id] || game.picksByUserId?.[id] || [];
@@ -168,13 +183,21 @@ window.CR = window.CR || {};
 
   function buildAllTimeBoard(model) {
     const users = model.users || [];
-    const games = canonicalGames(model);
-    const first = scoreTotal(games, 0, users);
-    const second = scoreTotal(games, 1, users);
+    const seasons = model.seasons || [];
+    const seasonGames = model.seasonGames || {};
+    const totals = seasons.reduce((acc, season) => {
+      const games = seasonGames[resolveSeasonId(season.id)] || canonicalGames(model, season.id);
+      const seasonScore = seasonTotals(season, games, users);
+      acc.first += seasonScore.first;
+      acc.second += seasonScore.second;
+      return acc;
+    }, { first: 0, second: 0 });
+    const first = totals.first;
+    const second = totals.second;
     const firstName = userName(users, 0);
     const secondName = userName(users, 1);
     const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
-    return { first, second, lead, totalGames: games.length };
+    return { first, second, lead, totalGames: model.games?.length || 0 };
   }
 
   function buildHighlights(games, users) {
@@ -227,9 +250,8 @@ window.CR = window.CR || {};
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
     const totals = seasonTotals(season, gameLog, users);
-    const first = totals.first;
-    const second = totals.second;
-    return { seasonLabel: season?.label || summary?.label || 'Season', first, second, recordText: `${first}-${second}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
+    const record = summary?.record || recordForGames(gameLog, users);
+    return { seasonLabel: season?.label || summary?.label || 'Season', first: totals.first, second: totals.second, recordText: recordText(record), recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
