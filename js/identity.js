@@ -4,8 +4,8 @@ window.CR = window.CR || {};
   const CR = window.CR;
 
   const fallbackUsers = [
-    { username: 'Aaron', displayName: 'Aaron', display_name: 'Aaron', legacyOwner: 'Aaron', legacy_owner: 'Aaron', legacy_owner_key: 'Aaron', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', colorHex: '#c8102e', colorLabel: 'Canes Red' },
-    { username: 'Julie', displayName: 'Julie', display_name: 'Julie', legacyOwner: 'Julie', legacy_owner: 'Julie', legacy_owner_key: 'Julie', rivalrySlot: 2, rivalry_slot: 2, themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie', colorHex: '#111827', colorLabel: 'Graphite' }
+    { username: 'Aaron', displayName: 'Aaron', display_name: 'Aaron', legacyOwner: 'Aaron', legacy_owner: 'Aaron', legacy_owner_key: 'Aaron', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', profileKey: 'Aaron', colorHex: '#c8102e', colorLabel: 'Canes Red' },
+    { username: 'Julie', displayName: 'Julie', display_name: 'Julie', legacyOwner: 'Julie', legacy_owner: 'Julie', legacy_owner_key: 'Julie', rivalrySlot: 2, rivalry_slot: 2, themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie', profileKey: 'Julie', colorHex: '#111827', colorLabel: 'Graphite' }
   ];
 
   function normalizeHex(value, fallback = '#111827') {
@@ -77,6 +77,7 @@ window.CR = window.CR || {};
     const themeClass = slot === 2 ? 'owner-secondary' : 'owner-primary';
     const avatarClass = slot === 2 ? 'avatar-secondary' : 'avatar-primary';
     const colorHex = normalizeHex(profile?.color_hex || profile?.colorHex || source.color_hex || source.colorHex, fallback.colorHex);
+    const profileKey = compact(source.id) || compact(source.profileKey) || compact(source.profile_key) || displayName;
 
     return {
       ...source,
@@ -94,6 +95,8 @@ window.CR = window.CR || {};
       avatar_class: avatarClass,
       scoreKey: legacyOwner,
       score_key: legacyOwner,
+      profileKey,
+      profile_key: profileKey,
       colorHex,
       color_hex: colorHex,
       colorLabel: compact(profile?.color_label || profile?.colorLabel || source.color_label || source.colorLabel) || fallback.colorLabel || 'User color'
@@ -115,7 +118,7 @@ window.CR = window.CR || {};
   function findUser(indexOrName = 0, source) {
     if (typeof indexOrName === 'number') return getUser(indexOrName, source);
     const lookup = compact(indexOrName).toLowerCase();
-    return getUsers(source).find((user) => [user.id, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key, user.legacyOwner, user.legacy_owner, user.legacy_owner_key]
+    return getUsers(source).find((user) => [user.id, user.profileKey, user.profile_key, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key, user.legacyOwner, user.legacy_owner, user.legacy_owner_key]
       .some((value) => compact(value).toLowerCase() === lookup)) || null;
   }
 
@@ -124,6 +127,7 @@ window.CR = window.CR || {};
   function getAvatarClass(indexOrName = 0, source) { return findUser(indexOrName, source)?.avatarClass || 'avatar-primary'; }
   function getColor(indexOrName = 0, source) { return findUser(indexOrName, source)?.colorHex || normalizeUser(null, typeof indexOrName === 'number' ? indexOrName : 0).colorHex; }
   function getScoreKey(index = 0, source) { return getUser(index, source).scoreKey; }
+  function getProfileKey(index = 0, source) { return getUser(index, source).profileKey; }
   function ownerClass(indexOrName = 0, source) { return getThemeClass(indexOrName, source); }
   function leaderClass(indexOrName = 0, source) { const owner = ownerClass(indexOrName, source); return owner ? owner.replace('owner-', 'leader-') : 'leader-tie'; }
   function winnerClass(indexOrName = 0, source) { if (String(indexOrName || '').toLowerCase() === 'tie') return 'winner-tie'; const owner = ownerClass(indexOrName, source); return owner ? owner.replace('owner-', 'winner-') : 'winner-tie'; }
@@ -154,5 +158,5 @@ window.CR = window.CR || {};
     setVar(root, '--cr-current-user-border', `rgba(${currentRgb}, 0.16)`);
   }
 
-  CR.identity = { getUsers, getUser, findUser, getDisplayName, getThemeClass, getAvatarClass, getColor, getScoreKey, ownerClass, leaderClass, winnerClass, applyUserColorVariables, normalizeUser, normalizeHex, shade, rgbString };
+  CR.identity = { getUsers, getUser, findUser, getDisplayName, getThemeClass, getAvatarClass, getColor, getScoreKey, getProfileKey, ownerClass, leaderClass, winnerClass, applyUserColorVariables, normalizeUser, normalizeHex, shade, rgbString };
 })();
