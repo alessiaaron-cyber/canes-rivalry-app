@@ -126,9 +126,9 @@ window.CR = window.CR || {};
     }, {});
   }
 
-  function scoreForUser(user, normalizedScores, fallbackScore = 0) {
+  function scoreForUser(user, normalizedScores) {
     const id = String(user?.id || '').trim();
-    return id && Object.prototype.hasOwnProperty.call(normalizedScores, id) ? toNumber(normalizedScores[id]) : toNumber(fallbackScore);
+    return id && Object.prototype.hasOwnProperty.call(normalizedScores, id) ? toNumber(normalizedScores[id]) : 0;
   }
 
   function scoresByUserIdFromValues(firstScore, secondScore) {
@@ -217,10 +217,8 @@ window.CR = window.CR || {};
       .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
       .map((row) => {
         const normalizedScores = normalizedScoreByUserId(scoresByGame[String(row.id)] || []);
-        const firstUser = userBySlot(1);
-        const secondUser = userBySlot(2);
-        const firstScore = scoreForUser(firstUser, normalizedScores, toNumber(row.aaron_points));
-        const secondScore = scoreForUser(secondUser, normalizedScores, toNumber(row.julie_points));
+        const firstScore = scoreForUser(userBySlot(1), normalizedScores);
+        const secondScore = scoreForUser(userBySlot(2), normalizedScores);
         const winnerSide = row.winner_user_id ? winnerSideFromUserId(row.winner_user_id) : (firstScore > secondScore ? SIDE_ONE : secondScore > firstScore ? SIDE_TWO : 'Tie');
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
         const gameType = row.game_type || 'Regular Season';
@@ -261,8 +259,8 @@ window.CR = window.CR || {};
   function mapSeasons(rows, currentSeasonId, totalsBySeason) {
     return sortSeasons(rows || []).map((row) => {
       const normalizedTotals = normalizedScoreByUserId(totalsBySeason[String(row.id)] || [], 'total_points');
-      const firstScore = scoreForUser(userBySlot(1), normalizedTotals, toNumber(row.aaron_final_total ?? row.aaron_points ?? row.aaron_total));
-      const secondScore = scoreForUser(userBySlot(2), normalizedTotals, toNumber(row.julie_final_total ?? row.julie_points ?? row.julie_total));
+      const firstScore = scoreForUser(userBySlot(1), normalizedTotals);
+      const secondScore = scoreForUser(userBySlot(2), normalizedTotals);
       return {
         id: String(row.id),
         label: seasonLabel(row),
