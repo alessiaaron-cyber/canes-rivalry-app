@@ -3,9 +3,9 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
 
-  const fallbackUsers = [
-    { username: 'Aaron', displayName: 'Aaron', display_name: 'Aaron', legacyOwner: 'Aaron', legacy_owner: 'Aaron', legacy_owner_key: 'Aaron', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', profileKey: 'Aaron', colorHex: '#c8102e', colorLabel: 'Canes Red' },
-    { username: 'Julie', displayName: 'Julie', display_name: 'Julie', legacyOwner: 'Julie', legacy_owner: 'Julie', legacy_owner_key: 'Julie', rivalrySlot: 2, rivalry_slot: 2, themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie', profileKey: 'Julie', colorHex: '#111827', colorLabel: 'Graphite' }
+  const defaultUsers = [
+    { id: 'player-1', username: 'player-1', displayName: 'Player 1', display_name: 'Player 1', rivalrySlot: 1, rivalry_slot: 1, themeClass: 'owner-primary', avatarClass: 'avatar-primary', profileKey: 'player-1', colorHex: '#c8102e', colorLabel: 'Canes Red' },
+    { id: 'player-2', username: 'player-2', displayName: 'Player 2', display_name: 'Player 2', rivalrySlot: 2, rivalry_slot: 2, themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', profileKey: 'player-2', colorHex: '#111827', colorLabel: 'Graphite' }
   ];
 
   function normalizeHex(value, fallback = '#111827') {
@@ -39,22 +39,9 @@ window.CR = window.CR || {};
     return Array.isArray(CR.currentProfiles) ? CR.currentProfiles.filter((profile) => profile?.is_active !== false) : [];
   }
 
-  function profileMatchesSlot(profile, fallback) {
-    const profileSlot = slotOf(profile?.rivalry_slot || profile?.rivalrySlot);
-    if (profileSlot && profileSlot === fallback.rivalrySlot) return true;
-
-    const values = [profile?.legacy_owner_key, profile?.legacyOwner, profile?.legacy_owner, profile?.scoreKey, profile?.score_key, profile?.owner, profile?.username, profile?.display_name, profile?.displayName]
-      .map((value) => compact(value).toLowerCase())
-      .filter(Boolean);
-    const expected = [fallback.legacy_owner_key, fallback.legacyOwner, fallback.legacy_owner, fallback.scoreKey]
-      .map((value) => compact(value).toLowerCase())
-      .filter(Boolean);
-    return expected.some((value) => values.includes(value));
-  }
-
   function findProfileForSlot(index, seedUser) {
     const profiles = liveProfiles();
-    const fallback = fallbackUsers[index] || fallbackUsers[0];
+    const slot = index + 1;
     const seedId = compact(seedUser?.id);
 
     if (seedId) {
@@ -62,41 +49,37 @@ window.CR = window.CR || {};
       if (byId) return byId;
     }
 
-    return profiles.find((profile) => profileMatchesSlot(profile, fallback)) || null;
+    return profiles.find((profile) => slotOf(profile?.rivalry_slot || profile?.rivalrySlot) === slot) || null;
   }
 
   function normalizeUser(user, index) {
-    const fallback = fallbackUsers[index] || fallbackUsers[0];
+    const fallback = defaultUsers[index] || defaultUsers[0];
     const profile = findProfileForSlot(index, user);
     const source = { ...(user || {}), ...(profile || {}) };
 
     const username = compact(source.username) || fallback.username;
-    const legacyOwner = compact(source.legacy_owner_key || source.legacyOwner || source.legacy_owner || fallback.legacyOwner);
     const displayName = compact(source.display_name) || compact(source.displayName) || username || fallback.displayName;
     const slot = slotOf(source.rivalry_slot || source.rivalrySlot) || fallback.rivalrySlot;
     const themeClass = slot === 2 ? 'owner-secondary' : 'owner-primary';
     const avatarClass = slot === 2 ? 'avatar-secondary' : 'avatar-primary';
     const colorHex = normalizeHex(profile?.color_hex || profile?.colorHex || source.color_hex || source.colorHex, fallback.colorHex);
-    const profileKey = compact(source.id) || compact(source.profileKey) || compact(source.profile_key) || displayName;
+    const profileKey = compact(source.id) || compact(source.profileKey) || compact(source.profile_key) || fallback.profileKey || username;
 
     return {
       ...source,
       username,
       displayName,
       display_name: displayName,
-      legacyOwner,
-      legacy_owner: legacyOwner,
-      legacy_owner_key: legacyOwner,
       rivalrySlot: slot,
       rivalry_slot: slot,
       themeClass,
       theme_class: themeClass,
       avatarClass,
       avatar_class: avatarClass,
-      scoreKey: legacyOwner,
-      score_key: legacyOwner,
       profileKey,
       profile_key: profileKey,
+      scoreKey: profileKey,
+      score_key: profileKey,
       colorHex,
       color_hex: colorHex,
       colorLabel: compact(profile?.color_label || profile?.colorLabel || source.color_label || source.colorLabel) || fallback.colorLabel || 'User color'
@@ -104,11 +87,11 @@ window.CR = window.CR || {};
   }
 
   function getUsers(source) {
-    const candidates = source?.users || liveProfiles() || fallbackUsers;
-    const seedUsers = Array.isArray(candidates) && candidates.length ? candidates : fallbackUsers;
+    const candidates = source?.users || liveProfiles() || defaultUsers;
+    const seedUsers = Array.isArray(candidates) && candidates.length ? candidates : defaultUsers;
     const bySlot = [0, 1].map((index) => {
       const slot = index + 1;
-      return seedUsers.find((user) => slotOf(user?.rivalry_slot || user?.rivalrySlot) === slot) || seedUsers[index] || fallbackUsers[index];
+      return seedUsers.find((user) => slotOf(user?.rivalry_slot || user?.rivalrySlot) === slot) || seedUsers[index] || defaultUsers[index];
     });
     return bySlot.map((seed, index) => normalizeUser(seed, index));
   }
@@ -118,7 +101,7 @@ window.CR = window.CR || {};
   function findUser(indexOrName = 0, source) {
     if (typeof indexOrName === 'number') return getUser(indexOrName, source);
     const lookup = compact(indexOrName).toLowerCase();
-    return getUsers(source).find((user) => [user.id, user.profileKey, user.profile_key, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key, user.legacyOwner, user.legacy_owner, user.legacy_owner_key]
+    return getUsers(source).find((user) => [user.id, user.profileKey, user.profile_key, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key]
       .some((value) => compact(value).toLowerCase() === lookup)) || null;
   }
 
@@ -139,7 +122,7 @@ window.CR = window.CR || {};
 
     users.slice(0, 2).forEach((user, index) => {
       const slot = index + 1;
-      const color = normalizeHex(user.colorHex, fallbackUsers[index]?.colorHex);
+      const color = normalizeHex(user.colorHex, defaultUsers[index]?.colorHex);
       const dark = shade(color, -30);
       const rgb = rgbString(color);
       setVar(root, `--cr-user-${slot}-color`, color);
@@ -149,7 +132,7 @@ window.CR = window.CR || {};
       setVar(root, `--cr-user-${slot}-border`, `rgba(${rgb}, 0.16)`);
     });
 
-    const currentColor = normalizeHex(CR.currentProfile?.color_hex || CR.currentProfile?.colorHex, users[0]?.colorHex || fallbackUsers[0].colorHex);
+    const currentColor = normalizeHex(CR.currentProfile?.color_hex || CR.currentProfile?.colorHex, users[0]?.colorHex || defaultUsers[0].colorHex);
     const currentRgb = rgbString(currentColor);
     setVar(root, '--cr-current-user-color', currentColor);
     setVar(root, '--cr-current-user-color-dark', shade(currentColor, -30));
