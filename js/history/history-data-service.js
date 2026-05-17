@@ -4,8 +4,8 @@ window.CR = window.CR || {};
   const CR = window.CR;
 
   const FALLBACK_USERS = [
-    { id: 'player-1', username: 'Player 1', displayName: 'Player 1', legacyOwner: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron' },
-    { id: 'player-2', username: 'Player 2', displayName: 'Player 2', legacyOwner: 'Julie', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie' }
+    { id: 'player-1', username: 'Player 1', displayName: 'Player 1', legacyOwner: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', rivalrySlot: 1 },
+    { id: 'player-2', username: 'Player 2', displayName: 'Player 2', legacyOwner: 'Julie', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie', rivalrySlot: 2 }
   ];
 
   function toNumber(value, fallback = 0) {
@@ -61,20 +61,20 @@ window.CR = window.CR || {};
     return identityUsers.length ? identityUsers : FALLBACK_USERS;
   }
 
-  function ownerKey(profile = {}) {
-    return CR.profileScoreUtils?.ownerKey?.(profile) || profile.legacyOwner || profile.legacy_owner_key || profile.displayName || '';
-  }
-
-  function userByLegacyKey(legacyKey) {
-    const lookup = CR.profileScoreUtils?.normalizeText?.(legacyKey) || String(legacyKey || '').trim().toLowerCase();
-    return users().find((user) => {
-      const key = CR.profileScoreUtils?.normalizeText?.(ownerKey(user)) || String(ownerKey(user) || '').trim().toLowerCase();
-      return key === lookup;
-    }) || null;
+  function sideSlot(legacyKey) {
+    return String(legacyKey || '').toLowerCase() === 'julie' ? 2 : 1;
   }
 
   function userBySlot(slot) {
-    return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || null;
+    return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || FALLBACK_USERS[Number(slot) - 1] || null;
+  }
+
+  function sideProfile(legacyKey) {
+    return userBySlot(sideSlot(legacyKey)) || {};
+  }
+
+  function ownerKey(profile = {}, fallback = '') {
+    return profile.legacyOwner || profile.legacy_owner_key || profile.scoreKey || profile.score_key || fallback;
   }
 
   function scoreRowsByGameId(rows = []) {
@@ -98,22 +98,19 @@ window.CR = window.CR || {};
   }
 
   function scoreForLegacyUser(row, legacyKey, normalizedScores) {
-    const profile = userByLegacyKey(legacyKey);
-    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
-    const user = profile || fallbackProfile || {};
+    const user = sideProfile(legacyKey);
     const legacyScore = legacyKey === 'Aaron' ? toNumber(row.aaron_points) : toNumber(row.julie_points);
     return CR.profileScoreUtils?.scoreForProfile?.({
       profile: user,
       normalizedScores,
       legacyScore,
-      fallbackScore: legacyScore
+      fallbackScore: legacyScore,
+      index: sideSlot(legacyKey) - 1
     }) ?? legacyScore;
   }
 
   function seasonTotalForLegacyUser(row, legacyKey, normalizedTotals) {
-    const profile = userByLegacyKey(legacyKey);
-    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
-    const user = profile || fallbackProfile || {};
+    const user = sideProfile(legacyKey);
     const legacyTotal = legacyKey === 'Aaron'
       ? toNumber(row.aaron_final_total ?? row.aaron_points ?? row.aaron_total)
       : toNumber(row.julie_final_total ?? row.julie_points ?? row.julie_total);
@@ -121,7 +118,8 @@ window.CR = window.CR || {};
       profile: user,
       normalizedScores: normalizedTotals,
       legacyScore: legacyTotal,
-      fallbackScore: legacyTotal
+      fallbackScore: legacyTotal,
+      index: sideSlot(legacyKey) - 1
     }) ?? legacyTotal;
   }
 
@@ -159,11 +157,19 @@ window.CR = window.CR || {};
     return (goals * 2) + assists + (firstGoal ? 2 : 0);
   }
 
+  function ownerSideKey(ownerUserId) {
+    const owner = users().find((user) => String(user.id) === String(ownerUserId));
+    const slot = Number(owner?.rivalrySlot || owner?.rivalry_slot || 0);
+    if (slot === 1) return 'Aaron';
+    if (slot === 2) return 'Julie';
+    return ownerUserId || 'Unknown';
+  }
+
   function mapPicksForGame(game, picks, playerLookup) {
     return sortPicks(picks || [])
       .filter((pick) => Number(pick.game_id) === Number(game.id))
       .reduce((acc, pick) => {
-        const owner = pick.owner || pick.owner_user_id || 'Unknown';
+        const owner = pick.owner || ownerSideKey(pick.owner_user_id);
         const name = pick.player_name || '';
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(String(pick.player_id || '')) || fallbackId;
@@ -190,7 +196,7 @@ window.CR = window.CR || {};
         const aaronScore = scoreForLegacyUser(row, 'Aaron', normalizedScores);
         const julieScore = scoreForLegacyUser(row, 'Julie', normalizedScores);
         const winnerProfile = row.winner_user_id ? users().find((user) => String(user.id) === String(row.winner_user_id)) : null;
-        const winner = winnerProfile ? ownerKey(winnerProfile) : (aaronScore > julieScore ? 'Aaron' : julieScore > aaronScore ? 'Julie' : 'Tie');
+        const winner = winnerProfile ? ownerKey(winnerProfile, sideSlot(winnerProfile.rivalrySlot || winnerProfile.rivalry_slot) === 2 ? 'Julie' : 'Aaron') : (aaronScore > julieScore ? 'Aaron' : julieScore > aaronScore ? 'Julie' : 'Tie');
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
         const resultTag = winner === 'Tie' ? 'Tie' : `${winner} win`;
         const gameType = row.game_type || 'Regular Season';
