@@ -26,11 +26,17 @@ window.CR = window.CR || {};
     if (!service || service.__mockBridgeWrapped) return;
 
     const realSavePregamePicks = service.savePregamePicks?.bind(service);
+    const realSaveDraftPick = service.saveDraftPick?.bind(service);
     const realUndoLastDraftPick = service.undoLastDraftPick?.bind(service);
 
     service.savePregamePicks = async (...args) => {
       if (shouldMock()) return mock().savePregamePicks(...args);
       return realSavePregamePicks?.(...args);
+    };
+
+    service.saveDraftPick = async (...args) => {
+      if (shouldMock()) return mock().saveDraftPick(...args);
+      return realSaveDraftPick?.(...args);
     };
 
     service.undoLastDraftPick = async (...args) => {
