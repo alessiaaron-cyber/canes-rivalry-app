@@ -146,14 +146,12 @@ window.CR = window.CR || {};
 
   function resolveProfile(pick = {}, context = {}) {
     const byId = context.profilesById || {};
-    const byKey = context.profilesByKey || {};
-    return byId[String(pick.owner_user_id || '')] || byKey[String(pick.owner_user_id || '')] || byKey[normalizeText(pick.owner)] || null;
+    return byId[String(pick.owner_user_id || '')] || null;
   }
 
   function resolveCurrentPicker(game = {}, context = {}) {
     const byId = context.profilesById || {};
-    const byKey = context.profilesByKey || {};
-    const profile = byId[String(game.current_pick_user_id || game.first_picker_user_id || '')] || byKey[normalizeText(game.first_picker)] || null;
+    const profile = byId[String(game.current_pick_user_id || game.first_picker_user_id || '')] || null;
     return profile ? { id: profile.id, displayName: profile.displayName, profileKey: profile.profileKey || profile.profile_key || profile.id } : { id: '', displayName: '', profileKey: '' };
   }
 
