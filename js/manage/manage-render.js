@@ -20,24 +20,13 @@ window.CR = window.CR || {};
   const renderStartSeasonSheet = sheets.renderStartSeasonSheet || (() => '');
   const renderScoringSheet = sheets.renderScoringSheet || (() => '');
 
-  function currentProfile() {
-    return CR.currentProfile || {};
-  }
-
-  function currentUser() {
-    return CR.currentUser || {};
-  }
-
-  function isAdmin() {
-    return String(currentProfile().role || '').toLowerCase() === 'admin';
-  }
+  function currentProfile() { return CR.currentProfile || {}; }
+  function currentUser() { return CR.currentUser || {}; }
+  function isAdmin() { return String(currentProfile().role || '').toLowerCase() === 'admin'; }
 
   function profileDraft(state) {
     const profile = currentProfile();
-    return state.profileDraft || {
-      displayName: profile.display_name || profile.username || '',
-      colorHex: profile.color_hex || profile.colorHex || '#111827'
-    };
+    return state.profileDraft || { displayName: profile.display_name || profile.username || '', colorHex: profile.color_hex || profile.colorHex || '#111827' };
   }
 
   function colorFamilyFor(hex, state) {
@@ -50,18 +39,14 @@ window.CR = window.CR || {};
     const optionHex = String(option.hex || '').toLowerCase();
     const optionFamily = option.family;
     const currentHex = String(draft.colorHex || '').toLowerCase();
-
     if (optionHex === currentHex) return '';
-
     const conflict = (state.users || []).find((user) => {
       if (String(user.id || '') === currentId) return false;
       const userHex = String(user.colorHex || user.color_hex || '').toLowerCase();
       if (!userHex) return false;
       return userHex === optionHex || colorFamilyFor(userHex, state) === optionFamily;
     });
-
     if (!conflict) return '';
-
     const conflictHex = String(conflict.colorHex || conflict.color_hex || '').toLowerCase();
     if (conflictHex === optionHex) return `Already used by ${escapeHtml(conflict.displayName || conflict.username || 'another player')}`;
     return `Too similar to ${escapeHtml(conflict.displayName || conflict.username || 'another player')}`;
@@ -71,86 +56,16 @@ window.CR = window.CR || {};
     const selected = String(option.hex).toLowerCase() === String(draft.colorHex || '').toLowerCase();
     const reason = colorDisabledReason(option, state, draft);
     const disabled = Boolean(reason);
-
-    return `
-      <button
-        class="manage-color-option ${selected ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}"
-        type="button"
-        data-manage-profile-color="${escapeHtml(option.hex)}"
-        ${disabled ? 'disabled' : ''}
-        style="--profile-color:${escapeHtml(option.hex)}"
-      >
-        <span class="manage-color-swatch"></span>
-        <span class="manage-color-copy">
-          <strong>${escapeHtml(option.label)}</strong>
-          <small>${selected ? 'Current color' : (reason || 'Available')}</small>
-        </span>
-      </button>
-    `;
+    return `<button class="manage-color-option ${selected ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}" type="button" data-manage-profile-color="${escapeHtml(option.hex)}" ${disabled ? 'disabled' : ''} style="--profile-color:${escapeHtml(option.hex)}"><span class="manage-color-swatch"></span><span class="manage-color-copy"><strong>${escapeHtml(option.label)}</strong><small>${selected ? 'Current color' : (reason || 'Available')}</small></span></button>`;
   }
 
   function renderProfileEditSheet(state) {
     if (!state.profileEditOpen) return '';
-
     const profile = currentProfile();
     const user = currentUser();
     const draft = profileDraft(state);
     const role = profile.role || 'member';
-
-    return `
-      <div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="profileEditTitle">
-        <div class="manage-edit-backdrop" data-manage-close-profile-editor></div>
-        <div class="manage-edit-card profile-edit-card">
-          <div class="manage-edit-header">
-            <div>
-              <div class="eyebrow">Account</div>
-              <h2 id="profileEditTitle">Edit Profile</h2>
-              <p>Personalize how you appear across Game Day, History, and Manage.</p>
-            </div>
-            <button class="manage-edit-close" type="button" data-manage-close-profile-editor aria-label="Close">×</button>
-          </div>
-
-          <div class="manage-profile-form">
-            <label class="history-sheet-field">
-              <span>Display name</span>
-              <input class="history-sheet-input" type="text" maxlength="40" value="${escapeHtml(draft.displayName)}" data-manage-profile-input="displayName" />
-            </label>
-
-            <div class="manage-readonly-grid">
-              <div class="manage-readonly-field">
-                <span>Username</span>
-                <strong>@${escapeHtml(profile.username || 'member')}</strong>
-              </div>
-              <div class="manage-readonly-field">
-                <span>Role</span>
-                <strong>${escapeHtml(String(role).charAt(0).toUpperCase() + String(role).slice(1))}</strong>
-              </div>
-            </div>
-
-            <div class="manage-readonly-field is-wide">
-              <span>Email</span>
-              <strong>${escapeHtml(user.email || profile.email || '—')}</strong>
-            </div>
-
-            <div class="manage-color-section">
-              <div class="manage-color-section-head">
-                <div>
-                  <span class="eyebrow">Profile color</span>
-                  <strong>Choose your rivalry color</strong>
-                </div>
-                <span class="manage-color-current" style="--profile-color:${escapeHtml(draft.colorHex)}">${escapeHtml(draft.colorHex)}</span>
-              </div>
-              <p class="manage-color-note">Colors already used by another player, or too visually similar to theirs, are unavailable.</p>
-              <div class="manage-color-grid">
-                ${(state.profileColorOptions || []).map((option) => renderProfileColorButton(option, state, draft)).join('')}
-              </div>
-            </div>
-          </div>
-
-          <button class="cr-button save" type="button" data-manage-save-profile>Save Profile</button>
-        </div>
-      </div>
-    `;
+    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="profileEditTitle"><div class="manage-edit-backdrop" data-manage-close-profile-editor></div><div class="manage-edit-card profile-edit-card"><div class="manage-edit-header"><div><div class="eyebrow">Account</div><h2 id="profileEditTitle">Edit Profile</h2><p>Personalize how you appear across Game Day, History, and Manage.</p></div><button class="manage-edit-close" type="button" data-manage-close-profile-editor aria-label="Close">×</button></div><div class="manage-profile-form"><label class="history-sheet-field"><span>Display name</span><input class="history-sheet-input" type="text" maxlength="40" value="${escapeHtml(draft.displayName)}" data-manage-profile-input="displayName" /></label><div class="manage-readonly-grid"><div class="manage-readonly-field"><span>Username</span><strong>@${escapeHtml(profile.username || 'member')}</strong></div><div class="manage-readonly-field"><span>Role</span><strong>${escapeHtml(String(role).charAt(0).toUpperCase() + String(role).slice(1))}</strong></div></div><div class="manage-readonly-field is-wide"><span>Email</span><strong>${escapeHtml(user.email || profile.email || '—')}</strong></div><div class="manage-color-section"><div class="manage-color-section-head"><div><span class="eyebrow">Profile color</span><strong>Choose your rivalry color</strong></div><span class="manage-color-current" style="--profile-color:${escapeHtml(draft.colorHex)}">${escapeHtml(draft.colorHex)}</span></div><p class="manage-color-note">Colors already used by another player, or too visually similar to theirs, are unavailable.</p><div class="manage-color-grid">${(state.profileColorOptions || []).map((option) => renderProfileColorButton(option, state, draft)).join('')}</div></div></div><button class="cr-button save" type="button" data-manage-save-profile>Save Profile</button></div></div>`;
   }
 
   function renderNotifications(state) {
@@ -175,7 +90,7 @@ window.CR = window.CR || {};
     const carryover = CR.gameDayMockService.isCarryover?.();
     const badge = enabled ? { className: 'warning', label: 'Mock on' } : { className: 'neutral', label: 'Off' };
     const modeButton = (value, label) => `<button class="mini-button cr-button ${enabled && mode === value ? 'primary' : 'secondary'}" type="button" data-manage-mock-mode="${value}">${label}</button>`;
-    return `<section class="panel-card manage-card">${renderCardHeader('Developer/Test Mode', 'Mock Game Day', 'Frontend-only test data for Game Day. No Supabase writes, notifications, or real game records are touched.', badge)}<div class="manage-action-row"><button class="cr-button ${enabled ? 'secondary' : 'primary'}" type="button" data-manage-mock-toggle>${enabled ? 'Turn Mock Off' : 'Turn Mock On'}</button><button class="cr-button secondary" type="button" data-manage-mock-clear>Clear Mock Settings</button></div><div class="manage-action-row">${modeButton('pregame', 'Pregame')}${modeButton('live', 'Live')}${modeButton('final', 'Final')}</div><div class="manage-setting-stack">${renderToggleRow({ key: 'mock.playoffs', label: 'Mock playoff mode', hint: 'Test playoff styling and labels with fake Game Day data.', checked: playoffs })}${renderToggleRow({ key: 'mock.carryover', label: 'Mock carryover mode', hint: 'Test carryover presentation without touching a real game.', checked: carryover })}</div></section>`;
+    return `<section class="panel-card manage-card manage-dev-card">${renderCardHeader('Developer/Test Mode', 'Mock Game Day', 'Frontend-only testing tools. No Supabase writes, notifications, or real game records are touched.', badge)}<div class="manage-dev-section"><span class="eyebrow">Mock state</span><div class="manage-action-row manage-dev-actions"><button class="cr-button ${enabled ? 'secondary' : 'primary'}" type="button" data-manage-mock-toggle>${enabled ? 'Turn Off' : 'Turn On'}</button><button class="cr-button secondary" type="button" data-manage-mock-clear>Clear</button></div></div><div class="manage-dev-section"><span class="eyebrow">Game phase</span><div class="manage-action-row manage-dev-actions">${modeButton('pregame', 'Pregame')}${modeButton('live', 'Live')}${modeButton('final', 'Final')}</div></div><div class="manage-setting-stack manage-dev-toggles">${renderToggleRow({ key: 'mock.playoffs', label: 'Playoff mock', hint: 'Test playoff styling and labels.', checked: playoffs })}${renderToggleRow({ key: 'mock.carryover', label: 'Carryover mock', hint: 'Test carryover presentation safely.', checked: carryover })}</div></section>`;
   }
 
   function renderScoringSummary(state) {
@@ -216,7 +131,7 @@ window.CR = window.CR || {};
   }
 
   function renderMain(state) {
-    return `<div class="content-stack manage-stack">${renderNotifications(state)}${renderWatchExperience(state)}${renderDeveloperTools()}${renderManageTools(state)}${renderSeasonSetup(state)}${renderStatus(state)}</div>${renderProfileEditSheet(state)}${renderEditSheet(state)}${renderStartSeasonSheet(state)}${renderScoringSheet(state)}`;
+    return `<div class="content-stack manage-stack">${renderNotifications(state)}${renderWatchExperience(state)}${renderManageTools(state)}${renderSeasonSetup(state)}${renderStatus(state)}${renderDeveloperTools()}</div>${renderProfileEditSheet(state)}${renderEditSheet(state)}${renderStartSeasonSheet(state)}${renderScoringSheet(state)}`;
   }
 
   function renderRoot(state) {
