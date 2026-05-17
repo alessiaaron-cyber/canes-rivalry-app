@@ -36,6 +36,18 @@ window.CR = window.CR || {};
     return Number(row?.[key] ?? 0);
   }
 
+  function ownerForWinner(winner, users) {
+    const text = String(winner || '').trim().toLowerCase();
+    if (!text || text === 'tie') return text ? 'Tie' : '';
+    for (const side of ['Aaron', 'Julie']) {
+      const keys = pickKeysForSide(users, side).map((key) => String(key).trim().toLowerCase());
+      if (keys.includes(text)) return side;
+    }
+    if (text === 'aaron') return 'Aaron';
+    if (text === 'julie') return 'Julie';
+    return '';
+  }
+
   function scoreTotal(games, side, users) {
     return games.reduce((total, game) => total + sideScore(game, side, users), 0);
   }
@@ -77,6 +89,8 @@ window.CR = window.CR || {};
   }
 
   function scoreWinner(game, users) {
+    const normalized = ownerForWinner(game?.winner, users);
+    if (normalized) return normalized;
     const aaron = sideScore(game, 'Aaron', users);
     const julie = sideScore(game, 'Julie', users);
     if (aaron > julie) return 'Aaron';
