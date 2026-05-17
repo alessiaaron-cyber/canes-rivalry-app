@@ -90,6 +90,16 @@ window.CR = window.CR || {};
     CR.renderAccountIdentity?.();
 
     try {
+      if (typeof CR.refreshGameDayData === 'function') {
+        await CR.refreshGameDayData({ skipIfEditing: true });
+      } else {
+        CR.renderGameDayState?.();
+      }
+    } catch (error) {
+      console.warn('Game Day refresh after profile save failed', error);
+    }
+
+    try {
       await CR.refreshHistoryData?.();
     } catch (error) {
       console.warn('History refresh after profile save failed', error);
