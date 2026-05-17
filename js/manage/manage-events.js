@@ -164,6 +164,19 @@ window.CR = window.CR || {};
     CR.renderManage?.({ scrollTop: options.scrollTop });
   }
 
+  function setMockOptions(patch = {}) {
+    const service = CR.gameDayMockService;
+    if (!service) return;
+    service.setMockOptions?.({
+      enabled: patch.enabled ?? service.isEnabled?.(),
+      mode: patch.mode || service.currentMode?.() || 'pregame',
+      playoffs: patch.playoffs ?? service.isPlayoffs?.(),
+      carryover: patch.carryover ?? service.isCarryover?.()
+    });
+    CR.refreshGameDayData?.({ flash: true });
+    rerender();
+  }
+
   function bindManageEvents() {
     const root = document.querySelector('#manageContent');
     const editProfileButton = document.querySelector('#manageEditProfileButton');
@@ -196,6 +209,13 @@ window.CR = window.CR || {};
 
     root.addEventListener('click', async (event) => {
       const current = state();
+
+      const mockToggle = event.target.closest('[data-manage-mock-toggle]');
+      if (mockToggle) { setMockOptions({ enabled: !CR.gameDayMockService?.isEnabled?.() }); CR.showToast?.({ message: CR.gameDayMockService?.isEnabled?.() ? 'Mock Game Day on' : 'Mock Game Day off' }); return; }
+      const mockClear = event.target.closest('[data-manage-mock-clear]');
+      if (mockClear) { CR.gameDayMockService?.clearMockOptions?.(); CR.refreshGameDayData?.({ flash: true }); rerender(); CR.showToast?.({ message: 'Mock settings cleared' }); return; }
+      const mockMode = event.target.closest('[data-manage-mock-mode]');
+      if (mockMode) { setMockOptions({ enabled: true, mode: mockMode.dataset.manageMockMode }); CR.showToast?.({ message: `Mock mode: ${mockMode.dataset.manageMockMode}` }); return; }
 
       const closeProfile = event.target.closest('[data-manage-close-profile-editor]');
       if (closeProfile) { current.profileEditOpen = false; current.profileDraft = null; rerender(); return; }
@@ -371,6 +391,8 @@ window.CR = window.CR || {};
       const toggleButton = event.target.closest('[data-manage-toggle]');
       if (toggleButton) {
         const key = toggleButton.dataset.manageToggle;
+        if (key === 'mock.playoffs') { setMockOptions({ enabled: true, playoffs: !CR.gameDayMockService?.isPlayoffs?.() }); CR.showToast?.({ message: 'Mock playoff setting updated' }); return; }
+        if (key === 'mock.carryover') { setMockOptions({ enabled: true, carryover: !CR.gameDayMockService?.isCarryover?.() }); CR.showToast?.({ message: 'Mock carryover setting updated' }); return; }
         const currentValue = Boolean(getNestedValue(current, key));
         setNestedValue(current, key, !currentValue);
         rerender();
