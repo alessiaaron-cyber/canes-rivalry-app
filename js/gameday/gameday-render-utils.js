@@ -7,25 +7,32 @@ window.CR = window.CR || {};
     return CR.identity || {};
   }
 
+  function stateUser(index) {
+    return CR.gameDay?.users?.[index] || null;
+  }
+
   function user(index) {
-    return identity().getUser?.(index) || {};
+    return stateUser(index) || identity().getUser?.(index) || {};
   }
 
   function userName(index) {
-    return identity().getDisplayName?.(index) || `Player ${index + 1}`;
+    const profileUser = user(index);
+    return profileUser.displayName || profileUser.display_name || identity().getDisplayName?.(index) || `Player ${index + 1}`;
   }
 
   function profileKey(index) {
     const profileUser = user(index);
-    return identity().getProfileKey?.(index) || profileUser.profileKey || profileUser.profile_key || profileUser.id || `player-${index + 1}`;
+    return profileUser.profileKey || profileUser.profile_key || profileUser.id || identity().getProfileKey?.(index) || `player-${index + 1}`;
   }
 
   function scoreKey(index) {
-    return identity().getScoreKey?.(index) || profileKey(index);
+    const profileUser = user(index);
+    return profileUser.scoreKey || profileUser.score_key || identity().getScoreKey?.(index) || profileKey(index);
   }
 
   function ownerClass(index) {
-    return identity().ownerClass?.(index) || (index === 0 ? 'owner-primary' : 'owner-secondary');
+    const profileUser = user(index);
+    return profileUser.themeClass || profileUser.theme_class || identity().ownerClass?.(index) || (index === 0 ? 'owner-primary' : 'owner-secondary');
   }
 
   function changedClass(key, className = 'is-realtime-changed') {
@@ -100,22 +107,5 @@ window.CR = window.CR || {};
     return [getSideContext(0, data), getSideContext(1, data)];
   }
 
-  CR.gameDayRenderUtils = {
-    user,
-    userName,
-    profileKey,
-    scoreKey,
-    ownerClass,
-    changedClass,
-    normalizeKeyPart,
-    scoreChangedKey,
-    pickChangedKey,
-    firstGoalChangedKey,
-    feedChangedKey,
-    lookupKeys,
-    getUserPicks,
-    getUserScore,
-    getSideContext,
-    sides
-  };
+  CR.gameDayRenderUtils = { user, userName, profileKey, scoreKey, ownerClass, changedClass, normalizeKeyPart, scoreChangedKey, pickChangedKey, firstGoalChangedKey, feedChangedKey, lookupKeys, getUserPicks, getUserScore, getSideContext, sides };
 })();
