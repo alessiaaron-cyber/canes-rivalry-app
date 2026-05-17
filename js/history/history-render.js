@@ -10,51 +10,74 @@ window.CR = window.CR || {};
   }
 
   function getUser(data, index) {
-    return CR.identity?.getUser?.(index, data) || {};
+    return data?.users?.[index] || CR.identity?.getUser?.(index, data) || {};
   }
 
   function userName(data, index) {
-    return CR.identity?.getDisplayName?.(index, data) || getUser(data, index).displayName || `Player ${index + 1}`;
-  }
-
-  function userThemeClass(data, usernameOrIndex) {
-    return CR.identity?.ownerClass?.(usernameOrIndex, data) || (Number(usernameOrIndex) === 1 ? 'owner-secondary' : 'owner-primary');
-  }
-
-  function userScoreKey(data, index) {
     const user = getUser(data, index);
-    return CR.identity?.getScoreKey?.(index, data) || user.scoreKey || user.score_key || user.profileKey || user.profile_key || user.id || (index === 0 ? 'first' : 'second');
+    return user.displayName || user.display_name || user.username || `Player ${index + 1}`;
   }
 
-  function lookupKeys(data, index) {
-    const user = getUser(data, index);
-    return [userScoreKey(data, index), user.profileKey, user.profile_key, user.id, user.username, user.display_name, user.displayName, index === 0 ? 'first' : 'second'].filter(Boolean);
+  function userId(data, index) {
+    return String(getUser(data, index).id || '').trim();
+  }
+
+  function userThemeClass(data, indexOrWinner) {
+    if (typeof indexOrWinner === 'number') return getUser(data, indexOrWinner).themeClass || (indexOrWinner === 1 ? 'owner-secondary' : 'owner-primary');
+    const winner = String(indexOrWinner || '');
+    const index = (data?.users || []).findIndex((user) => String(user.id || user.displayName || user.display_name || user.username) === winner);
+    return index === 1 ? 'owner-secondary' : 'owner-primary';
   }
 
   function gameScores(data, game) {
-    if (game?.firstScore !== undefined || game?.secondScore !== undefined) {
-      return { first: Number(game?.firstScore || 0), second: Number(game?.secondScore || 0) };
-    }
-    const firstUser = getUser(data, 0);
-    const secondUser = getUser(data, 1);
-    const firstId = String(firstUser.id || firstUser.profileKey || firstUser.profile_key || '').trim();
-    const secondId = String(secondUser.id || secondUser.profileKey || secondUser.profile_key || '').trim();
     return {
-      first: Number(game?.scoresByUserId?.[firstId] || 0),
-      second: Number(game?.scoresByUserId?.[secondId] || 0)
+      first: Number(game?.scoresByUserId?.[userId(data, 0)] ?? game?.firstScore ?? 0),
+      second: Number(game?.scoresByUserId?.[userId(data, 1)] ?? game?.secondScore ?? 0)
+    };
+  }
+
+  function seasonScores(data, season) {
+    return {
+      first: Number(season?.totalsByUserId?.[userId(data, 0)] ?? season?.scoresByUserId?.[userId(data, 0)] ?? 0),
+      second: Number(season?.totalsByUserId?.[userId(data, 1)] ?? season?.scoresByUserId?.[userId(data, 1)] ?? 0)
     };
   }
 
   function picksFor(data, game, index) {
-    const keys = lookupKeys(data, index);
-    const key = keys.find((candidate) => Array.isArray(game.picks?.[candidate]));
-    return game.picks?.[key] || [];
+    return game.picks?.[userId(data, index)] || game.picksByUserId?.[userId(data, index)] || [];
   }
 
-  function seasonWinner(data, summary, totals) {
-    if (totals.first > totals.second) return userName(data, 0);
-    if (totals.second > totals.first) return userName(data, 1);
+  function winnerDisplayName(data, winner) {
+    const value = String(winner || '').trim();
+    if (!value || value.toLowerCase() === 'tie') return 'Tie';
+    const user = (data?.users || []).find((item) => String(item.id) === value || String(item.displayName || item.display_name || item.username) === value);
+    return user?.displayName || user?.display_name || user?.username || value;
+  }
+
+  function winnerThemeClass(data, winner) {
+    const value = String(winner || '').trim();
+    if (!value || value.toLowerCase() === 'tie') return 'winner-tie';
+    const index = (data?.users || []).findIndex((item) => String(item.id) === value || String(item.displayName || item.display_name || item.username) === value);
+    if (index === 0) return 'winner-primary';
+    if (index === 1) return 'winner-secondary';
+    return CR.identity?.winnerClass?.(winner, data) || 'winner-tie';
+  }
+
+  function outcomeText(data, game) {
+    const winnerId = game.winnerUserId || game.winner_user_id || game.winner;
+    if (!winnerId || String(winnerId).toLowerCase() === 'tie') return 'Even finish';
+    return `${winnerDisplayName(data, winnerId)} won`;
+  }
+
+  function seasonWinner(data, totals) {
+    if (totals.first > totals.second) return userId(data, 0);
+    if (totals.second > totals.first) return userId(data, 1);
     return 'Tie';
+  }
+
+  function seasonOutcomeText(data, winner, isCurrent) {
+    if (String(winner || '').toLowerCase() === 'tie') return isCurrent ? 'Tied' : 'Season tied';
+    return isCurrent ? `${winnerDisplayName(data, winner)} leads` : `${winnerDisplayName(data, winner)} won`;
   }
 
   function leaderClassFromRecord(data, recordText = '') {
@@ -67,52 +90,28 @@ window.CR = window.CR || {};
     return 'leader-tie';
   }
 
-  function winnerThemeClass(data, winner) {
-    if (String(winner || '').toLowerCase() === 'tie') return 'winner-tie';
-    return CR.identity?.winnerClass?.(winner, data) || 'winner-tie';
-  }
-
-  function winnerDisplayName(data, winner) {
-    if (String(winner || '').toLowerCase() === 'tie') return 'Tie';
-    return CR.identity?.findUser?.(winner, data)?.displayName || winner;
-  }
-
   function highlightCopy(data, card) {
     const owner = card.owner ? winnerDisplayName(data, card.owner) : '';
     return owner ? `${owner} ${card.copy}` : card.copy;
   }
 
   function ownerPerformersOnly(data, performers = []) {
-    const users = [getUser(data, 0), getUser(data, 1)];
-    return users
-      .map((user, index) => {
-        const keys = lookupKeys(data, index).map((key) => String(key).toLowerCase());
-        return performers.find((player) => keys.includes(String(player.owner || '').toLowerCase()));
-      })
+    return [userId(data, 0), userId(data, 1)]
+      .map((id) => performers.find((player) => String(player.owner || '').toLowerCase() === String(id).toLowerCase()))
       .filter(Boolean);
-  }
-
-  function outcomeText(data, game) {
-    if (String(game.winner || '').toLowerCase() === 'tie') return 'Even finish';
-    return `${winnerDisplayName(data, game.winner)} won`;
-  }
-
-  function seasonOutcomeText(data, winner, isCurrent) {
-    if (String(winner || '').toLowerCase() === 'tie') return isCurrent ? 'Tied' : 'Season tied';
-    return isCurrent ? `${winnerDisplayName(data, winner)} leads` : `${winnerDisplayName(data, winner)} won`;
   }
 
   function gameLabel(game) {
     return [game?.date, game?.opponent ? `vs ${game.opponent}` : ''].filter(Boolean).join(' • ') || game?.title || 'Game';
   }
 
-  function hasScoredResult(game) {
-    const scores = gameScores({}, game);
+  function hasScoredResult(data, game) {
+    const scores = gameScores(data, game);
     return scores.first + scores.second > 0;
   }
 
   function seasonFeaturedResult(data, summary, games) {
-    const scoredGames = (games || []).filter(hasScoredResult).map((game) => {
+    const scoredGames = (games || []).filter((game) => hasScoredResult(data, game)).map((game) => {
       const scores = gameScores(data, game);
       return { ...game, scores, label: gameLabel(game), margin: Math.abs(scores.first - scores.second), combined: scores.first + scores.second };
     });
@@ -130,9 +129,7 @@ window.CR = window.CR || {};
 
   function momentumInitial(data, winner) {
     if (String(winner || '').toLowerCase() === 'tie') return 'T';
-    const user = CR.identity?.findUser?.(winner, data);
-    const label = user?.displayName || winner || '';
-    return String(label).slice(0, 1);
+    return String(winnerDisplayName(data, winner) || '').slice(0, 1);
   }
 
   function renderRootShell() {
@@ -172,20 +169,23 @@ window.CR = window.CR || {};
 
   function renderGameCard(data, game, isArchive) {
     const scores = gameScores(data, game);
-    const winnerClass = winnerThemeClass(data, game.winner);
+    const winnerId = game.winnerUserId || game.winner_user_id || game.winner;
+    const winnerClass = winnerThemeClass(data, winnerId);
     const context = isArchive ? 'archive' : 'recent';
     const gameChangedClass = CR.ui?.changedClass?.(`history:game:${game.id}`) || '';
     const scoreChangedClass = CR.ui?.changedClass?.(`history:game:${game.id}:score`) || '';
     const gameTypeBadge = game.playoff ? '<span class="cr-pill playoff">Playoffs</span>' : '<span class="cr-pill regular">Regular</span>';
-    return `<article class="history-log-card rivalry-recap-card ${winnerClass} ${gameChangedClass} ${isArchive ? 'is-archive' : ''}" id="history-game-${escapeHtml(game.id)}"><div class="history-log-topline"><div><div class="history-log-kicker-row"><span class="history-log-kicker">Game ${escapeHtml(String(game.displayNumber))}</span>${gameTypeBadge}<span class="history-outcome-pill ${winnerClass}">${escapeHtml(outcomeText(data, game))}</span></div><div class="history-log-subtitle">${escapeHtml(game.subtitle || game.date)}</div></div></div><div class="history-recap-sides"><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</strong><span>${escapeHtml(String(scores.first))}</span></div><div class="history-recap-picks">${picksFor(data, game, 0).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</strong><span>${escapeHtml(String(scores.second))}</span></div><div class="history-recap-picks">${picksFor(data, game, 1).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section></div><div class="history-recap-footer"><span class="history-recap-first-goal">First goal: ${escapeHtml(game.firstGoalScorer || '—')}</span><div class="history-recap-actions"><button class="cr-button edit" type="button" data-history-edit-game="${escapeHtml(game.id)}" data-history-edit-context="${context}">Edit</button></div></div></article>`;
+    const gameNumber = game.displayNumber || game.display_number || '';
+    return `<article class="history-log-card rivalry-recap-card ${winnerClass} ${gameChangedClass} ${isArchive ? 'is-archive' : ''}" id="history-game-${escapeHtml(game.id)}"><div class="history-log-topline"><div><div class="history-log-kicker-row"><span class="history-log-kicker">${gameNumber ? `Game ${escapeHtml(String(gameNumber))}` : 'Game'}</span>${gameTypeBadge}<span class="history-outcome-pill ${winnerClass}">${escapeHtml(outcomeText(data, game))}</span></div><div class="history-log-subtitle">${escapeHtml(game.subtitle || game.date)}</div></div></div><div class="history-recap-sides"><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</strong><span>${escapeHtml(String(scores.first))}</span></div><div class="history-recap-picks">${picksFor(data, game, 0).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</strong><span>${escapeHtml(String(scores.second))}</span></div><div class="history-recap-picks">${picksFor(data, game, 1).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section></div><div class="history-recap-footer"><span class="history-recap-first-goal">First goal: ${escapeHtml(game.firstGoalScorer || '—')}</span><div class="history-recap-actions"><button class="cr-button edit" type="button" data-history-edit-game="${escapeHtml(game.id)}" data-history-edit-context="${context}">Edit</button></div></div></article>`;
   }
 
   function renderSeasonCard(data, summary) {
     const season = (data.seasons || []).find((item) => item.id === summary.seasonId);
     const games = data.seasonGames?.[summary.seasonId] || [];
     const gameTotals = games.reduce((acc, game) => { const scores = gameScores(data, game); acc.first += scores.first; acc.second += scores.second; return acc; }, { first: 0, second: 0 });
-    const totals = { first: gameTotals.first || Number(season?.firstScore || 0), second: gameTotals.second || Number(season?.secondScore || 0) };
-    const winner = seasonWinner(data, summary, totals);
+    const seasonTotal = seasonScores(data, season);
+    const totals = { first: gameTotals.first || seasonTotal.first, second: gameTotals.second || seasonTotal.second };
+    const winner = seasonWinner(data, totals);
     const winnerClass = winnerThemeClass(data, winner);
     const leaderClass = leaderClassFromRecord(data, summary.recordText);
     const playoffCount = games.filter((game) => game.playoff).length;
