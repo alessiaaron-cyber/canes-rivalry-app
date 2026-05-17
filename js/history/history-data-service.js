@@ -4,8 +4,8 @@ window.CR = window.CR || {};
   const CR = window.CR;
 
   const FALLBACK_USERS = [
-    { id: 'user-aaron', username: 'Aaron', displayName: 'Aaron', legacyOwner: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron' },
-    { id: 'user-julie', username: 'Julie', displayName: 'Julie', legacyOwner: 'Julie', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'Julie' }
+    { id: 'user-1', username: 'player-1', displayName: 'Player 1', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'user-1' },
+    { id: 'user-2', username: 'player-2', displayName: 'Player 2', themeClass: 'owner-secondary', avatarClass: 'avatar-secondary', scoreKey: 'user-2' }
   ];
 
   function toNumber(value, fallback = 0) {
@@ -60,20 +60,12 @@ window.CR = window.CR || {};
     return CR.identity?.getUsers?.() || FALLBACK_USERS;
   }
 
-  function ownerKey(profile = {}) {
-    return CR.profileScoreUtils?.ownerKey?.(profile) || profile.legacyOwner || profile.legacy_owner_key || profile.displayName || '';
+  function userAtSlot(slot) {
+    return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || FALLBACK_USERS[Number(slot) - 1] || null;
   }
 
-  function userByLegacyKey(legacyKey) {
-    const lookup = CR.profileScoreUtils?.normalizeText?.(legacyKey) || String(legacyKey || '').trim().toLowerCase();
-    return users().find((user) => {
-      const key = CR.profileScoreUtils?.normalizeText?.(ownerKey(user)) || String(ownerKey(user) || '').trim().toLowerCase();
-      return key === lookup;
-    }) || null;
-  }
-
-  function userBySlot(slot) {
-    return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || null;
+  function displayName(profile = {}) {
+    return CR.profileScoreUtils?.displayName?.(profile) || profile.displayName || profile.display_name || profile.username || 'Player';
   }
 
   function scoreRowsByGameId(rows = []) {
@@ -96,32 +88,20 @@ window.CR = window.CR || {};
     }, {});
   }
 
-  function scoreForLegacyUser(row, legacyKey, normalizedScores) {
-    const profile = userByLegacyKey(legacyKey);
-    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
-    const user = profile || fallbackProfile || {};
-    const legacyScore = legacyKey === 'Aaron' ? toNumber(row.aaron_points) : toNumber(row.julie_points);
-    return CR.profileScoreUtils?.scoreForProfile?.({
-      profile: user,
-      normalizedScores,
-      legacyScore,
-      fallbackScore: legacyScore
-    }) ?? legacyScore;
+  function normalizedScores(rows = [], valueKey = 'points') {
+    return CR.profileScoreUtils?.normalizedScoreByUserId?.(rows, valueKey) || {};
   }
 
-  function seasonTotalForLegacyUser(row, legacyKey, normalizedTotals) {
-    const profile = userByLegacyKey(legacyKey);
-    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
-    const user = profile || fallbackProfile || {};
-    const legacyTotal = legacyKey === 'Aaron'
-      ? toNumber(row.aaron_final_total ?? row.aaron_points ?? row.aaron_total)
-      : toNumber(row.julie_final_total ?? row.julie_points ?? row.julie_total);
-    return CR.profileScoreUtils?.scoreForProfile?.({
-      profile: user,
-      normalizedScores: normalizedTotals,
-      legacyScore: legacyTotal,
-      fallbackScore: legacyTotal
-    }) ?? legacyTotal;
+  function scoreForSlot(slot, scoreMap) {
+    const profile = userAtSlot(slot);
+    return CR.profileScoreUtils?.scoreForProfile?.(profile, scoreMap) || 0;
+  }
+
+  function winnerForGame(row, aScore, bScore) {
+    const winnerProfile = row.winner_user_id ? users().find((user) => String(user.id) === String(row.winner_user_id)) : null;
+    if (winnerProfile) return displayName(winnerProfile);
+    if (aScore === bScore) return 'Tie';
+    return aScore > bScore ? displayName(userAtSlot(1)) : displayName(userAtSlot(2));
   }
 
   function mapPlayers(rows) {
@@ -159,10 +139,12 @@ window.CR = window.CR || {};
   }
 
   function mapPicksForGame(game, picks, playerLookup) {
+    const byId = CR.profileScoreUtils?.profilesById?.(users()) || {};
     return sortPicks(picks || [])
       .filter((pick) => Number(pick.game_id) === Number(game.id))
       .reduce((acc, pick) => {
-        const owner = pick.owner || 'Unknown';
+        const ownerProfile = byId[String(pick.owner_user_id || '')] || null;
+        const owner = ownerProfile ? (CR.profileScoreUtils?.scoreKey?.(ownerProfile) || ownerProfile.id) : String(pick.owner_user_id || 'unknown');
         const name = pick.player_name || '';
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(String(pick.player_id || '')) || fallbackId;
@@ -175,7 +157,8 @@ window.CR = window.CR || {};
           goals: toNumber(pick.goals),
           assists: toNumber(pick.assists),
           firstGoal: Boolean(game.first_goal_scorer && name === game.first_goal_scorer && toNumber(pick.goals) > 0),
-          points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer))
+          points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer)),
+          ownerUserId: pick.owner_user_id || ''
         });
         return acc;
       }, {});
@@ -185,11 +168,10 @@ window.CR = window.CR || {};
     return sortGames(rows || [])
       .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
       .map((row) => {
-        const normalizedScores = CR.profileScoreUtils?.normalizedScoreByUserId?.(scoresByGame[String(row.id)] || []) || {};
-        const aaronScore = scoreForLegacyUser(row, 'Aaron', normalizedScores);
-        const julieScore = scoreForLegacyUser(row, 'Julie', normalizedScores);
-        const winnerProfile = row.winner_user_id ? users().find((user) => String(user.id) === String(row.winner_user_id)) : null;
-        const winner = winnerProfile ? ownerKey(winnerProfile) : (aaronScore > julieScore ? 'Aaron' : julieScore > aaronScore ? 'Julie' : 'Tie');
+        const scoreMap = normalizedScores(scoresByGame[String(row.id)] || []);
+        const aaronScore = scoreForSlot(1, scoreMap);
+        const julieScore = scoreForSlot(2, scoreMap);
+        const winner = winnerForGame(row, aaronScore, julieScore);
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
         const resultTag = winner === 'Tie' ? 'Tie' : `${winner} win`;
         const gameType = row.game_type || 'Regular Season';
@@ -199,7 +181,7 @@ window.CR = window.CR || {};
           seasonId: String(row.season_id),
           date: row.game_date || row.date || '',
           opponent: row.opponent || '',
-          firstPick: row.first_picker || '',
+          firstPick: row.first_picker_user_id || '',
           firstGoalScorer: row.first_goal_scorer || '',
           title: gameTitle(row),
           gameType,
@@ -218,15 +200,15 @@ window.CR = window.CR || {};
 
   function mapSeasons(rows, currentSeasonId, totalsBySeason) {
     return sortSeasons(rows || []).map((row) => {
-      const normalizedTotals = CR.profileScoreUtils?.normalizedScoreByUserId?.(totalsBySeason[String(row.id)] || [], 'total_points') || {};
+      const totalMap = normalizedScores(totalsBySeason[String(row.id)] || [], 'total_points');
       return {
         id: String(row.id),
         label: seasonLabel(row),
         shortLabel: seasonShortLabel(row),
         isCurrent: String(row.id) === String(currentSeasonId),
         note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
-        aaronScore: seasonTotalForLegacyUser(row, 'Aaron', normalizedTotals),
-        julieScore: seasonTotalForLegacyUser(row, 'Julie', normalizedTotals)
+        aaronScore: scoreForSlot(1, totalMap),
+        julieScore: scoreForSlot(2, totalMap)
       };
     });
   }
@@ -250,8 +232,8 @@ window.CR = window.CR || {};
 
     if (gamesRes.error) throw gamesRes.error;
     if (playersRes.error) throw playersRes.error;
-    if (gameScoresRes.error) console.warn('History normalized game scores unavailable; using legacy scores', gameScoresRes.error);
-    if (seasonTotalsRes.error) console.warn('History normalized season totals unavailable; using legacy totals', seasonTotalsRes.error);
+    if (gameScoresRes.error) throw gameScoresRes.error;
+    if (seasonTotalsRes.error) throw seasonTotalsRes.error;
 
     const gamesRows = sortGames(gamesRes.data || []);
     let picksRows = [];
@@ -265,8 +247,8 @@ window.CR = window.CR || {};
 
     const players = mapPlayers(playersRes.data || []);
     const playerLookup = buildPlayerLookup(players);
-    const scoresByGame = scoreRowsByGameId(gameScoresRes.error ? [] : gameScoresRes.data || []);
-    const totalsBySeason = totalsRowsBySeasonId(seasonTotalsRes.error ? [] : seasonTotalsRes.data || []);
+    const scoresByGame = scoreRowsByGameId(gameScoresRes.data || []);
+    const totalsBySeason = totalsRowsBySeasonId(seasonTotalsRes.data || []);
 
     return {
       source: 'supabase',
