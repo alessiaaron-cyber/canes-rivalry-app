@@ -12,16 +12,16 @@ window.CR = window.CR || {};
   }
 
   function userName(index) {
-    return identity().getDisplayName?.(index) || (index === 0 ? 'Aaron' : 'Julie');
+    return identity().getDisplayName?.(index) || `Player ${index + 1}`;
+  }
+
+  function profileKey(index) {
+    const profileUser = user(index);
+    return identity().getProfileKey?.(index) || profileUser.profileKey || profileUser.profile_key || profileUser.id || `player-${index + 1}`;
   }
 
   function scoreKey(index) {
-    return identity().getScoreKey?.(index) || legacyOwner(index) || userName(index);
-  }
-
-  function legacyOwner(index) {
-    const profileUser = user(index);
-    return profileUser.legacyOwner || profileUser.legacy_owner || profileUser.legacy_owner_key || (index === 0 ? 'Aaron' : 'Julie');
+    return identity().getScoreKey?.(index) || profileKey(index);
   }
 
   function ownerClass(index) {
@@ -55,17 +55,18 @@ window.CR = window.CR || {};
   function lookupKeys(index) {
     const profileUser = user(index);
     return [
+      profileKey(index),
+      profileUser.profileKey,
+      profileUser.profile_key,
       profileUser.id,
       profileUser.user_id,
       scoreKey(index),
       profileUser.scoreKey,
       profileUser.score_key,
-      legacyOwner(index),
       profileUser.username,
       profileUser.displayName,
       profileUser.display_name,
-      userName(index),
-      index === 0 ? 'Aaron' : 'Julie'
+      userName(index)
     ].filter(Boolean);
   }
 
@@ -87,8 +88,8 @@ window.CR = window.CR || {};
     return {
       index,
       name: userName(index),
-      key: scoreKey(index),
-      legacyOwner: legacyOwner(index),
+      key: profileKey(index),
+      profileKey: profileKey(index),
       ownerClass: ownerClass(index),
       picks: getUserPicks(data.users, index),
       score: getUserScore(data.scores, index)
@@ -102,8 +103,8 @@ window.CR = window.CR || {};
   CR.gameDayRenderUtils = {
     user,
     userName,
+    profileKey,
     scoreKey,
-    legacyOwner,
     ownerClass,
     changedClass,
     normalizeKeyPart,
