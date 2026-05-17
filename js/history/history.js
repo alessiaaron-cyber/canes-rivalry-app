@@ -261,7 +261,7 @@ window.CR = window.CR || {};
   }
 
   function buildStaticHistoryData(model) {
-    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasons || [], scoreSignature: scoreSignature(model) };
+    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [], scoreSignature: scoreSignature(model) };
   }
 
   function getScopedData(model, state) {
