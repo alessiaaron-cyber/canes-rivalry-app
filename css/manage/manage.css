@@ -53,6 +53,15 @@
 .manage-stepper { display: inline-flex; gap: 8px; }
 .manage-stepper button { width: 40px; height: 40px; border: 0; border-radius: var(--radius-sm, 14px); background: var(--ui-primary); color: #fff; font-size: 22px; font-weight: var(--font-heavy, 900); }
 
+.manage-dev-card { overflow: visible; }
+.manage-dev-section { margin-top: 16px; }
+.manage-dev-button-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; flex-wrap: wrap; }
+.manage-dev-button-row .cr-button { margin: 0 !important; min-height: 42px; padding: 0 18px; }
+.manage-segmented-control { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 9px; padding: 4px; border: 1px solid var(--border-subtle); border-radius: var(--radius-pill, 999px); background: #eef2f6; }
+.manage-segment-button { min-height: 34px; border: 0; border-radius: var(--radius-pill, 999px); background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: var(--font-strong, 800); transition: background var(--motion-fast, 140ms) ease, color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease; }
+.manage-segment-button.is-active { background: #fff; color: var(--ink-strong); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12); }
+.manage-dev-toggles { margin-top: 18px; }
+
 .manage-edit-options-spaced { margin-top: 10px; }
 .manage-edit-sheet { position: fixed; inset: 0; z-index: 6000; display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px max(112px, calc(16px + env(safe-area-inset-bottom))); touch-action: none; overscroll-behavior: contain; }
 .manage-edit-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.26); backdrop-filter: blur(8px); touch-action: none; }
