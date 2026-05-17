@@ -21,10 +21,40 @@ window.CR = window.CR || {};
     };
   }
 
+  function identityUsers() {
+    return CR.historyData?.users || CR.currentProfiles || [];
+  }
+
+  function userForSide(side) {
+    const index = side === 'Julie' ? 1 : 0;
+    return identityUsers()[index] || {};
+  }
+
+  function pickKeysForSide(side) {
+    const user = userForSide(side);
+    return [
+      user.scoreKey,
+      user.score_key,
+      user.legacyOwner,
+      user.legacy_owner,
+      user.legacyOwnerKey,
+      user.legacy_owner_key,
+      user.username,
+      user.displayName,
+      user.display_name,
+      side
+    ].filter(Boolean);
+  }
+
+  function picksForSide(game, side) {
+    const key = pickKeysForSide(side).find((candidate) => Array.isArray(game.picks?.[candidate]));
+    return game.picks?.[key] || [];
+  }
+
   function firstGoalScorer(game) {
     if (game.firstGoalScorer) return game.firstGoalScorer;
     for (const side of ['Aaron', 'Julie']) {
-      const hit = (game.picks?.[side] || []).find((pick) => pick.firstGoal);
+      const hit = picksForSide(game, side).find((pick) => pick.firstGoal);
       if (hit) return hit.playerName;
     }
     return '—';
@@ -62,7 +92,7 @@ window.CR = window.CR || {};
 
     selectedGames.forEach((game) => {
       ['Aaron', 'Julie'].forEach((side) => {
-        (game.picks?.[side] || []).forEach((pick) => {
+        picksForSide(game, side).forEach((pick) => {
           const existing = byPlayer.get(pick.playerName) || {
             name: pick.playerName,
             position: pick.position,
