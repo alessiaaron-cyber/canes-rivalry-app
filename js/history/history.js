@@ -58,13 +58,13 @@ window.CR = window.CR || {};
   }
 
   function seasonTotals(season, seasonGames, users) {
-    const gameFirst = scoreTotal(seasonGames, 0, users);
-    const gameSecond = scoreTotal(seasonGames, 1, users);
     const seasonFirst = scoreForSide(season, users, 0);
     const seasonSecond = scoreForSide(season, users, 1);
+    const gameFirst = scoreTotal(seasonGames, 0, users);
+    const gameSecond = scoreTotal(seasonGames, 1, users);
     return {
-      first: gameFirst || seasonFirst,
-      second: gameSecond || seasonSecond,
+      first: seasonFirst || gameFirst,
+      second: seasonSecond || gameSecond,
       hasGameTotals: Boolean(gameFirst || gameSecond),
       hasSeasonTotals: Boolean(seasonFirst || seasonSecond)
     };
@@ -195,13 +195,18 @@ window.CR = window.CR || {};
 
   function buildAllTimeBoard(model) {
     const users = model.users || [];
-    const games = canonicalGames(model);
-    const first = scoreTotal(games, 0, users);
-    const second = scoreTotal(games, 1, users);
+    const seasons = model.seasons || [];
+    const totals = seasons.reduce((acc, season) => {
+      acc.first += scoreForSide(season, users, 0);
+      acc.second += scoreForSide(season, users, 1);
+      return acc;
+    }, { first: 0, second: 0 });
+    const first = totals.first;
+    const second = totals.second;
     const firstName = userName(users, 0);
     const secondName = userName(users, 1);
     const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
-    return { first, second, lead, totalGames: games.length };
+    return { first, second, lead, totalGames: canonicalGames(model).length };
   }
 
   function buildHighlights(games, users) {
@@ -279,11 +284,17 @@ window.CR = window.CR || {};
   }
 
   function scoreSignature(model = {}) {
-    return canonicalGames(model).map((game) => {
+    const seasonPart = (model.seasons || []).map((season) => {
+      const first = scoreForSide(season, model.users || [], 0);
+      const second = scoreForSide(season, model.users || [], 1);
+      return `season:${season.id}:${first}-${second}`;
+    }).join('|');
+    const gamePart = canonicalGames(model).map((game) => {
       const first = scoreForSide(game, model.users || [], 0);
       const second = scoreForSide(game, model.users || [], 1);
-      return `${game.id}:${game.seasonId || game.season_id || ''}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
+      return `game:${game.id}:${game.seasonId || game.season_id || ''}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
     }).join('|');
+    return `${seasonPart}|${gamePart}`;
   }
 
   function buildStaticHistoryData(model) {
