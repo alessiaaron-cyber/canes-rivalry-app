@@ -12,6 +12,7 @@ window.CR = window.CR || {};
   ];
 
   let historyUsers = FALLBACK_USERS;
+  let lastFetchDebug = null;
 
   function toNumber(value, fallback = 0) {
     const n = Number(value);
@@ -123,7 +124,7 @@ window.CR = window.CR || {};
   }
 
   function normalizedScoreByUserId(rows = [], valueKey = 'points') {
-    return (rows || []).reduce((acc, row) => {
+    return CR.profileScoreUtils?.normalizedScoreByUserId?.(rows, valueKey) || (rows || []).reduce((acc, row) => {
       const userId = normalizeKey(row?.user_id);
       if (userId) acc[userId] = toNumber(row?.[valueKey]);
       return acc;
@@ -131,8 +132,7 @@ window.CR = window.CR || {};
   }
 
   function scoreForUser(user, normalizedScores) {
-    const id = normalizeKey(user?.id);
-    return id && Object.prototype.hasOwnProperty.call(normalizedScores, id) ? toNumber(normalizedScores[id]) : 0;
+    return CR.profileScoreUtils?.scoreForProfile?.({ profile: user, normalizedScores, fallbackScore: 0 }) ?? 0;
   }
 
   function scoresByUserIdFromValues(firstScore, secondScore) {
@@ -262,7 +262,8 @@ window.CR = window.CR || {};
 
   function mapSeasons(rows, currentSeasonId, totalsBySeason) {
     return sortSeasons(rows || []).map((row) => {
-      const normalizedTotals = normalizedScoreByUserId(totalsBySeason[normalizeKey(row.id)] || [], 'total_points');
+      const seasonRows = totalsBySeason[normalizeKey(row.id)] || [];
+      const normalizedTotals = normalizedScoreByUserId(seasonRows, 'total_points');
       const firstScore = scoreForUser(userBySlot(1), normalizedTotals);
       const secondScore = scoreForUser(userBySlot(2), normalizedTotals);
       return {
@@ -274,7 +275,9 @@ window.CR = window.CR || {};
         firstScore,
         secondScore,
         totalsByUserId: scoresByUserIdFromValues(firstScore, secondScore),
-        scoresByUserId: scoresByUserIdFromValues(firstScore, secondScore)
+        scoresByUserId: scoresByUserIdFromValues(firstScore, secondScore),
+        debugSeasonRows: seasonRows.map((item) => ({ season_id: item.season_id, user_id: item.user_id, total_points: item.total_points })),
+        debugNormalizedTotals: normalizedTotals
       };
     });
   }
@@ -318,11 +321,21 @@ window.CR = window.CR || {};
     const playerLookup = buildPlayerLookup(players);
     const scoresByGame = rowsByKey(gameScoresRes.error ? [] : gameScoresRes.data || [], 'game_id');
     const totalsBySeason = rowsByKey(seasonTotalsRes.error ? [] : seasonTotalsRes.data || [], 'season_id');
+    lastFetchDebug = {
+      seasonTotalsError: seasonTotalsRes.error ? String(seasonTotalsRes.error.message || seasonTotalsRes.error) : null,
+      seasonTotalsCount: (seasonTotalsRes.data || []).length,
+      seasonTotalsSample: (seasonTotalsRes.data || []).slice(0, 10),
+      totalsBySeasonKeys: Object.keys(totalsBySeason),
+      gameScoresCount: (gameScoresRes.data || []).length,
+      gameScoresSample: (gameScoresRes.data || []).slice(0, 10),
+      scoresByGameKeysSample: Object.keys(scoresByGame).slice(0, 10)
+    };
 
     return {
       source: 'supabase',
       currentSeasonId,
       users: users(),
+      debugFetch: lastFetchDebug,
       seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason),
       players,
       games: mapGames(gamesRows, picksRows, playerLookup, scoresByGame)
