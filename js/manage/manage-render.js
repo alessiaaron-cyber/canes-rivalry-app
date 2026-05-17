@@ -28,6 +28,10 @@ window.CR = window.CR || {};
     return CR.currentUser || {};
   }
 
+  function isAdmin() {
+    return String(currentProfile().role || '').toLowerCase() === 'admin';
+  }
+
   function profileDraft(state) {
     const profile = currentProfile();
     return state.profileDraft || {
@@ -163,6 +167,17 @@ window.CR = window.CR || {};
     return `<section class="panel-card manage-card manage-watch-card">${renderCardHeader('Watch experience', 'Stream Mode', 'Protect against broadcast spoilers without changing the underlying rivalry engine.', { className: 'neutral', label: selected?.label || 'Custom' })}<div class="manage-option-grid">${state.streamMode.options.map((option) => renderPill(option.value, option.label, option.value === state.streamMode.selected, option.note)).join('')}</div><div class="manage-setting-stack">${renderToggleRow({ key: 'streamMode.delayPush', label: 'Delay push notifications', hint: 'Keep lock-screen alerts aligned with your spoiler buffer.', checked: state.streamMode.delayPush })}${renderToggleRow({ key: 'streamMode.delayToasts', label: 'Delay in-app toasts too', hint: 'Useful if you keep the app open while watching.', checked: state.streamMode.delayToasts })}${renderToggleRow({ key: 'streamMode.delayFeed', label: 'Delay visible feed moments', hint: 'Internal scoring stays realtime while visible updates wait.', checked: state.streamMode.delayFeed })}</div></section>`;
   }
 
+  function renderDeveloperTools() {
+    if (!isAdmin() || !CR.gameDayMockService) return '';
+    const enabled = CR.gameDayMockService.isEnabled?.();
+    const mode = CR.gameDayMockService.currentMode?.() || 'pregame';
+    const playoffs = CR.gameDayMockService.isPlayoffs?.();
+    const carryover = CR.gameDayMockService.isCarryover?.();
+    const badge = enabled ? { className: 'warning', label: 'Mock on' } : { className: 'neutral', label: 'Off' };
+    const modeButton = (value, label) => `<button class="mini-button cr-button ${enabled && mode === value ? 'primary' : 'secondary'}" type="button" data-manage-mock-mode="${value}">${label}</button>`;
+    return `<section class="panel-card manage-card">${renderCardHeader('Developer/Test Mode', 'Mock Game Day', 'Frontend-only test data for Game Day. No Supabase writes, notifications, or real game records are touched.', badge)}<div class="manage-action-row"><button class="cr-button ${enabled ? 'secondary' : 'primary'}" type="button" data-manage-mock-toggle>${enabled ? 'Turn Mock Off' : 'Turn Mock On'}</button><button class="cr-button secondary" type="button" data-manage-mock-clear>Clear Mock Settings</button></div><div class="manage-action-row">${modeButton('pregame', 'Pregame')}${modeButton('live', 'Live')}${modeButton('final', 'Final')}</div><div class="manage-setting-stack">${renderToggleRow({ key: 'mock.playoffs', label: 'Mock playoff mode', hint: 'Test playoff styling and labels with fake Game Day data.', checked: playoffs })}${renderToggleRow({ key: 'mock.carryover', label: 'Mock carryover mode', hint: 'Test carryover presentation without touching a real game.', checked: carryover })}</div></section>`;
+  }
+
   function renderScoringSummary(state) {
     const selectedProfile = state.season.scoringProfile;
     const scoring = state.season.scoringSystems?.[selectedProfile] || {};
@@ -201,7 +216,7 @@ window.CR = window.CR || {};
   }
 
   function renderMain(state) {
-    return `<div class="content-stack manage-stack">${renderNotifications(state)}${renderWatchExperience(state)}${renderManageTools(state)}${renderSeasonSetup(state)}${renderStatus(state)}</div>${renderProfileEditSheet(state)}${renderEditSheet(state)}${renderStartSeasonSheet(state)}${renderScoringSheet(state)}`;
+    return `<div class="content-stack manage-stack">${renderNotifications(state)}${renderWatchExperience(state)}${renderDeveloperTools()}${renderManageTools(state)}${renderSeasonSetup(state)}${renderStatus(state)}</div>${renderProfileEditSheet(state)}${renderEditSheet(state)}${renderStartSeasonSheet(state)}${renderScoringSheet(state)}`;
   }
 
   function renderRoot(state) {
