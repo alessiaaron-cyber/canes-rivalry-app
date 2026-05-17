@@ -635,6 +635,26 @@ Deno.serve(async (req) => {
 
     const roster = (players || []).map((p: any) => p.player_name).filter(Boolean);
 
+    const { data: profiles, error: profilesError } = await db
+      .from("user_profiles")
+      .select("id, display_name, legacy_owner_key, rivalry_slot")
+      .eq("is_active", true)
+      .order("rivalry_slot", { ascending: true });
+
+    if (profilesError) throw profilesError;
+
+    const slot1 = (profiles || []).find(
+      (p: any) => Number(p.rivalry_slot) === 1,
+    );
+
+    const slot2 = (profiles || []).find(
+      (p: any) => Number(p.rivalry_slot) === 2,
+    );
+
+    if (!slot1 || !slot2) {
+      throw new Error("Missing rivalry slot profiles");
+    }
+
     const { stats, firstGoal } = parseScoring(pbp, box);
     const firstGoalResolved = resolveRosterName(firstGoal, roster);
 
@@ -665,12 +685,14 @@ Deno.serve(async (req) => {
       const oldHadBonus = bonusIncluded(playerName, oldGoals, firstGoalResolved);
       const newHasBonus = bonusIncluded(playerName, goals, firstGoalResolved);
 
-      if (pick.owner === "Aaron") {
+      const ownerUserId = String(pick.owner_user_id || "").trim();
+
+      if (ownerUserId === slot1.id) {
         oldA += oldPoints;
         newA += points;
       }
 
-      if (pick.owner === "Julie") {
+      if (ownerUserId === slot2.id) {
         oldJ += oldPoints;
         newJ += points;
       }
