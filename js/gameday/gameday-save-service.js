@@ -85,10 +85,8 @@ window.CR = window.CR || {};
   }
 
   function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '', index = 0) {
-    const owner = profileKey(ownerProfile, index);
     return {
       game_id: gameId,
-      owner,
       owner_user_id: ownerProfile?.id || null,
       pick_slot: pickSlot,
       player_name: playerName || '',
