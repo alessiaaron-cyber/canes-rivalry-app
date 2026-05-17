@@ -5,8 +5,8 @@ window.CR = window.CR || {};
   const pointsForPick = (pick) => ((pick.goals || 0) * 2) + (pick.assists || 0) + (pick.firstGoal ? 2 : 0);
 
   const FALLBACK_USERS = [
-    { username: 'Aaron', displayName: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron' },
-    { username: 'Julie', displayName: 'Julie', themeClass: 'owner-secondary', avatarClass: 'owner-secondary', scoreKey: 'Julie' }
+    { username: 'Aaron', displayName: 'Aaron', themeClass: 'owner-primary', avatarClass: 'avatar-primary', scoreKey: 'Aaron', profileKey: 'Aaron' },
+    { username: 'Julie', displayName: 'Julie', themeClass: 'owner-secondary', avatarClass: 'owner-secondary', scoreKey: 'Julie', profileKey: 'Julie' }
   ];
 
   function clone(value) {
@@ -25,7 +25,9 @@ window.CR = window.CR || {};
       displayName: user.displayName || user.username || FALLBACK_USERS[index]?.displayName || `Player ${index + 1}`,
       themeClass: user.themeClass || user.theme_class || FALLBACK_USERS[index]?.themeClass || (index === 0 ? 'owner-primary' : 'owner-secondary'),
       avatarClass: user.avatarClass || user.avatar_class || FALLBACK_USERS[index]?.avatarClass || (index === 0 ? 'avatar-primary' : 'avatar-secondary'),
-      scoreKey: user.scoreKey || user.score_key || user.username || FALLBACK_USERS[index]?.scoreKey || `Player ${index + 1}`
+      scoreKey: user.scoreKey || user.score_key || user.username || FALLBACK_USERS[index]?.scoreKey || `Player ${index + 1}`,
+      profileKey: user.profileKey || user.profile_key || user.id || user.displayName || user.username || FALLBACK_USERS[index]?.profileKey || `Player ${index + 1}`,
+      profile_key: user.profileKey || user.profile_key || user.id || user.displayName || user.username || FALLBACK_USERS[index]?.profileKey || `Player ${index + 1}`
     }));
   }
 
@@ -38,9 +40,14 @@ window.CR = window.CR || {};
 
   function pickKeyOptions(user, index) {
     return [
+      user?.profileKey,
+      user?.profile_key,
+      user?.id,
       user?.scoreKey,
+      user?.score_key,
       user?.username,
       user?.displayName,
+      user?.display_name,
       index === 0 ? 'Aaron' : 'Julie'
     ].filter(Boolean);
   }
