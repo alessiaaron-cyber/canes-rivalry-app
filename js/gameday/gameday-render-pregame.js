@@ -20,6 +20,7 @@ window.CR = window.CR || {};
   function isCurrentUserTurn() {
     const draft = CR.gameDay?.draft || {};
     const pickerId = String(draft.currentPicker?.id || '').trim();
+    if (CR.gameDayMockBridge?.shouldMock?.()) return true;
     if (!pickerId || !currentUserId()) return false;
     return pickerId === currentUserId();
   }
@@ -44,11 +45,7 @@ window.CR = window.CR || {};
   function renderAdminOverrideButton(scheduled) {
     if (!scheduled || !isAdmin()) return '';
 
-    return `
-      <button class="cr-button secondary gd-inline-action" data-action="open-manage" type="button">
-        Admin Override
-      </button>
-    `;
+    return `<button class="mini-button cr-button secondary gd-header-action" data-action="open-manage" type="button">Manage Picks</button>`;
   }
 
   function renderPickSlot({ pick, isPlayoffs, isFocus, picksEnabled }) {
@@ -128,9 +125,9 @@ window.CR = window.CR || {};
     const waitingCopy = scheduled && !picksEnabled ? `<span class="gd-inline-note">${draftDisabledLabel()}</span>` : '';
 
     return `
-      <div class="gd-label-row" id="gdPregamePicksAnchor">
+      <div class="gd-label-row gd-picks-label-row" id="gdPregamePicksAnchor">
         <div class="gd-label">${isPlayoffs && scheduled ? 'Playoff Picks' : 'Picks'}</div>
-        <div class="gd-label-group">
+        <div class="gd-label-group gd-label-group-compact">
           ${!scheduled ? '<span class="gd-inline-note">Pick controls unlock when a game is scheduled.</span>' : waitingCopy}
           ${renderAdminOverrideButton(scheduled)}
         </div>
