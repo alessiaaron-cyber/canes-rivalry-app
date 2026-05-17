@@ -3,7 +3,39 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   const params = new URLSearchParams(window.location.search || '');
-  const enabled = params.get('mockGameDay') === '1';
+
+  function setting(name, fallback = '') {
+    const queryValue = params.get(name);
+    if (queryValue !== null) return queryValue;
+    try {
+      return window.localStorage.getItem(`cr.${name}`) || fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function setSetting(name, value) {
+    try {
+      if (value === null || value === undefined || value === '') window.localStorage.removeItem(`cr.${name}`);
+      else window.localStorage.setItem(`cr.${name}`, String(value));
+    } catch (_) {}
+  }
+
+  function isEnabled() {
+    return setting('mockGameDay') === '1';
+  }
+
+  function currentMode() {
+    return setting('mockMode', 'pregame') || 'pregame';
+  }
+
+  function isPlayoffs() {
+    return setting('mockPlayoffs') === '1';
+  }
+
+  function isCarryover() {
+    return setting('mockCarryover') === '1';
+  }
 
   const mockUsers = [
     { id: '00000000-0000-4000-8000-000000000001', username: 'player-1', displayName: 'Player 1', display_name: 'Player 1', rivalrySlot: 1, rivalry_slot: 1, profileKey: '00000000-0000-4000-8000-000000000001', profile_key: '00000000-0000-4000-8000-000000000001', scoreKey: '00000000-0000-4000-8000-000000000001', score_key: '00000000-0000-4000-8000-000000000001', themeClass: 'owner-primary', avatarClass: 'avatar-primary', colorHex: '#c8102e', color_hex: '#c8102e', colorLabel: 'Canes Red', color_label: 'Canes Red' },
@@ -25,7 +57,7 @@ window.CR = window.CR || {};
     return mockUsers[index].profileKey;
   }
 
-  function buildState(mode = params.get('mockMode') || 'pregame') {
+  function buildState(mode = currentMode()) {
     const pregame = {
       [key(0)]: ['Sebastian Aho', 'Jaccob Slavin'],
       [key(1)]: ['Seth Jarvis', 'Andrei Svechnikov']
@@ -46,8 +78,8 @@ window.CR = window.CR || {};
       source: 'mock',
       currentGameId: 'mock-game-day',
       mode,
-      playoffMode: params.get('mockPlayoffs') === '1' ? 'playoffs' : 'regular',
-      carryover: { active: params.get('mockCarryover') === '1' },
+      playoffMode: isPlayoffs() ? 'playoffs' : 'regular',
+      carryover: { active: isCarryover() },
       game: { hasGame: true, scheduleText: 'Tonight 7:00 PM', opponent: 'NYR', headline: 'Canes vs NYR' },
       draft: { status: 'open', currentPickNumber: 3, currentPicker: { id: mockUsers[0].id, displayName: mockUsers[0].displayName, profileKey: key(0) }, firstPicker: mockUsers[0].id },
       users: mockUsers,
@@ -66,12 +98,21 @@ window.CR = window.CR || {};
     };
   }
 
-  function isEnabled() {
-    return enabled;
+  function setMockOptions(options = {}) {
+    setSetting('mockGameDay', options.enabled ? '1' : '');
+    setSetting('mockMode', options.mode || 'pregame');
+    setSetting('mockPlayoffs', options.playoffs ? '1' : '');
+    setSetting('mockCarryover', options.carryover ? '1' : '');
+    mockState = null;
+  }
+
+  function clearMockOptions() {
+    ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, ''));
+    mockState = null;
   }
 
   async function fetchGameDayData() {
-    mockState = mockState || buildState();
+    mockState = buildState(currentMode());
     return JSON.parse(JSON.stringify(mockState));
   }
 
@@ -94,5 +135,5 @@ window.CR = window.CR || {};
     return { clearedRow: null, game: mockState.game, undonePickNumber: 1, mock: true };
   }
 
-  CR.gameDayMockService = { isEnabled, fetchGameDayData, savePregamePicks, undoLastDraftPick, buildState };
+  CR.gameDayMockService = { isEnabled, currentMode, isPlayoffs, isCarryover, setMockOptions, clearMockOptions, fetchGameDayData, savePregamePicks, undoLastDraftPick, buildState };
 })();
