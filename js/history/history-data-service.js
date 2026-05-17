@@ -56,6 +56,74 @@ window.CR = window.CR || {};
     return rows.slice().sort((a, b) => toNumber(a.pick_slot, 9999) - toNumber(b.pick_slot, 9999));
   }
 
+  function users() {
+    return CR.identity?.getUsers?.() || FALLBACK_USERS;
+  }
+
+  function ownerKey(profile = {}) {
+    return CR.profileScoreUtils?.ownerKey?.(profile) || profile.legacyOwner || profile.legacy_owner_key || profile.displayName || '';
+  }
+
+  function userByLegacyKey(legacyKey) {
+    const lookup = CR.profileScoreUtils?.normalizeText?.(legacyKey) || String(legacyKey || '').trim().toLowerCase();
+    return users().find((user) => {
+      const key = CR.profileScoreUtils?.normalizeText?.(ownerKey(user)) || String(ownerKey(user) || '').trim().toLowerCase();
+      return key === lookup;
+    }) || null;
+  }
+
+  function userBySlot(slot) {
+    return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || null;
+  }
+
+  function scoreRowsByGameId(rows = []) {
+    return rows.reduce((acc, row) => {
+      const gameId = String(row.game_id || '');
+      if (!gameId) return acc;
+      acc[gameId] = acc[gameId] || [];
+      acc[gameId].push(row);
+      return acc;
+    }, {});
+  }
+
+  function totalsRowsBySeasonId(rows = []) {
+    return rows.reduce((acc, row) => {
+      const seasonId = String(row.season_id || '');
+      if (!seasonId) return acc;
+      acc[seasonId] = acc[seasonId] || [];
+      acc[seasonId].push(row);
+      return acc;
+    }, {});
+  }
+
+  function scoreForLegacyUser(row, legacyKey, normalizedScores) {
+    const profile = userByLegacyKey(legacyKey);
+    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
+    const user = profile || fallbackProfile || {};
+    const legacyScore = legacyKey === 'Aaron' ? toNumber(row.aaron_points) : toNumber(row.julie_points);
+    return CR.profileScoreUtils?.scoreForProfile?.({
+      profile: user,
+      normalizedScores,
+      legacyScore,
+      fallbackScore: legacyScore
+    }) ?? legacyScore;
+  }
+
+  function seasonTotalForLegacyUser(row, legacyKey, normalizedTotals) {
+    const profile = userByLegacyKey(legacyKey);
+    const fallbackProfile = legacyKey === 'Aaron' ? userBySlot(1) : userBySlot(2);
+    const user = profile || fallbackProfile || {};
+    const legacyTotal = legacyKey === 'Aaron'
+      ? toNumber(row.aaron_final_total ?? row.aaron_points ?? row.aaron_total)
+      : toNumber(row.julie_final_total ?? row.julie_points ?? row.julie_total);
+    return CR.profileScoreUtils?.scoreForProfile?.({
+      profile: user,
+      normalizedScores: normalizedTotals,
+      legacyScore: legacyTotal,
+      fallbackScore: legacyTotal
+    }) ?? legacyTotal;
+  }
+
   function mapPlayers(rows) {
     const byId = new Map();
 
@@ -113,13 +181,15 @@ window.CR = window.CR || {};
       }, {});
   }
 
-  function mapGames(rows, picks, playerLookup) {
+  function mapGames(rows, picks, playerLookup, scoresByGame) {
     return sortGames(rows || [])
       .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
       .map((row) => {
-        const aaronScore = toNumber(row.aaron_points);
-        const julieScore = toNumber(row.julie_points);
-        const winner = aaronScore > julieScore ? 'Aaron' : julieScore > aaronScore ? 'Julie' : 'Tie';
+        const normalizedScores = CR.profileScoreUtils?.normalizedScoreByUserId?.(scoresByGame[String(row.id)] || []) || {};
+        const aaronScore = scoreForLegacyUser(row, 'Aaron', normalizedScores);
+        const julieScore = scoreForLegacyUser(row, 'Julie', normalizedScores);
+        const winnerProfile = row.winner_user_id ? users().find((user) => String(user.id) === String(row.winner_user_id)) : null;
+        const winner = winnerProfile ? ownerKey(winnerProfile) : (aaronScore > julieScore ? 'Aaron' : julieScore > aaronScore ? 'Julie' : 'Tie');
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
         const resultTag = winner === 'Tie' ? 'Tie' : `${winner} win`;
         const gameType = row.game_type || 'Regular Season';
@@ -146,16 +216,19 @@ window.CR = window.CR || {};
       });
   }
 
-  function mapSeasons(rows, currentSeasonId) {
-    return sortSeasons(rows || []).map((row) => ({
-      id: String(row.id),
-      label: seasonLabel(row),
-      shortLabel: seasonShortLabel(row),
-      isCurrent: String(row.id) === String(currentSeasonId),
-      note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
-      aaronScore: toNumber(row.aaron_final_total ?? row.aaron_points ?? row.aaron_total),
-      julieScore: toNumber(row.julie_final_total ?? row.julie_points ?? row.julie_total)
-    }));
+  function mapSeasons(rows, currentSeasonId, totalsBySeason) {
+    return sortSeasons(rows || []).map((row) => {
+      const normalizedTotals = CR.profileScoreUtils?.normalizedScoreByUserId?.(totalsBySeason[String(row.id)] || [], 'total_points') || {};
+      return {
+        id: String(row.id),
+        label: seasonLabel(row),
+        shortLabel: seasonShortLabel(row),
+        isCurrent: String(row.id) === String(currentSeasonId),
+        note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
+        aaronScore: seasonTotalForLegacyUser(row, 'Aaron', normalizedTotals),
+        julieScore: seasonTotalForLegacyUser(row, 'Julie', normalizedTotals)
+      };
+    });
   }
 
   async function fetchHistoryData() {
@@ -168,13 +241,17 @@ window.CR = window.CR || {};
     const activeSeason = seasons.find((season) => season.is_active) || seasons[seasons.length - 1] || null;
     const currentSeasonId = activeSeason?.id ? String(activeSeason.id) : '';
 
-    const [gamesRes, playersRes] = await Promise.all([
+    const [gamesRes, playersRes, gameScoresRes, seasonTotalsRes] = await Promise.all([
       db.from('games').select('*'),
-      db.from('players').select('*')
+      db.from('players').select('*'),
+      db.from('game_user_scores').select('game_id, user_id, points'),
+      db.from('season_user_totals').select('season_id, user_id, total_points')
     ]);
 
     if (gamesRes.error) throw gamesRes.error;
     if (playersRes.error) throw playersRes.error;
+    if (gameScoresRes.error) console.warn('History normalized game scores unavailable; using legacy scores', gameScoresRes.error);
+    if (seasonTotalsRes.error) console.warn('History normalized season totals unavailable; using legacy totals', seasonTotalsRes.error);
 
     const gamesRows = sortGames(gamesRes.data || []);
     let picksRows = [];
@@ -188,14 +265,16 @@ window.CR = window.CR || {};
 
     const players = mapPlayers(playersRes.data || []);
     const playerLookup = buildPlayerLookup(players);
+    const scoresByGame = scoreRowsByGameId(gameScoresRes.error ? [] : gameScoresRes.data || []);
+    const totalsBySeason = totalsRowsBySeasonId(seasonTotalsRes.error ? [] : seasonTotalsRes.data || []);
 
     return {
       source: 'supabase',
       currentSeasonId,
-      users: CR.identity?.getUsers?.() || FALLBACK_USERS,
-      seasons: mapSeasons(seasons, currentSeasonId),
+      users: users(),
+      seasons: mapSeasons(seasons, currentSeasonId, totalsBySeason),
       players,
-      games: mapGames(gamesRows, picksRows, playerLookup)
+      games: mapGames(gamesRows, picksRows, playerLookup, scoresByGame)
     };
   }
 
