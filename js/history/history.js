@@ -38,6 +38,13 @@ window.CR = window.CR || {};
     return games.filter(hasRealScore);
   }
 
+  function recentSortValue(game) {
+    const displayNumber = Number(game?.displayNumber || game?.display_number || 0);
+    if (Number.isFinite(displayNumber) && displayNumber > 0) return displayNumber;
+    const time = Date.parse(game?.date || game?.gameDate || game?.game_date || '');
+    return Number.isFinite(time) ? time / 100000000000 : 0;
+  }
+
   function scoreWinner(game) {
     const aaron = Number(game?.aaronScore || 0);
     const julie = Number(game?.julieScore || 0);
@@ -102,7 +109,12 @@ window.CR = window.CR || {};
     return Array.from(byPlayer.values()).sort((a, b) => b.totalPoints - a.totalPoints || b.gamesPicked - a.gamesPicked).slice(0, 3);
   }
 
-  function buildRecentTen(selectedGames) { return scoredGames(selectedGames).slice(0, 10); }
+  function buildRecentTen(selectedGames) {
+    return scoredGames(selectedGames)
+      .slice()
+      .sort((a, b) => recentSortValue(b) - recentSortValue(a))
+      .slice(0, 10);
+  }
 
   function buildRecentRecord(games) {
     return buildRecentTen(games).reduce((acc, game) => {
@@ -195,7 +207,7 @@ window.CR = window.CR || {};
     const totals = seasonTotals(season, games);
     const aaron = totals.aaron;
     const julie = totals.julie;
-    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(games), bestGameTitle: scoredGames(games)[0]?.title || '' };
+    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(games), bestGameTitle: buildRecentTen(games)[0]?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
