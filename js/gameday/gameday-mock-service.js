@@ -39,18 +39,16 @@ window.CR = window.CR || {};
 
   let mockState = null;
   function key(index) { return mockUsers[index].profileKey; }
-
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function saveState() { try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState)); } catch (_) {} }
+  function loadState() { try { const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null'); return parsed && parsed.source === 'mock' ? parsed : null; } catch (_) { return null; } }
 
-  function saveState() {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState)); } catch (_) {}
-  }
-
-  function loadState() {
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
-      return parsed && parsed.source === 'mock' ? parsed : null;
-    } catch (_) { return null; }
+  function normalizePregameBuckets(pregame = {}) {
+    const normalized = { [key(0)]: [], [key(1)]: [] };
+    [key(0), key(1)].forEach((bucketKey) => {
+      normalized[bucketKey] = Array.from(new Set((pregame[bucketKey] || []).filter(Boolean))).slice(0, 2);
+    });
+    return normalized;
   }
 
   function buildState(mode = currentMode()) {
@@ -65,26 +63,14 @@ window.CR = window.CR || {};
         { player: 'Andrei Svechnikov', goals: 0, assists: 2, firstGoal: false, points: 2, ownerUserId: mockUsers[1].id, profileKey: key(1) }
       ]
     };
-    return {
-      source: 'mock', currentGameId: 'mock-game-day', mode, playoffMode: isPlayoffs() ? 'playoffs' : 'regular', carryover: { active: isCarryover() },
-      game: { hasGame: true, scheduleText: 'Tonight 7:00 PM', opponent: 'NYR', headline: 'Canes vs NYR' },
-      draft: { status: 'open', currentPickNumber: 1, currentPicker: { id: mockUsers[0].id, displayName: mockUsers[0].displayName, profileKey: key(0) }, firstPicker: mockUsers[0].id },
-      users: mockUsers, pregame,
-      live: { scores: { [key(0)]: 6, [key(1)]: 4 }, period: mode === 'pregame' ? 'Tonight 7:00 PM' : '2nd • 08:32', users: liveUsers, feed: [
-        { icon: '👑', title: 'Sebastian Aho first Canes goal', detail: 'Player 1 gets the first goal bonus', points: 2, tier: 'heavy' },
-        { icon: '🚨', title: 'Seth Jarvis goal', detail: 'Player 2 scores through a picked player', points: 2, tier: 'medium' },
-        { icon: '🎯', title: 'Andrei Svechnikov assists', detail: 'Player 2 adds assist points', points: 2, tier: 'light' }
-      ] }, roster
-    };
+    return { source: 'mock', currentGameId: 'mock-game-day', mode, playoffMode: isPlayoffs() ? 'playoffs' : 'regular', carryover: { active: isCarryover() }, game: { hasGame: true, scheduleText: 'Tonight 7:00 PM', opponent: 'NYR', headline: 'Canes vs NYR' }, draft: { status: 'open', currentPickNumber: 1, currentPicker: { id: mockUsers[0].id, displayName: mockUsers[0].displayName, profileKey: key(0) }, firstPicker: mockUsers[0].id }, users: mockUsers, pregame, live: { scores: { [key(0)]: 6, [key(1)]: 4 }, period: mode === 'pregame' ? 'Tonight 7:00 PM' : '2nd • 08:32', users: liveUsers, feed: [ { icon: '👑', title: 'Sebastian Aho first Canes goal', detail: 'Player 1 gets the first goal bonus', points: 2, tier: 'heavy' }, { icon: '🚨', title: 'Seth Jarvis goal', detail: 'Player 2 scores through a picked player', points: 2, tier: 'medium' }, { icon: '🎯', title: 'Andrei Svechnikov assists', detail: 'Player 2 adds assist points', points: 2, tier: 'light' } ] }, roster };
   }
 
   function ensureState() {
     mockState = mockState || loadState() || buildState(currentMode());
     mockState.users = mockUsers;
     mockState.roster = roster;
-    mockState.pregame = mockState.pregame || { [key(0)]: [], [key(1)]: [] };
-    mockState.pregame[key(0)] = mockState.pregame[key(0)] || [];
-    mockState.pregame[key(1)] = mockState.pregame[key(1)] || [];
+    mockState.pregame = normalizePregameBuckets(mockState.pregame || {});
     return mockState;
   }
 
@@ -100,16 +86,8 @@ window.CR = window.CR || {};
     saveState();
   }
 
-  function clearMockOptions() {
-    ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, ''));
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-    mockState = null;
-  }
-
-  function resetDraft() {
-    mockState = buildState(currentMode());
-    saveState();
-  }
+  function clearMockOptions() { ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, '')); try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {} mockState = null; }
+  function resetDraft() { mockState = buildState(currentMode()); saveState(); }
 
   function syncDraftState() {
     ensureState();
@@ -122,50 +100,10 @@ window.CR = window.CR || {};
     saveState();
   }
 
-  async function fetchGameDayData() {
-    ensureState();
-    mockState.mode = currentMode();
-    mockState.playoffMode = isPlayoffs() ? 'playoffs' : 'regular';
-    mockState.carryover = { active: isCarryover() };
-    syncDraftState();
-    return clone(mockState);
-  }
-
-  async function savePregamePicks(gameId, pregame) {
-    ensureState();
-    mockState.pregame = clone(pregame || {});
-    mockState.pregame[key(0)] = mockState.pregame[key(0)] || [];
-    mockState.pregame[key(1)] = mockState.pregame[key(1)] || [];
-    syncDraftState();
-    return { savedRows: [], mock: true };
-  }
-
-  async function saveDraftPick(gameId, playerName) {
-    ensureState();
-    if (!playerName) throw new Error('Choose a player first.');
-    if (Object.values(mockState.pregame || {}).flat().includes(playerName)) throw new Error('That player has already been picked.');
-    syncDraftState();
-    const pickNumber = Number(mockState.draft.currentPickNumber || 1);
-    if (pickNumber > 4) throw new Error('Draft is already complete.');
-    const bucket = key((pickNumber - 1) % 2);
-    mockState.pregame[bucket].push(playerName);
-    syncDraftState();
-    return { savedRow: null, game: mockState.game, mock: true };
-  }
-
-  async function undoLastDraftPick() {
-    ensureState();
-    const order = [key(0), key(1), key(0), key(1)];
-    for (let i = 3; i >= 0; i -= 1) {
-      const bucket = order[i];
-      if ((mockState.pregame[bucket] || []).length) {
-        mockState.pregame[bucket].pop();
-        syncDraftState();
-        return { clearedRow: null, game: mockState.game, undonePickNumber: i + 1, mock: true };
-      }
-    }
-    throw new Error('There are no draft picks to undo.');
-  }
+  async function fetchGameDayData() { ensureState(); mockState.mode = currentMode(); mockState.playoffMode = isPlayoffs() ? 'playoffs' : 'regular'; mockState.carryover = { active: isCarryover() }; syncDraftState(); return clone(mockState); }
+  async function savePregamePicks(gameId, pregame) { ensureState(); mockState.pregame = normalizePregameBuckets(pregame || {}); syncDraftState(); return { savedRows: [], mock: true }; }
+  async function saveDraftPick(gameId, playerName) { ensureState(); if (!playerName) throw new Error('Choose a player first.'); if ([key(0), key(1)].flatMap((bucketKey) => mockState.pregame[bucketKey] || []).includes(playerName)) throw new Error('That player has already been picked.'); syncDraftState(); const pickNumber = Number(mockState.draft.currentPickNumber || 1); if (pickNumber > 4) throw new Error('Draft is already complete.'); const bucket = key((pickNumber - 1) % 2); mockState.pregame[bucket].push(playerName); syncDraftState(); return { savedRow: null, game: mockState.game, mock: true }; }
+  async function undoLastDraftPick() { ensureState(); const order = [key(0), key(1), key(0), key(1)]; for (let i = 3; i >= 0; i -= 1) { const bucket = order[i]; if ((mockState.pregame[bucket] || []).length) { mockState.pregame[bucket].pop(); syncDraftState(); return { clearedRow: null, game: mockState.game, undonePickNumber: i + 1, mock: true }; } } throw new Error('There are no draft picks to undo.'); }
 
   CR.gameDayMockService = { isEnabled, currentMode, isPlayoffs, isCarryover, setMockOptions, clearMockOptions, resetDraft, fetchGameDayData, savePregamePicks, saveDraftPick, undoLastDraftPick, buildState };
 })();
