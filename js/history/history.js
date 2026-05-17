@@ -2,34 +2,39 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const SIDES = [0, 1];
 
-  function sideUtils() {
-    return CR.historySideUtils || {};
+  function toNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
   }
 
-  function userForSide(users, side) {
-    return sideUtils().userForSide?.(users, side) || users?.[Number(side) === 1 ? 1 : 0] || {};
+  function userAt(users = [], index = 0) {
+    return users[index] || { id: `player-${index + 1}`, displayName: `Player ${index + 1}` };
   }
 
-  function sideName(side) {
-    return sideUtils().sideName?.(side) || (Number(side) === 1 ? 'second' : 'first');
+  function userId(users = [], index = 0) {
+    return String(userAt(users, index).id || '').trim();
   }
 
-  function sideScore(row, side, users) {
-    return sideUtils().sideScore?.(row, side, users) ?? 0;
+  function userName(users = [], index = 0) {
+    const user = userAt(users, index);
+    return user.displayName || user.display_name || user.username || `Player ${index + 1}`;
   }
 
-  function scoreTotal(games, side, users) {
-    return games.reduce((total, game) => total + sideScore(game, side, users), 0);
+  function scoreFor(row = {}, users = [], index = 0) {
+    const id = userId(users, index);
+    return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id]);
+  }
+
+  function scoreTotal(games, index, users) {
+    return games.reduce((total, game) => total + scoreFor(game, users, index), 0);
   }
 
   function seasonTotals(season, seasonGames, users) {
     const gameFirst = scoreTotal(seasonGames, 0, users);
     const gameSecond = scoreTotal(seasonGames, 1, users);
-    const seasonFirst = sideScore(season, 0, users);
-    const seasonSecond = sideScore(season, 1, users);
-
+    const seasonFirst = scoreFor(season, users, 0);
+    const seasonSecond = scoreFor(season, users, 1);
     return {
       first: gameFirst || seasonFirst,
       second: gameSecond || seasonSecond,
@@ -38,21 +43,22 @@ window.CR = window.CR || {};
     };
   }
 
-  function picksForSide(game, side, users) {
-    return sideUtils().picksForSide?.(game, side, users) || [];
+  function picksForUser(game = {}, users = [], index = 0) {
+    const id = userId(users, index);
+    return game.picks?.[id] || game.picksByUserId?.[id] || [];
   }
 
   function firstGoalScorer(game, users) {
     if (game.firstGoalScorer) return game.firstGoalScorer;
-    for (const side of SIDES) {
-      const hit = picksForSide(game, side, users).find((pick) => pick.firstGoal);
+    for (let index = 0; index < 2; index += 1) {
+      const hit = picksForUser(game, users, index).find((pick) => pick.firstGoal);
       if (hit) return hit.playerName;
     }
     return '—';
   }
 
   function hasRealScore(game, users) {
-    return sideScore(game, 0, users) + sideScore(game, 1, users) > 0;
+    return scoreFor(game, users, 0) + scoreFor(game, users, 1) > 0;
   }
 
   function scoredGames(games = [], users) {
@@ -60,7 +66,13 @@ window.CR = window.CR || {};
   }
 
   function scoreWinner(game, users) {
-    return sideUtils().scoreWinner?.(game, users) || 'Tie';
+    const winnerId = String(game?.winnerUserId || game?.winner_user_id || '').trim();
+    if (winnerId) return winnerId;
+    const first = scoreFor(game, users, 0);
+    const second = scoreFor(game, users, 1);
+    if (first > second) return userId(users, 0);
+    if (second > first) return userId(users, 1);
+    return 'Tie';
   }
 
   function gameLabel(game) {
@@ -71,9 +83,9 @@ window.CR = window.CR || {};
     const byPlayer = new Map();
 
     selectedGames.forEach((game) => {
-      SIDES.forEach((side) => {
-        const sideKey = sideName(side);
-        picksForSide(game, side, users).forEach((pick) => {
+      [0, 1].forEach((index) => {
+        const ownerId = userId(users, index);
+        picksForUser(game, users, index).forEach((pick) => {
           const existing = byPlayer.get(pick.playerName) || {
             name: pick.playerName,
             position: pick.position,
@@ -91,16 +103,16 @@ window.CR = window.CR || {};
 
           existing.totalPoints += Number(pick.points || 0);
           existing.gamesPicked += 1;
-          if (side === 0) existing.pickedByFirst += 1;
-          if (side === 1) existing.pickedBySecond += 1;
-          if (scoreWinner(game, users) === sideKey) existing.winsWhenPicked += 1;
+          if (index === 0) existing.pickedByFirst += 1;
+          if (index === 1) existing.pickedBySecond += 1;
+          if (scoreWinner(game, users) === ownerId) existing.winsWhenPicked += 1;
           if (!existing.bestGame || Number(pick.points || 0) > Number(existing.bestGame.points || 0)) {
             existing.bestGame = { title: game.title, points: Number(pick.points || 0) };
           }
 
           existing.owner = existing.pickedByFirst === existing.pickedBySecond
             ? 'Split'
-            : existing.pickedByFirst > existing.pickedBySecond ? sideName(0) : sideName(1);
+            : existing.pickedByFirst > existing.pickedBySecond ? userId(users, 0) : userId(users, 1);
 
           existing.recordWhenPicked = `${existing.winsWhenPicked}-${Math.max(0, existing.gamesPicked - existing.winsWhenPicked)}`;
           existing.clutch = existing.totalPoints >= 10 ? 'Season-shaping chaos' : existing.totalPoints >= 6 ? 'Reliable momentum piece' : 'Quietly clutch';
@@ -119,8 +131,8 @@ window.CR = window.CR || {};
   function buildRecentRecord(games, users) {
     return buildRecentTen(games).reduce((acc, game) => {
       const winner = scoreWinner(game, users);
-      if (winner === sideName(0)) acc.first += 1;
-      else if (winner === sideName(1)) acc.second += 1;
+      if (winner === userId(users, 0)) acc.first += 1;
+      else if (winner === userId(users, 1)) acc.second += 1;
       else acc.ties += 1;
       return acc;
     }, { first: 0, second: 0, ties: 0 });
@@ -143,8 +155,8 @@ window.CR = window.CR || {};
       first += totals.first;
       second += totals.second;
     });
-    const firstName = userForSide(users, 0)?.displayName || 'Player 1';
-    const secondName = userForSide(users, 1)?.displayName || 'Player 2';
+    const firstName = userName(users, 0);
+    const secondName = userName(users, 1);
     const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
     return { first, second, lead, totalGames: model.games?.length || 0 };
   }
@@ -164,7 +176,7 @@ window.CR = window.CR || {};
       } else {
         current = { owner: '', count: 0 };
       }
-      const margin = Math.abs(sideScore(game, 0, users) - sideScore(game, 1, users));
+      const margin = Math.abs(scoreFor(game, users, 0) - scoreFor(game, users, 1));
       if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game) };
       const scorer = firstGoalScorer(game, users);
       if (scorer && scorer !== '—') firstGoalCounts.set(scorer, (firstGoalCounts.get(scorer) || 0) + 1);
@@ -190,7 +202,7 @@ window.CR = window.CR || {};
   function gameSortValue(game) {
     const dateValue = Date.parse(game?.date || '');
     if (Number.isFinite(dateValue)) return dateValue;
-    return Number(game?.displayNumber || game?.id || 0);
+    return Number(game?.displayNumber || game?.display_number || game?.id || 0);
   }
 
   function buildGameLog(games) {
