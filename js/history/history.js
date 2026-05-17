@@ -26,6 +26,12 @@ window.CR = window.CR || {};
     return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id]);
   }
 
+  function canonicalGames(model, seasonId = '') {
+    const games = model.games || [];
+    if (!seasonId) return games;
+    return games.filter((game) => String(game.seasonId || game.season_id || '') === String(seasonId));
+  }
+
   function scoreTotal(games, index, users) {
     return games.reduce((total, game) => total + scoreFor(game, users, index), 0);
   }
@@ -145,20 +151,14 @@ window.CR = window.CR || {};
   }
 
   function buildAllTimeBoard(model) {
-    const bySeason = model.seasons || [];
     const users = model.users || [];
-    let first = 0;
-    let second = 0;
-    bySeason.forEach((season) => {
-      const games = model.seasonGames?.[season.id] || [];
-      const totals = seasonTotals(season, games, users);
-      first += totals.first;
-      second += totals.second;
-    });
+    const games = canonicalGames(model);
+    const first = scoreTotal(games, 0, users);
+    const second = scoreTotal(games, 1, users);
     const firstName = userName(users, 0);
     const secondName = userName(users, 1);
     const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
-    return { first, second, lead, totalGames: model.games?.length || 0 };
+    return { first, second, lead, totalGames: games.length };
   }
 
   function buildHighlights(games, users) {
@@ -219,7 +219,7 @@ window.CR = window.CR || {};
   function buildSeasonScopedData(model, seasonId) {
     const selectedSeason = model.seasons.find((season) => season.id === seasonId) || model.seasons[0] || null;
     const resolvedSeasonId = selectedSeason?.id || seasonId;
-    const selectedGames = model.seasonGames?.[resolvedSeasonId] || [];
+    const selectedGames = canonicalGames(model, resolvedSeasonId);
     const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
@@ -231,34 +231,27 @@ window.CR = window.CR || {};
   function buildHqSeasonData(model, seasonId) {
     const users = model.users || [];
     const seasonData = buildSeasonScopedData(model, seasonId);
-    const globalRecentGameLog = buildGameLog(model.games || []);
+    const globalRecentGameLog = buildGameLog(canonicalGames(model));
     return { ...seasonData, seasonBoard: { ...seasonData.seasonBoard, recentText: recentRecordText(globalRecentGameLog, users) }, momentum: buildMomentum(globalRecentGameLog, users) };
   }
 
   function scoreSignature(model = {}) {
-    return (model.games || []).map((game) => {
+    return canonicalGames(model).map((game) => {
       const first = scoreFor(game, model.users || [], 0);
       const second = scoreFor(game, model.users || [], 1);
-      return `${game.id}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
+      return `${game.id}:${game.seasonId || game.season_id || ''}:${first}-${second}:${game.winnerUserId || game.winner_user_id || game.winner || ''}`;
     }).join('|');
   }
 
   function buildStaticHistoryData(model) {
-    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [], scoreSignature: scoreSignature(model) };
+    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasons || [], scoreSignature: scoreSignature(model) };
   }
 
   function getScopedData(model, state) {
-    const cache = CR.historyCache || (CR.historyCache = { staticData: null, seasons: {}, signature: '' });
     const signature = scoreSignature(model);
-    if (cache.signature !== signature) {
-      cache.staticData = null;
-      cache.seasons = {};
-      cache.signature = signature;
-    }
     const hqSeasonId = model.currentSeasonId || state.seasonId;
-    if (!cache.staticData) cache.staticData = buildStaticHistoryData(model);
-    if (!cache.seasons[state.seasonId]) cache.seasons[state.seasonId] = buildSeasonScopedData(model, state.seasonId);
-    return { ...model, ...cache.staticData, ...cache.seasons[state.seasonId], hqSeasonData: buildHqSeasonData(model, hqSeasonId) };
+    const scopedSeason = buildSeasonScopedData(model, state.seasonId);
+    return { ...model, ...buildStaticHistoryData(model), ...scopedSeason, hqSeasonData: buildHqSeasonData(model, hqSeasonId), scoreSignature: signature };
   }
 
   function ensureHistoryShell(root) {
