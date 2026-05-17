@@ -57,14 +57,6 @@ window.CR = window.CR || {};
     return [game?.date, game?.opponent ? `vs ${game.opponent}` : ''].filter(Boolean).join(' • ') || game?.title || 'Game';
   }
 
-  function gameTypeValue(game) {
-    return String(game?.gameType || game?.game_type || '').trim().toLowerCase();
-  }
-
-  function isPlayoffGame(game) {
-    return gameTypeValue(game).includes('playoff');
-  }
-
   function buildSeasonPlayerSpotlights(selectedGames) {
     const byPlayer = new Map();
 
@@ -173,34 +165,21 @@ window.CR = window.CR || {};
   function buildHighlightCards(highlights, games = []) {
     const completedCount = scoredGames(games).length;
     return [
-      {
-        label: 'Longest run',
-        value: highlights.longest?.count ? `${highlights.longest.count} straight` : 'No streak yet',
-        owner: highlights.longest?.count ? highlights.longest.owner : 'Tie',
-        copy: highlights.longest?.count ? 'built the longest winning streak.' : 'No one has pulled away yet.'
-      },
-      {
-        label: 'Biggest swing',
-        value: highlights.biggestBlowout?.margin ? `+${highlights.biggestBlowout.margin}` : 'Even',
-        owner: highlights.biggestBlowout?.owner || 'Tie',
-        copy: highlights.biggestBlowout?.margin ? `owned ${highlights.biggestBlowout.title}.` : 'No blowout result logged yet.'
-      },
-      {
-        label: 'First-goal magnet',
-        value: highlights.topFirstGoal?.[0] || 'Waiting',
-        owner: null,
-        copy: highlights.topFirstGoal?.[0] ? `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` : 'First-goal patterns will appear here.'
-      },
-      {
-        label: 'Games logged',
-        value: String(completedCount || games.length || 0),
-        owner: null,
-        copy: 'Completed rivalry games in the archive.'
-      }
+      { label: 'Longest run', value: highlights.longest?.count ? `${highlights.longest.count} straight` : 'No streak yet', owner: highlights.longest?.count ? highlights.longest.owner : 'Tie', copy: highlights.longest?.count ? 'built the longest winning streak.' : 'No one has pulled away yet.' },
+      { label: 'Biggest swing', value: highlights.biggestBlowout?.margin ? `+${highlights.biggestBlowout.margin}` : 'Even', owner: highlights.biggestBlowout?.owner || 'Tie', copy: highlights.biggestBlowout?.margin ? `owned ${highlights.biggestBlowout.title}.` : 'No blowout result logged yet.' },
+      { label: 'First-goal magnet', value: highlights.topFirstGoal?.[0] || 'Waiting', owner: null, copy: highlights.topFirstGoal?.[0] ? `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` : 'First-goal patterns will appear here.' },
+      { label: 'Games logged', value: String(completedCount || games.length || 0), owner: null, copy: 'Completed rivalry games in the archive.' }
     ];
   }
 
-  function buildMomentum(games) { return buildRecentTen(games).map((game) => ({ winner: scoreWinner(game), playoff: isPlayoffGame(game), id: game.id })); }
+  function buildMomentum(games) {
+    return buildRecentTen(games).map((game) => ({
+      winner: scoreWinner(game),
+      playoff: Boolean(game.playoff),
+      id: game.id
+    }));
+  }
+
   function buildGameLog(games) { return games.slice().sort((a, b) => Number(b.displayNumber || 0) - Number(a.displayNumber || 0)); }
 
   function buildSeasonBoard(season, games, summary) {
@@ -217,7 +196,8 @@ window.CR = window.CR || {};
     const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
     const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames));
     const gameLog = buildGameLog(selectedGames);
-    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary), momentum: buildMomentum(gameLog), recentGames: gameLog.slice(0, 4), gameLog, playerSpotlights };
+    const recentTen = buildRecentTen(gameLog);
+    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary), momentum: buildMomentum(gameLog), recentGames: recentTen.slice(0, 4), gameLog, playerSpotlights };
   }
 
   function buildStaticHistoryData(model) {
