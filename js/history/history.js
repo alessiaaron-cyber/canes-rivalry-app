@@ -96,6 +96,22 @@ window.CR = window.CR || {};
 
   function buildRecentTen(selectedGames) { return selectedGames.slice(0, 10); }
 
+  function buildRecentRecord(games) {
+    return buildRecentTen(games).reduce((acc, game) => {
+      if (!hasRealScore(game)) return acc;
+      if (game.winner === 'Aaron') acc.aaron += 1;
+      else if (game.winner === 'Julie') acc.julie += 1;
+      else acc.ties += 1;
+      return acc;
+    }, { aaron: 0, julie: 0, ties: 0 });
+  }
+
+  function recentRecordText(games) {
+    const recent = buildRecentRecord(games);
+    const base = `Last 10 ${recent.aaron}-${recent.julie}`;
+    return recent.ties ? `${base}-${recent.ties}` : base;
+  }
+
   function buildAllTimeBoard(model) {
     const bySeason = model.seasons || [];
     let aaron = 0;
@@ -131,6 +147,43 @@ window.CR = window.CR || {};
     return { longest, biggestBlowout, topFirstGoal };
   }
 
+  function buildHighlightCards(highlights, games = []) {
+    const cards = [];
+    if (highlights.longest?.count) {
+      cards.push({
+        label: 'Longest run',
+        value: `${highlights.longest.count} straight`,
+        copy: `${highlights.longest.owner} built the longest winning streak.`
+      });
+    }
+
+    if (highlights.biggestBlowout?.margin) {
+      cards.push({
+        label: 'Biggest swing',
+        value: `+${highlights.biggestBlowout.margin}`,
+        copy: `${highlights.biggestBlowout.owner} owned ${highlights.biggestBlowout.title}.`
+      });
+    }
+
+    if (highlights.topFirstGoal?.[0]) {
+      cards.push({
+        label: 'First-goal magnet',
+        value: highlights.topFirstGoal[0],
+        copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.`
+      });
+    }
+
+    if (!cards.length && games.length) {
+      cards.push({
+        label: 'Games logged',
+        value: String(games.length),
+        copy: 'Completed rivalry games are flowing into the archive.'
+      });
+    }
+
+    return cards.slice(0, 3);
+  }
+
   function buildMomentum(games) { return buildRecentTen(games).map((game) => ({ winner: game.winner, playoff: isPlayoffGame(game), id: game.id })); }
   function buildGameLog(games) { return games.slice().sort((a, b) => Number(b.displayNumber || 0) - Number(a.displayNumber || 0)); }
 
@@ -138,8 +191,7 @@ window.CR = window.CR || {};
     const totals = seasonTotals(season, games);
     const aaron = totals.aaron;
     const julie = totals.julie;
-    const leader = aaron === julie ? 'Tied' : aaron > julie ? 'Aaron leads' : 'Julie leads';
-    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: leader, bestGameTitle: games.find(hasRealScore)?.title || '' };
+    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(games), bestGameTitle: games.find(hasRealScore)?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
@@ -153,7 +205,8 @@ window.CR = window.CR || {};
   }
 
   function buildStaticHistoryData(model) {
-    return { allTimeBoard: buildAllTimeBoard(model), highlights: { ...buildHighlights(model.games || []), cards: [] }, seasonSummaries: model.seasonSummaries || [] };
+    const highlights = buildHighlights(model.games || []);
+    return { allTimeBoard: buildAllTimeBoard(model), highlights: { ...highlights, cards: buildHighlightCards(highlights, model.games || []) }, seasonSummaries: model.seasonSummaries || [] };
   }
 
   function getScopedData(model, state) {
