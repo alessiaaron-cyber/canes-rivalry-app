@@ -12,26 +12,32 @@ window.CR = window.CR || {};
     return String(value || '').trim().toLowerCase();
   }
 
-  function ownerKey(profile = {}) {
-    return profile.legacyOwner || profile.legacy_owner || profile.legacy_owner_key || profile.displayName || profile.display_name || profile.username || '';
+  function profileId(profile = {}) {
+    return String(profile?.id || '').trim();
   }
 
   function displayName(profile = {}, fallback = 'Player') {
-    return String(profile.displayName || profile.display_name || profile.username || ownerKey(profile) || fallback).trim();
+    return String(profile.displayName || profile.display_name || profile.username || fallback).trim();
+  }
+
+  function scoreKey(profile = {}) {
+    return profileId(profile) || displayName(profile);
   }
 
   function profilesById(profiles = []) {
     return profiles.reduce((acc, profile) => {
-      const id = String(profile?.id || '').trim();
+      const id = profileId(profile);
       if (id) acc[id] = profile;
       return acc;
     }, {});
   }
 
-  function profilesByLegacyOwner(profiles = []) {
+  function profilesByName(profiles = []) {
     return profiles.reduce((acc, profile) => {
-      const key = normalizeText(ownerKey(profile));
-      if (key) acc[key] = profile;
+      [profile.username, profile.displayName, profile.display_name]
+        .map(normalizeText)
+        .filter(Boolean)
+        .forEach((key) => { acc[key] = profile; });
       return acc;
     }, {});
   }
@@ -44,45 +50,42 @@ window.CR = window.CR || {};
     }, {});
   }
 
-  function legacyGameScore(game = {}, profile = {}) {
-    const legacy = normalizeText(ownerKey(profile));
-    if (legacy === 'aaron') return toNumber(game.aaron_points);
-    if (legacy === 'julie') return toNumber(game.julie_points);
-    return null;
+  function scoreForProfile(profile = {}, normalizedScores = {}) {
+    const id = profileId(profile);
+    return id && Object.prototype.hasOwnProperty.call(normalizedScores, id)
+      ? toNumber(normalizedScores[id])
+      : 0;
   }
 
-  function legacySeasonTotal(season = {}, profile = {}) {
-    const legacy = normalizeText(ownerKey(profile));
-    if (legacy === 'aaron') return toNumber(season.aaron_final_total ?? season.aaron_points ?? season.aaron_total);
-    if (legacy === 'julie') return toNumber(season.julie_final_total ?? season.julie_points ?? season.julie_total);
-    return null;
+  function requireProfileScore(profile = {}, normalizedScores = {}, context = 'score') {
+    const id = profileId(profile);
+    if (!id) throw new Error(`Missing user profile id for ${context}.`);
+    if (!Object.prototype.hasOwnProperty.call(normalizedScores, id)) return 0;
+    return toNumber(normalizedScores[id]);
   }
 
-  function scoreForProfile({ profile, normalizedScores = {}, fallbackScore = 0, legacyScore = null }) {
-    const id = String(profile?.id || '').trim();
-    if (id && Object.prototype.hasOwnProperty.call(normalizedScores, id)) return toNumber(normalizedScores[id]);
-    if (legacyScore !== null && legacyScore !== undefined) return toNumber(legacyScore);
-    return toNumber(fallbackScore);
-  }
+  function resolveProfile(value, profiles = []) {
+    const id = String(value || '').trim();
+    if (!id) return null;
 
-  function resolveProfileFromOwner(owner, profiles = []) {
-    const lookup = normalizeText(owner);
-    if (!lookup) return null;
-    return profiles.find((profile) => [profile.id, profile.username, profile.displayName, profile.display_name, ownerKey(profile)]
-      .some((value) => normalizeText(value) === lookup)) || null;
+    const byId = profilesById(profiles);
+    if (byId[id]) return byId[id];
+
+    const byName = profilesByName(profiles);
+    return byName[normalizeText(value)] || null;
   }
 
   CR.profileScoreUtils = {
     toNumber,
     normalizeText,
-    ownerKey,
+    profileId,
     displayName,
+    scoreKey,
     profilesById,
-    profilesByLegacyOwner,
+    profilesByName,
     normalizedScoreByUserId,
-    legacyGameScore,
-    legacySeasonTotal,
     scoreForProfile,
-    resolveProfileFromOwner
+    requireProfileScore,
+    resolveProfile
   };
 })();
