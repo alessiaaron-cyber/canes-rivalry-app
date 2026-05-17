@@ -41,6 +41,19 @@ window.CR = window.CR || {};
     return side === 'Julie' ? 'owner-secondary' : 'owner-primary';
   }
 
+  function sideIndex(side) {
+    return side === 'Julie' ? 1 : 0;
+  }
+
+  function sideDisplayName(side) {
+    const index = sideIndex(side);
+    return CR.identity?.getDisplayName?.(index, CR.historyData)
+      || CR.identity?.getUser?.(index, CR.historyData)?.displayName
+      || CR.historyData?.users?.[index]?.displayName
+      || CR.historyData?.users?.[index]?.username
+      || side;
+  }
+
   function scoringRules(isPlayoff) {
     return isPlayoff
       ? { goal: 2, assist: 1, firstGoalBonus: 1 }
@@ -68,6 +81,7 @@ window.CR = window.CR || {};
   }
 
   function renderPickCards(picks, sideKey) {
+    const sideLabel = sideDisplayName(sideKey);
     return (picks || []).map((pick, index) => `
       <article class="history-sheet-pick-card" data-history-pick-card="1" data-history-pick-slot="${index + 1}">
         <div class="history-sheet-pick-card-topline">
@@ -81,7 +95,7 @@ window.CR = window.CR || {};
               type="text"
               value="${escapeHtml(pick.playerName)}"
               data-history-pick-name="1"
-              aria-label="${escapeHtml(sideKey)} pick ${index + 1} player"
+              aria-label="${escapeHtml(sideLabel)} pick ${index + 1} player"
             />
           </label>
           <label class="history-sheet-mini-stat">
@@ -93,7 +107,7 @@ window.CR = window.CR || {};
               step="1"
               value="${escapeHtml(String(Number(pick.goals || 0)))}"
               data-history-goals="1"
-              aria-label="${escapeHtml(sideKey)} pick ${index + 1} goals"
+              aria-label="${escapeHtml(sideLabel)} pick ${index + 1} goals"
             />
           </label>
           <label class="history-sheet-mini-stat">
@@ -105,7 +119,7 @@ window.CR = window.CR || {};
               step="1"
               value="${escapeHtml(String(Number(pick.assists || 0)))}"
               data-history-assists="1"
-              aria-label="${escapeHtml(sideKey)} pick ${index + 1} assists"
+              aria-label="${escapeHtml(sideLabel)} pick ${index + 1} assists"
             />
           </label>
         </div>
@@ -126,6 +140,9 @@ window.CR = window.CR || {};
     }
 
     const firstGoalOptions = buildFirstGoalOptions(game);
+    const firstLabel = sideDisplayName('Aaron');
+    const secondLabel = sideDisplayName('Julie');
+    const firstPickLabel = game.firstPick === 'Julie' ? secondLabel : game.firstPick === 'Aaron' ? firstLabel : game.firstPick || '—';
 
     const detailsHtml = `
       <form class="history-sheet-form history-sheet-form-v2" data-history-edit-form="1" data-history-game-id="${escapeHtml(game.id)}" onsubmit="return false;">
@@ -133,10 +150,10 @@ window.CR = window.CR || {};
           <div>
             <div class="history-sheet-summary-title">Game ${escapeHtml(String(game.displayNumber || ''))} • ${escapeHtml(game.playoff ? 'Playoffs' : 'Regular')}</div>
             <div class="history-sheet-summary-copy">${escapeHtml(game.date)} • ${escapeHtml(game.opponent || 'Opponent TBD')}</div>
-            <div class="history-sheet-summary-copy">First pick: ${escapeHtml(game.firstPick || '—')}</div>
+            <div class="history-sheet-summary-copy">First pick: ${escapeHtml(firstPickLabel)}</div>
             <div class="history-sheet-summary-copy">First goal: <span data-history-first-goal-readout="1">${escapeHtml(game.firstGoalScorer || '—')}</span></div>
-            <div class="history-sheet-summary-copy">Aaron: ${(game.picks?.Aaron || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
-            <div class="history-sheet-summary-copy">Julie: ${(game.picks?.Julie || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
+            <div class="history-sheet-summary-copy">${escapeHtml(firstLabel)}: ${(game.picks?.Aaron || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
+            <div class="history-sheet-summary-copy">${escapeHtml(secondLabel)}: ${(game.picks?.Julie || []).map((pick) => escapeHtml(pick.playerName)).join(' / ')}</div>
           </div>
         </div>
 
@@ -168,8 +185,8 @@ window.CR = window.CR || {};
             <label class="history-sheet-field">
               <span>First pick</span>
               <select class="history-sheet-select" data-history-first-picker="1" aria-label="First pick">
-                <option value="Aaron" ${game.firstPick === 'Aaron' ? 'selected' : ''}>Aaron</option>
-                <option value="Julie" ${game.firstPick === 'Julie' ? 'selected' : ''}>Julie</option>
+                <option value="Aaron" ${game.firstPick === 'Aaron' ? 'selected' : ''}>${escapeHtml(firstLabel)}</option>
+                <option value="Julie" ${game.firstPick === 'Julie' ? 'selected' : ''}>${escapeHtml(secondLabel)}</option>
               </select>
             </label>
           </div>
@@ -178,7 +195,7 @@ window.CR = window.CR || {};
         <section class="history-sheet-panel" data-history-sheet-panel="picks" hidden>
           <div class="history-sheet-side-section">
             <div class="history-sheet-side-section-head">
-              <h3>Aaron Picks</h3>
+              <h3>${escapeHtml(firstLabel)} Picks</h3>
               <span class="history-sheet-ga-head">G / A</span>
             </div>
             <div class="history-sheet-pick-stack" data-history-side="Aaron">
@@ -188,7 +205,7 @@ window.CR = window.CR || {};
 
           <div class="history-sheet-side-section">
             <div class="history-sheet-side-section-head">
-              <h3>Julie Picks</h3>
+              <h3>${escapeHtml(secondLabel)} Picks</h3>
               <span class="history-sheet-ga-head">G / A</span>
             </div>
             <div class="history-sheet-pick-stack" data-history-side="Julie">
@@ -208,11 +225,11 @@ window.CR = window.CR || {};
 
           <div class="history-sheet-score-preview-grid">
             <article class="history-sheet-score-preview-card">
-              <div class="eyebrow ${ownerClass('Aaron')}">Aaron</div>
+              <div class="eyebrow ${ownerClass('Aaron')}">${escapeHtml(firstLabel)}</div>
               <div class="history-sheet-score-preview-value" data-history-side-total="Aaron">${escapeHtml(String(game.aaronScore || 0))}</div>
             </article>
             <article class="history-sheet-score-preview-card">
-              <div class="eyebrow ${ownerClass('Julie')}">Julie</div>
+              <div class="eyebrow ${ownerClass('Julie')}">${escapeHtml(secondLabel)}</div>
               <div class="history-sheet-score-preview-value" data-history-side-total="Julie">${escapeHtml(String(game.julieScore || 0))}</div>
             </article>
           </div>
