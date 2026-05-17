@@ -2,7 +2,6 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const SIDES = [0, 1];
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -39,11 +38,24 @@ window.CR = window.CR || {};
     return toNumber(row?.scoresByUserId?.[user.id] ?? row?.totalsByUserId?.[user.id]);
   }
 
-  function winnerName(game, users) {
-    if (!game?.winnerUserId && !game?.winner_user_id) return 'Tie';
-    const id = String(game.winnerUserId || game.winner_user_id || '').trim();
-    const user = users.find((item) => item.id === id);
-    return user ? userName([user], 0) : 'Tie';
+  function scoreMapFromPicks(picks, users) {
+    return users.reduce((acc, user) => {
+      acc[user.id] = (picks?.[user.id] || []).reduce((total, pick) => total + toNumber(pick.points), 0);
+      return acc;
+    }, {});
+  }
+
+  function winnerName(game, users, scoresByUserId) {
+    const winnerId = String(game?.winnerUserId || game?.winner_user_id || '').trim();
+    if (winnerId) {
+      const user = users.find((item) => item.id === winnerId);
+      if (user) return user.displayName || user.display_name || user.username || 'Player';
+    }
+    const first = toNumber(scoresByUserId?.[userAt(users, 0).id]);
+    const second = toNumber(scoresByUserId?.[userAt(users, 1).id]);
+    if (first > second) return userName(users, 0);
+    if (second > first) return userName(users, 1);
+    return 'Tie';
   }
 
   function isPlayoffGame(game) {
@@ -73,12 +85,22 @@ window.CR = window.CR || {};
       acc[user.id] = (game.picksByUserId?.[user.id] || []).map((pick) => enrichPick(pick, map));
       return acc;
     }, {});
-    const firstScore = scoreFor(game, users, 0);
-    const secondScore = scoreFor(game, users, 1);
-    const gameWinner = winnerName(game, users);
+    const derivedScores = scoreMapFromPicks(picks, users);
+    const sourceScores = game.scoresByUserId || {};
+    const scoresByUserId = users.reduce((acc, user) => {
+      const sourceValue = toNumber(sourceScores[user.id]);
+      const derivedValue = toNumber(derivedScores[user.id]);
+      acc[user.id] = sourceValue || derivedValue;
+      return acc;
+    }, {});
+    const firstScore = toNumber(scoresByUserId[userAt(users, 0).id]);
+    const secondScore = toNumber(scoresByUserId[userAt(users, 1).id]);
+    const gameWinner = winnerName(game, users, scoresByUserId);
 
     return {
       ...game,
+      scoresByUserId,
+      picksByUserId: picks,
       playoff: isPlayoffGame(game),
       firstScore,
       secondScore,
@@ -98,7 +120,7 @@ window.CR = window.CR || {};
     const moments = [];
 
     seasonGames.forEach((game) => {
-      const gameWinner = winnerName(game, users);
+      const gameWinner = winnerName(game, users, game.scoresByUserId);
       if (gameWinner === first) totals.first += 1;
       if (gameWinner === second) totals.second += 1;
       if (game.playoff && gameWinner === first) totals.playoffFirst += 1;
