@@ -12,6 +12,10 @@ window.CR = window.CR || {};
     return Number.isFinite(n) ? n : fallback;
   }
 
+  function normalizeId(value) {
+    return String(value || '').trim();
+  }
+
   function getUsers(raw) {
     const source = Array.isArray(raw?.users) && raw.users.length ? raw.users : [];
     return source.slice(0, 2).map((user, index) => ({
@@ -35,7 +39,8 @@ window.CR = window.CR || {};
 
   function scoreFor(row, users, index) {
     const user = userAt(users, index);
-    return toNumber(row?.scoresByUserId?.[user.id] ?? row?.totalsByUserId?.[user.id]);
+    const sideValue = index === 1 ? row?.secondScore : row?.firstScore;
+    return toNumber(row?.scoresByUserId?.[user.id] ?? row?.totalsByUserId?.[user.id] ?? sideValue);
   }
 
   function scoreMapFromPicks(picks, users) {
@@ -99,6 +104,8 @@ window.CR = window.CR || {};
 
     return {
       ...game,
+      seasonId: normalizeId(game.seasonId || game.season_id),
+      season_id: normalizeId(game.seasonId || game.season_id),
       scoresByUserId,
       picksByUserId: picks,
       playoff: isPlayoffGame(game),
@@ -116,6 +123,8 @@ window.CR = window.CR || {};
   function buildSeasonSummary(season, seasonGames, users) {
     const first = userName(users, 0);
     const second = userName(users, 1);
+    const firstScore = seasonGames.reduce((total, game) => total + scoreFor(game, users, 0), 0) || scoreFor(season, users, 0);
+    const secondScore = seasonGames.reduce((total, game) => total + scoreFor(game, users, 1), 0) || scoreFor(season, users, 1);
     const totals = { first: 0, second: 0, playoffFirst: 0, playoffSecond: 0 };
     const moments = [];
 
@@ -132,10 +141,17 @@ window.CR = window.CR || {};
     const closestGame = seasonGames.slice().sort((a, b) => Math.abs(scoreFor(a, users, 0) - scoreFor(a, users, 1)) - Math.abs(scoreFor(b, users, 0) - scoreFor(b, users, 1)))[0] || null;
 
     return {
-      seasonId: season.id,
+      seasonId: normalizeId(season.id),
+      id: normalizeId(season.id),
       label: season.label,
       isCurrent: season.isCurrent,
       note: season.note,
+      firstScore,
+      secondScore,
+      scoresByUserId: {
+        [userAt(users, 0).id]: firstScore,
+        [userAt(users, 1).id]: secondScore
+      },
       totals: {
         [first]: totals.first,
         [second]: totals.second,
@@ -154,12 +170,12 @@ window.CR = window.CR || {};
     build(rawInput) {
       const raw = clone(rawInput || CR.historyMockData || {});
       const users = getUsers(raw);
-      const seasons = raw.seasons || [];
+      const seasons = (raw.seasons || []).map((season) => ({ ...season, id: normalizeId(season.id) }));
       const players = raw.players || [];
       const map = playerMap(players);
       const games = (raw.games || []).map((game) => enrichGame(game, map, users)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      const currentSeasonId = raw.currentSeasonId || seasons.find((season) => season.isCurrent)?.id || seasons[0]?.id || '';
-      const seasonGames = Object.fromEntries(seasons.map((season) => [season.id, games.filter((game) => game.seasonId === season.id)]));
+      const currentSeasonId = normalizeId(raw.currentSeasonId || seasons.find((season) => season.isCurrent)?.id || seasons[0]?.id || '');
+      const seasonGames = Object.fromEntries(seasons.map((season) => [season.id, games.filter((game) => normalizeId(game.seasonId || game.season_id) === season.id)]));
       const seasonSummaries = seasons.map((season) => buildSeasonSummary(season, seasonGames[season.id] || [], users));
 
       return {
