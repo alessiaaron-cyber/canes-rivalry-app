@@ -243,8 +243,9 @@ window.CR = window.CR || {};
     const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
+    const seasonHighlights = buildHighlights(gameLog, users);
     const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames, users), users);
-    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog).slice(0, 4), gameLog, playerSpotlights };
+    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog).slice(0, 4), gameLog, playerSpotlights, highlights: { ...seasonHighlights, cards: buildHighlightCards(seasonHighlights, gameLog, users) } };
   }
 
   function buildHqSeasonData(model, seasonId) {
@@ -255,9 +256,7 @@ window.CR = window.CR || {};
   }
 
   function buildStaticHistoryData(model) {
-    const users = model.users || [];
-    const highlights = buildHighlights(model.games || [], users);
-    return { allTimeBoard: buildAllTimeBoard(model), highlights: { ...highlights, cards: buildHighlightCards(highlights, model.games || [], users) }, seasonSummaries: model.seasonSummaries || [] };
+    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [] };
   }
 
   function getScopedData(model, state) {
