@@ -41,6 +41,11 @@ window.CR = window.CR || {};
     return (model.seasons || []).find((season) => resolveSeasonId(season.id) === lookup) || null;
   }
 
+  function findSeasonSummary(model, seasonId) {
+    const lookup = resolveSeasonId(seasonId);
+    return (model.seasonSummaries || []).find((season) => resolveSeasonId(season.seasonId || season.id) === lookup) || null;
+  }
+
   function canonicalGames(model, seasonId = '') {
     const games = model.games || [];
     const lookup = resolveSeasonId(seasonId);
@@ -52,16 +57,18 @@ window.CR = window.CR || {};
     return games.reduce((total, game) => total + scoreForSide(game, users, index), 0);
   }
 
-  function seasonTotals(season, seasonGames, users) {
+  function seasonTotals(season, seasonGames, users, summary = null) {
+    const summaryFirst = scoreForSide(summary || {}, users, 0);
+    const summarySecond = scoreForSide(summary || {}, users, 1);
     const gameFirst = scoreTotal(seasonGames, 0, users);
     const gameSecond = scoreTotal(seasonGames, 1, users);
     const seasonFirst = scoreForSide(season, users, 0);
     const seasonSecond = scoreForSide(season, users, 1);
     return {
-      first: gameFirst || seasonFirst,
-      second: gameSecond || seasonSecond,
+      first: summaryFirst || gameFirst || seasonFirst,
+      second: summarySecond || gameSecond || seasonSecond,
       hasGameTotals: Boolean(gameFirst || gameSecond),
-      hasSeasonTotals: Boolean(seasonFirst || seasonSecond)
+      hasSeasonTotals: Boolean(seasonFirst || seasonSecond || summaryFirst || summarySecond)
     };
   }
 
@@ -73,6 +80,13 @@ window.CR = window.CR || {};
       else if (winner === 'Tie') acc.ties += 1;
       return acc;
     }, { first: 0, second: 0, ties: 0 });
+  }
+
+  function recordFromSummary(summary = {}) {
+    if (summary.record) return summary.record;
+    const match = String(summary.recordText || '').match(/(\d+)\s*[–-]\s*(\d+)(?:\s*[–-]\s*(\d+))?/);
+    if (match) return { first: toNumber(match[1]), second: toNumber(match[2]), ties: toNumber(match[3]) };
+    return null;
   }
 
   function recordText(record = {}) {
@@ -183,11 +197,15 @@ window.CR = window.CR || {};
 
   function buildAllTimeBoard(model) {
     const users = model.users || [];
+    const summaries = model.seasonSummaries || [];
     const seasons = model.seasons || [];
     const seasonGames = model.seasonGames || {};
-    const totals = seasons.reduce((acc, season) => {
-      const games = seasonGames[resolveSeasonId(season.id)] || canonicalGames(model, season.id);
-      const seasonScore = seasonTotals(season, games, users);
+    const totals = (summaries.length ? summaries : seasons).reduce((acc, item) => {
+      const seasonId = resolveSeasonId(item.seasonId || item.id);
+      const season = findSeason(model, seasonId) || item;
+      const summary = findSeasonSummary(model, seasonId) || item;
+      const games = seasonGames[seasonId] || canonicalGames(model, seasonId);
+      const seasonScore = seasonTotals(season, games, users, summary);
       acc.first += seasonScore.first;
       acc.second += seasonScore.second;
       return acc;
@@ -249,8 +267,8 @@ window.CR = window.CR || {};
   }
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
-    const totals = seasonTotals(season, gameLog, users);
-    const record = summary?.record || recordForGames(gameLog, users);
+    const totals = seasonTotals(season, gameLog, users, summary);
+    const record = recordFromSummary(summary || {}) || recordForGames(gameLog, users);
     return { seasonLabel: season?.label || summary?.label || 'Season', first: totals.first, second: totals.second, recordText: recordText(record), recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
@@ -259,7 +277,7 @@ window.CR = window.CR || {};
     const selectedSeason = findSeason(model, requestedId) || findSeason(model, model.currentSeasonId) || model.seasons[0] || null;
     const resolvedSeasonId = resolveSeasonId(selectedSeason?.id || requestedId);
     const selectedGames = canonicalGames(model, resolvedSeasonId);
-    const selectedSummary = (model.seasonSummaries || []).find((season) => resolveSeasonId(season.seasonId || season.id) === resolvedSeasonId) || null;
+    const selectedSummary = findSeasonSummary(model, resolvedSeasonId);
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
     const seasonHighlights = buildHighlights(gameLog, users);
