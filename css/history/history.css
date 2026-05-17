@@ -603,3 +603,8 @@
 .history-hq-card .history-season-score-grid .rivalry-score-value {
   text-align: center;
 }
+
+.history-hq-card .history-season-score-grid .rivalry-score-card .eyebrow {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
