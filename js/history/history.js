@@ -30,10 +30,6 @@ window.CR = window.CR || {};
     return '—';
   }
 
-  function gameSubtitle(game) {
-    return [game.date, game.opponent].filter(Boolean).join(' • ');
-  }
-
   function hasRealScore(game) {
     return Number(game?.aaronScore || 0) + Number(game?.julieScore || 0) > 0;
   }
@@ -99,8 +95,10 @@ window.CR = window.CR || {};
   function buildRecentRecord(games) {
     return buildRecentTen(games).reduce((acc, game) => {
       if (!hasRealScore(game)) return acc;
-      if (game.winner === 'Aaron') acc.aaron += 1;
-      else if (game.winner === 'Julie') acc.julie += 1;
+      const aaron = Number(game.aaronScore || 0);
+      const julie = Number(game.julieScore || 0);
+      if (aaron > julie) acc.aaron += 1;
+      else if (julie > aaron) acc.julie += 1;
       else acc.ties += 1;
       return acc;
     }, { aaron: 0, julie: 0, ties: 0 });
@@ -149,38 +147,10 @@ window.CR = window.CR || {};
 
   function buildHighlightCards(highlights, games = []) {
     const cards = [];
-    if (highlights.longest?.count) {
-      cards.push({
-        label: 'Longest run',
-        value: `${highlights.longest.count} straight`,
-        copy: `${highlights.longest.owner} built the longest winning streak.`
-      });
-    }
-
-    if (highlights.biggestBlowout?.margin) {
-      cards.push({
-        label: 'Biggest swing',
-        value: `+${highlights.biggestBlowout.margin}`,
-        copy: `${highlights.biggestBlowout.owner} owned ${highlights.biggestBlowout.title}.`
-      });
-    }
-
-    if (highlights.topFirstGoal?.[0]) {
-      cards.push({
-        label: 'First-goal magnet',
-        value: highlights.topFirstGoal[0],
-        copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.`
-      });
-    }
-
-    if (!cards.length && games.length) {
-      cards.push({
-        label: 'Games logged',
-        value: String(games.length),
-        copy: 'Completed rivalry games are flowing into the archive.'
-      });
-    }
-
+    if (highlights.longest?.count) cards.push({ label: 'Longest run', value: `${highlights.longest.count} straight`, copy: `${highlights.longest.owner} built the longest winning streak.` });
+    if (highlights.biggestBlowout?.margin) cards.push({ label: 'Biggest swing', value: `+${highlights.biggestBlowout.margin}`, copy: `${highlights.biggestBlowout.owner} owned ${highlights.biggestBlowout.title}.` });
+    if (highlights.topFirstGoal?.[0]) cards.push({ label: 'First-goal magnet', value: highlights.topFirstGoal[0], copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` });
+    if (!cards.length && games.length) cards.push({ label: 'Games logged', value: String(games.length), copy: 'Completed rivalry games are flowing into the archive.' });
     return cards.slice(0, 3);
   }
 
