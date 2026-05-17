@@ -80,18 +80,10 @@ window.CR = window.CR || {};
     return owner ? `${owner} ${card.copy}` : card.copy;
   }
 
-  function balancedPerformers(data, performers = []) {
-    const owners = [legacyOwner(data, 0), legacyOwner(data, 1)];
-    const selected = [];
-    owners.forEach((owner) => {
-      const match = performers.find((player) => String(player.owner || '').toLowerCase() === String(owner).toLowerCase());
-      if (match) selected.push(match);
-    });
-    performers.forEach((player) => {
-      if (selected.length >= 2) return;
-      if (!selected.some((item) => item.name === player.name)) selected.push(player);
-    });
-    return selected.slice(0, 2);
+  function ownerPerformersOnly(data, performers = []) {
+    return [legacyOwner(data, 0), legacyOwner(data, 1)]
+      .map((owner) => performers.find((player) => String(player.owner || '').toLowerCase() === String(owner).toLowerCase()))
+      .filter(Boolean);
   }
 
   function outcomeText(data, game) {
@@ -159,20 +151,10 @@ window.CR = window.CR || {};
     return `<section class="panel-card history-momentum-card"><div class="history-section-head"><div><div class="eyebrow">Momentum</div><h3>Last 10 results</h3></div></div><div class="history-momentum-strip">${results.map((item) => `<div class="history-momentum-node ${winnerThemeClass(data, item.winner)} ${item.playoff ? 'is-playoff' : ''}"><span>${escapeHtml(momentumInitial(data, item.winner))}</span></div>`).join('')}</div><p class="history-support-copy">${escapeHtml(data.highlights?.heater?.copy || 'Momentum is still shifting.')}</p></section>`;
   }
 
-  function renderDebugRows(rows = []) {
-    return rows.map((game, index) => `<div style="font-size:11px;line-height:1.35;margin:0 0 6px;padding:6px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;"><strong>${index + 1}. ${escapeHtml(game.date || 'no date')}</strong> • id ${escapeHtml(game.id)} • ${escapeHtml(game.title || '')}<br>playoff:${escapeHtml(String(game.playoff))} real:${escapeHtml(String(game.hasRealScore))} score:${escapeHtml(String(game.aaronScore))}-${escapeHtml(String(game.julieScore))} raw:${escapeHtml(game.rawWinner)} computed:${escapeHtml(game.scoreWinner)}</div>`).join('');
-  }
-
-  function renderHistoryDebug(data) {
-    const debug = data.historyDebug;
-    if (!debug) return '';
-    return `<section class="panel-card history-debug-card" style="border:2px solid #f97316;background:#fff7ed;"><div class="history-section-head"><div><div class="eyebrow">Temporary Debug v52</div><h3>History HQ Last 10 Debug</h3></div></div><p class="history-support-copy">Screenshot this panel. Compare Global Log vs HQ Last 10 Source vs HQ Momentum.</p><details open><summary><strong>First 10 Global Log</strong></summary>${renderDebugRows(debug.firstTenGlobalLog)}</details><details open><summary><strong>HQ Last 10 Source</strong></summary>${renderDebugRows(debug.firstTenAfterScoreFilter)}</details><details open><summary><strong>HQ Momentum IDs</strong></summary><pre style="white-space:pre-wrap;font-size:11px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;">${escapeHtml(JSON.stringify(debug.hqMomentum, null, 2))}</pre></details><details><summary><strong>Season Recent Cards</strong></summary>${renderDebugRows(debug.seasonRecentCards)}</details></section>`;
-  }
-
   function renderHighlights(data) {
     const seasonData = data.hqSeasonData || data;
     const cards = (data.highlights?.cards || []).slice(0, 4);
-    const performers = balancedPerformers(data, seasonData.playerSpotlights || []);
+    const performers = ownerPerformersOnly(data, seasonData.playerSpotlights || []);
     const performerCards = performers.map((player) => `<article class="rivalry-highlight-item history-highlight-performer"><div class="eyebrow ${userThemeClass(data, player.owner)}">${escapeHtml(player.position || 'Player')} • ${escapeHtml(winnerDisplayName(data, player.owner))} lean</div><div class="rivalry-highlight-value">${escapeHtml(player.name)}</div><p>${escapeHtml(player.totalPoints)} pts • ${escapeHtml(player.clutch)}</p></article>`).join('');
     return `<section class="panel-card rivalry-highlights-card"><div class="history-section-head"><div><div class="eyebrow">Highlights</div><h3>Rivalry notes</h3></div></div><div class="rivalry-highlight-grid compact-grid">${cards.map((card) => `<article class="rivalry-highlight-item panel-card"><div class="eyebrow ${card.owner ? userThemeClass(data, card.owner) : ''}">${escapeHtml(card.label)}</div><div class="rivalry-highlight-value">${escapeHtml(card.value)}</div><p>${escapeHtml(highlightCopy(data, card))}</p></article>`).join('')}${performerCards}</div></section>`;
   }
@@ -220,7 +202,7 @@ window.CR = window.CR || {};
   }
 
   function renderHQ(data) {
-    return `<div class="history-feed rivalry-command-feed">${renderBoard(data)}${renderSeasonSnapshot(data)}${renderMomentum(data)}${renderHistoryDebug(data)}${renderHighlights(data)}${renderRecentGames(data)}</div>`;
+    return `<div class="history-feed rivalry-command-feed">${renderBoard(data)}${renderSeasonSnapshot(data)}${renderMomentum(data)}${renderHighlights(data)}${renderRecentGames(data)}</div>`;
   }
 
   function renderAdminSheet(state) {
