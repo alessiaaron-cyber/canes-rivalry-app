@@ -21,26 +21,28 @@ window.CR = window.CR || {};
     return CR.identity?.ownerClass?.(usernameOrIndex, data) || (Number(usernameOrIndex) === 1 ? 'owner-secondary' : 'owner-primary');
   }
 
-  function legacyOwner(data, index) {
-    const user = getUser(data, index);
-    return user.legacyOwner || user.legacy_owner || (index === 0 ? 'Aaron' : 'Julie');
-  }
-
   function userScoreKey(data, index) {
-    return CR.identity?.getScoreKey?.(index, data) || getUser(data, index).scoreKey || legacyOwner(data, index) || userName(data, index);
+    const user = getUser(data, index);
+    return CR.identity?.getScoreKey?.(index, data) || user.scoreKey || user.score_key || user.profileKey || user.profile_key || user.id || (index === 0 ? 'first' : 'second');
   }
 
   function lookupKeys(data, index) {
     const user = getUser(data, index);
-    return [userScoreKey(data, index), legacyOwner(data, index), user.username, user.display_name, user.displayName, index === 0 ? 'Aaron' : 'Julie'].filter(Boolean);
+    return [userScoreKey(data, index), user.profileKey, user.profile_key, user.id, user.username, user.display_name, user.displayName, index === 0 ? 'first' : 'second'].filter(Boolean);
   }
 
   function gameScores(data, game) {
-    const firstKeys = lookupKeys(data, 0).map((key) => `${String(key).toLowerCase()}Score`);
-    const secondKeys = lookupKeys(data, 1).map((key) => `${String(key).toLowerCase()}Score`);
-    const firstKey = firstKeys.find((key) => game?.[key] !== undefined && game?.[key] !== null);
-    const secondKey = secondKeys.find((key) => game?.[key] !== undefined && game?.[key] !== null);
-    return { first: Number(game?.[firstKey] ?? game?.aaronScore ?? 0), second: Number(game?.[secondKey] ?? game?.julieScore ?? 0) };
+    if (game?.firstScore !== undefined || game?.secondScore !== undefined) {
+      return { first: Number(game?.firstScore || 0), second: Number(game?.secondScore || 0) };
+    }
+    const firstUser = getUser(data, 0);
+    const secondUser = getUser(data, 1);
+    const firstId = String(firstUser.id || firstUser.profileKey || firstUser.profile_key || '').trim();
+    const secondId = String(secondUser.id || secondUser.profileKey || secondUser.profile_key || '').trim();
+    return {
+      first: Number(game?.scoresByUserId?.[firstId] || 0),
+      second: Number(game?.scoresByUserId?.[secondId] || 0)
+    };
   }
 
   function picksFor(data, game, index) {
@@ -81,8 +83,12 @@ window.CR = window.CR || {};
   }
 
   function ownerPerformersOnly(data, performers = []) {
-    return [legacyOwner(data, 0), legacyOwner(data, 1)]
-      .map((owner) => performers.find((player) => String(player.owner || '').toLowerCase() === String(owner).toLowerCase()))
+    const users = [getUser(data, 0), getUser(data, 1)];
+    return users
+      .map((user, index) => {
+        const keys = lookupKeys(data, index).map((key) => String(key).toLowerCase());
+        return performers.find((player) => keys.includes(String(player.owner || '').toLowerCase()));
+      })
       .filter(Boolean);
   }
 
@@ -135,14 +141,14 @@ window.CR = window.CR || {};
 
   function renderBoard(data) {
     const board = data.allTimeBoard || {};
-    return `<section class="panel-card rivalry-board-card history-legacy-card"><div class="rivalry-board-topline"><span class="eyebrow">All-Time Rivalry</span></div><h2 class="rivalry-board-title">${escapeHtml(board.lead || 'Rivalry tied')}</h2><div class="history-scoreboard-banner"><div class="history-scoreboard-grid"><div class="history-scoreboard-team"><span class="history-scoreboard-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(board.aaron ?? 0))}</strong></div><span class="history-scoreboard-divider" aria-hidden="true">—</span><div class="history-scoreboard-team is-right"><span class="history-scoreboard-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(board.julie ?? 0))}</strong></div></div></div><p class="history-hero-copy">All completed season and game totals feed this card.</p></section>`;
+    return `<section class="panel-card rivalry-board-card history-legacy-card"><div class="rivalry-board-topline"><span class="eyebrow">All-Time Rivalry</span></div><h2 class="rivalry-board-title">${escapeHtml(board.lead || 'Rivalry tied')}</h2><div class="history-scoreboard-banner"><div class="history-scoreboard-grid"><div class="history-scoreboard-team"><span class="history-scoreboard-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(board.first ?? 0))}</strong></div><span class="history-scoreboard-divider" aria-hidden="true">—</span><div class="history-scoreboard-team is-right"><span class="history-scoreboard-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(board.second ?? 0))}</strong></div></div></div><p class="history-hero-copy">All completed season and game totals feed this card.</p></section>`;
   }
 
   function renderSeasonSnapshot(data) {
     const seasonData = data.hqSeasonData || data;
     const board = seasonData.seasonBoard || {};
     const leaderClass = leaderClassFromRecord(data, board.recordText);
-    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid"><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</div><div class="rivalry-score-value">${escapeHtml(String(board.aaron ?? 0))}</div></article><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</div><div class="rivalry-score-value">${escapeHtml(String(board.julie ?? 0))}</div></article></div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(board.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(board.recentText || 'Form still developing')}</span></div>${board.bestGameTitle ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(board.bestGameTitle)}</p>` : ''}</section>`;
+    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid"><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</div><div class="rivalry-score-value">${escapeHtml(String(board.first ?? 0))}</div></article><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</div><div class="rivalry-score-value">${escapeHtml(String(board.second ?? 0))}</div></article></div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(board.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(board.recentText || 'Form still developing')}</span></div>${board.bestGameTitle ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(board.bestGameTitle)}</p>` : ''}</section>`;
   }
 
   function renderMomentum(data) {
@@ -178,7 +184,7 @@ window.CR = window.CR || {};
     const season = (data.seasons || []).find((item) => item.id === summary.seasonId);
     const games = data.seasonGames?.[summary.seasonId] || [];
     const gameTotals = games.reduce((acc, game) => { const scores = gameScores(data, game); acc.first += scores.first; acc.second += scores.second; return acc; }, { first: 0, second: 0 });
-    const totals = { first: gameTotals.first || Number(season?.aaronScore || 0), second: gameTotals.second || Number(season?.julieScore || 0) };
+    const totals = { first: gameTotals.first || Number(season?.firstScore || 0), second: gameTotals.second || Number(season?.secondScore || 0) };
     const winner = seasonWinner(data, summary, totals);
     const winnerClass = winnerThemeClass(data, winner);
     const leaderClass = leaderClassFromRecord(data, summary.recordText);
