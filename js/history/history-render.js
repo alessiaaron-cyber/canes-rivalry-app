@@ -70,26 +70,29 @@ window.CR = window.CR || {};
       totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {})
     }));
     const payload = {
-      view: CR.historyState?.view,
-      selectedSeasonId: CR.historyState?.seasonId,
-      currentSeasonId: data?.currentSeasonId,
-      users: [0, 1].map((index) => ({
-        id: userId(data, index),
-        name: userName(data, index),
-        slot: getUser(data, index).rivalrySlot || getUser(data, index).rivalry_slot
-      })),
-      counts: {
-        allGames: data?.games?.length || 0,
-        gameLog: data?.gameLog?.length || 0,
-        seasons: data?.seasons?.length || 0,
-        summaries: data?.seasonSummaries?.length || 0
-      },
-      board: data?.seasonBoard || null,
-      allTimeBoard: data?.allTimeBoard || null,
-      sampleGames,
-      sampleSeasons
+      rawBeforeModel: CR.historyRawDebug || null,
+      modelAfterBuild: {
+        view: CR.historyState?.view,
+        selectedSeasonId: CR.historyState?.seasonId,
+        currentSeasonId: data?.currentSeasonId,
+        users: [0, 1].map((index) => ({
+          id: userId(data, index),
+          name: userName(data, index),
+          slot: getUser(data, index).rivalrySlot || getUser(data, index).rivalry_slot
+        })),
+        counts: {
+          allGames: data?.games?.length || 0,
+          gameLog: data?.gameLog?.length || 0,
+          seasons: data?.seasons?.length || 0,
+          summaries: data?.seasonSummaries?.length || 0
+        },
+        board: data?.seasonBoard || null,
+        allTimeBoard: data?.allTimeBoard || null,
+        sampleGames,
+        sampleSeasons
+      }
     };
-    return `<section class="panel-card history-debug-card" style="margin:12px 0;border:2px dashed #ef4444;background:#fff7ed;color:#111827;"><div class="eyebrow">TEMP DEBUG</div><h3>History score diagnostics</h3><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;max-height:520px;overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre></section>`;
+    return `<section class="panel-card history-debug-card" style="margin:12px 0;border:2px dashed #ef4444;background:#fff7ed;color:#111827;"><div class="eyebrow">TEMP DEBUG</div><h3>History score diagnostics</h3><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;max-height:620px;overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre></section>`;
   }
 
   function picksFor(data, game, index) {
