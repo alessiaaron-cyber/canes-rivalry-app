@@ -4,6 +4,7 @@ window.CR = window.CR || {};
   const CR = window.CR;
 
   function users(source) {
+    if (Array.isArray(source?.users) && source.users.length) return source.users;
     return CR.identity?.getUsers?.(source) || [];
   }
 
@@ -17,7 +18,8 @@ window.CR = window.CR || {};
   }
 
   function displayName(index = 0, source) {
-    return CR.identity?.getDisplayName?.(index, source) || user(index, source).displayName || `Player ${index + 1}`;
+    const profile = user(index, source);
+    return profile.displayName || profile.display_name || CR.identity?.getDisplayName?.(index, source) || `Player ${index + 1}`;
   }
 
   function sideKeys(source) {
@@ -65,10 +67,10 @@ window.CR = window.CR || {};
 
   function claimedOwner(gameDay = {}, playerName = '') {
     const source = { users: gameDay.users };
-    const key = sideKeys(source).find((candidate) => (gameDay.pregame?.[candidate] || []).includes(playerName));
+    const keys = sideKeys(source);
+    const key = keys.find((candidate) => (gameDay.pregame?.[candidate] || []).includes(playerName));
     if (!key) return '';
-    const index = sideKeys(source).indexOf(key);
-    return displayName(index, source);
+    return displayName(keys.indexOf(key), source);
   }
 
   function scoreForIndex(scores = {}, index = 0, source) {
@@ -83,20 +85,5 @@ window.CR = window.CR || {};
     return 'Rivalry Tie';
   }
 
-  CR.gameDayStateUtils = {
-    users,
-    user,
-    profileKey,
-    displayName,
-    sideKeys,
-    emptyPickBuckets,
-    emptyScoreBuckets,
-    draftOrder,
-    structuredPregame,
-    selectedPregamePlayers,
-    nextDraftSide,
-    claimedOwner,
-    scoreForIndex,
-    winnerText
-  };
+  CR.gameDayStateUtils = { users, user, profileKey, displayName, sideKeys, emptyPickBuckets, emptyScoreBuckets, draftOrder, structuredPregame, selectedPregamePlayers, nextDraftSide, claimedOwner, scoreForIndex, winnerText };
 })();
