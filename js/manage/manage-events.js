@@ -164,6 +164,11 @@ window.CR = window.CR || {};
     CR.renderManage?.({ scrollTop: options.scrollTop });
   }
 
+  function refreshGameDayAfterMockChange() {
+    CR.refreshGameDayData?.({ flash: true });
+    CR.renderGameDayState?.();
+  }
+
   function setMockOptions(patch = {}) {
     const service = CR.gameDayMockService;
     if (!service) return;
@@ -173,7 +178,7 @@ window.CR = window.CR || {};
       playoffs: patch.playoffs ?? service.isPlayoffs?.(),
       carryover: patch.carryover ?? service.isCarryover?.()
     });
-    CR.refreshGameDayData?.({ flash: true });
+    refreshGameDayAfterMockChange();
     rerender();
   }
 
@@ -204,7 +209,7 @@ window.CR = window.CR || {};
       const rosterInput = event.target.closest('[data-manage-roster-input]');
       if (rosterInput) { current.rosterDraft[rosterInput.dataset.manageRosterInput] = rosterInput.value; return; }
       const scheduleInput = event.target.closest('[data-manage-schedule-input]');
-      if (scheduleInput) current.scheduleDraft[scheduleInput.dataset.manageScheduleInput] = scheduleInput.value;
+      if (scheduleInput) current.scheduleDraft[scheduleInput.dataset.manageScheduleInput] = event.target.value;
     });
 
     root.addEventListener('click', async (event) => {
@@ -213,7 +218,7 @@ window.CR = window.CR || {};
       const mockToggle = event.target.closest('[data-manage-mock-toggle]');
       if (mockToggle) { setMockOptions({ enabled: !CR.gameDayMockService?.isEnabled?.() }); CR.showToast?.({ message: CR.gameDayMockService?.isEnabled?.() ? 'Mock Game Day on' : 'Mock Game Day off' }); return; }
       const mockClear = event.target.closest('[data-manage-mock-clear]');
-      if (mockClear) { CR.gameDayMockService?.clearMockOptions?.(); CR.refreshGameDayData?.({ flash: true }); rerender(); CR.showToast?.({ message: 'Mock settings cleared' }); return; }
+      if (mockClear) { CR.gameDayMockService?.clearMockOptions?.(); refreshGameDayAfterMockChange(); rerender(); CR.showToast?.({ message: 'Mock settings cleared' }); return; }
       const mockMode = event.target.closest('[data-manage-mock-mode]');
       if (mockMode) { setMockOptions({ enabled: true, mode: mockMode.dataset.manageMockMode }); CR.showToast?.({ message: `Mock mode: ${mockMode.dataset.manageMockMode}` }); return; }
 
