@@ -57,18 +57,16 @@ window.CR = window.CR || {};
     return games.reduce((total, game) => total + scoreForSide(game, users, index), 0);
   }
 
-  function seasonTotals(season, seasonGames, users, summary = null) {
-    const summaryFirst = scoreForSide(summary || {}, users, 0);
-    const summarySecond = scoreForSide(summary || {}, users, 1);
+  function seasonTotals(season, seasonGames, users) {
     const gameFirst = scoreTotal(seasonGames, 0, users);
     const gameSecond = scoreTotal(seasonGames, 1, users);
     const seasonFirst = scoreForSide(season, users, 0);
     const seasonSecond = scoreForSide(season, users, 1);
     return {
-      first: summaryFirst || gameFirst || seasonFirst,
-      second: summarySecond || gameSecond || seasonSecond,
+      first: gameFirst || seasonFirst,
+      second: gameSecond || seasonSecond,
       hasGameTotals: Boolean(gameFirst || gameSecond),
-      hasSeasonTotals: Boolean(seasonFirst || seasonSecond || summaryFirst || summarySecond)
+      hasSeasonTotals: Boolean(seasonFirst || seasonSecond)
     };
   }
 
@@ -197,25 +195,13 @@ window.CR = window.CR || {};
 
   function buildAllTimeBoard(model) {
     const users = model.users || [];
-    const summaries = model.seasonSummaries || [];
-    const seasons = model.seasons || [];
-    const seasonGames = model.seasonGames || {};
-    const totals = (summaries.length ? summaries : seasons).reduce((acc, item) => {
-      const seasonId = resolveSeasonId(item.seasonId || item.id);
-      const season = findSeason(model, seasonId) || item;
-      const summary = findSeasonSummary(model, seasonId) || item;
-      const games = seasonGames[seasonId] || canonicalGames(model, seasonId);
-      const seasonScore = seasonTotals(season, games, users, summary);
-      acc.first += seasonScore.first;
-      acc.second += seasonScore.second;
-      return acc;
-    }, { first: 0, second: 0 });
-    const first = totals.first;
-    const second = totals.second;
+    const games = canonicalGames(model);
+    const first = scoreTotal(games, 0, users);
+    const second = scoreTotal(games, 1, users);
     const firstName = userName(users, 0);
     const secondName = userName(users, 1);
     const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
-    return { first, second, lead, totalGames: model.games?.length || 0 };
+    return { first, second, lead, totalGames: games.length };
   }
 
   function buildHighlights(games, users) {
@@ -267,7 +253,7 @@ window.CR = window.CR || {};
   }
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
-    const totals = seasonTotals(season, gameLog, users, summary);
+    const totals = seasonTotals(season, gameLog, users);
     const record = recordFromSummary(summary || {}) || recordForGames(gameLog, users);
     return { seasonLabel: season?.label || summary?.label || 'Season', first: totals.first, second: totals.second, recordText: recordText(record), recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
