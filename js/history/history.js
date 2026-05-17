@@ -219,7 +219,15 @@ window.CR = window.CR || {};
     return buildRecentTen(gameLog, users).map((game) => ({ winner: scoreWinner(game, users), playoff: Boolean(game.playoff), id: game.id }));
   }
 
-  function buildGameLog(games) { return games.slice().sort((a, b) => Number(b.displayNumber || 0) - Number(a.displayNumber || 0)); }
+  function gameSortValue(game) {
+    const dateValue = Date.parse(game?.date || '');
+    if (Number.isFinite(dateValue)) return dateValue;
+    return Number(game?.displayNumber || game?.id || 0);
+  }
+
+  function buildGameLog(games) {
+    return games.slice().sort((a, b) => gameSortValue(b) - gameSortValue(a));
+  }
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
     const totals = seasonTotals(season, gameLog, users);
