@@ -2,29 +2,22 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
+  const SIDES = [0, 1];
 
   function sideUtils() {
     return CR.historySideUtils || {};
   }
 
   function userForSide(users, side) {
-    return sideUtils().userForSide?.(users, side) || users?.[side === 'Julie' ? 1 : 0] || {};
+    return sideUtils().userForSide?.(users, side) || users?.[Number(side) === 1 ? 1 : 0] || {};
   }
 
-  function pickKeysForSide(users, side) {
-    return sideUtils().pickKeysForSide?.(users, side) || [];
-  }
-
-  function scoreKeysForSide(users, side) {
-    return sideUtils().scoreKeysForSide?.(users, side) || [];
+  function sideName(side) {
+    return sideUtils().sideName?.(side) || (Number(side) === 1 ? 'second' : 'first');
   }
 
   function sideScore(row, side, users) {
     return sideUtils().sideScore?.(row, side, users) ?? 0;
-  }
-
-  function ownerForWinner(winner, users) {
-    return sideUtils().ownerForWinner?.(winner, users) || '';
   }
 
   function scoreTotal(games, side, users) {
@@ -32,16 +25,16 @@ window.CR = window.CR || {};
   }
 
   function seasonTotals(season, seasonGames, users) {
-    const gameAaron = scoreTotal(seasonGames, 'Aaron', users);
-    const gameJulie = scoreTotal(seasonGames, 'Julie', users);
-    const seasonAaron = sideScore(season, 'Aaron', users);
-    const seasonJulie = sideScore(season, 'Julie', users);
+    const gameFirst = scoreTotal(seasonGames, 0, users);
+    const gameSecond = scoreTotal(seasonGames, 1, users);
+    const seasonFirst = sideScore(season, 0, users);
+    const seasonSecond = sideScore(season, 1, users);
 
     return {
-      aaron: gameAaron || seasonAaron,
-      julie: gameJulie || seasonJulie,
-      hasGameTotals: Boolean(gameAaron || gameJulie),
-      hasSeasonTotals: Boolean(seasonAaron || seasonJulie)
+      first: gameFirst || seasonFirst,
+      second: gameSecond || seasonSecond,
+      hasGameTotals: Boolean(gameFirst || gameSecond),
+      hasSeasonTotals: Boolean(seasonFirst || seasonSecond)
     };
   }
 
@@ -51,7 +44,7 @@ window.CR = window.CR || {};
 
   function firstGoalScorer(game, users) {
     if (game.firstGoalScorer) return game.firstGoalScorer;
-    for (const side of ['Aaron', 'Julie']) {
+    for (const side of SIDES) {
       const hit = picksForSide(game, side, users).find((pick) => pick.firstGoal);
       if (hit) return hit.playerName;
     }
@@ -59,7 +52,7 @@ window.CR = window.CR || {};
   }
 
   function hasRealScore(game, users) {
-    return sideScore(game, 'Aaron', users) + sideScore(game, 'Julie', users) > 0;
+    return sideScore(game, 0, users) + sideScore(game, 1, users) > 0;
   }
 
   function scoredGames(games = [], users) {
@@ -78,7 +71,8 @@ window.CR = window.CR || {};
     const byPlayer = new Map();
 
     selectedGames.forEach((game) => {
-      ['Aaron', 'Julie'].forEach((side) => {
+      SIDES.forEach((side) => {
+        const sideKey = sideName(side);
         picksForSide(game, side, users).forEach((pick) => {
           const existing = byPlayer.get(pick.playerName) || {
             name: pick.playerName,
@@ -87,8 +81,8 @@ window.CR = window.CR || {};
             owner: 'Split',
             totalPoints: 0,
             gamesPicked: 0,
-            pickedByAaron: 0,
-            pickedByJulie: 0,
+            pickedByFirst: 0,
+            pickedBySecond: 0,
             winsWhenPicked: 0,
             recordWhenPicked: '0-0',
             bestGame: null,
@@ -97,16 +91,16 @@ window.CR = window.CR || {};
 
           existing.totalPoints += Number(pick.points || 0);
           existing.gamesPicked += 1;
-          if (side === 'Aaron') existing.pickedByAaron += 1;
-          if (side === 'Julie') existing.pickedByJulie += 1;
-          if (scoreWinner(game, users) === side) existing.winsWhenPicked += 1;
+          if (side === 0) existing.pickedByFirst += 1;
+          if (side === 1) existing.pickedBySecond += 1;
+          if (scoreWinner(game, users) === sideKey) existing.winsWhenPicked += 1;
           if (!existing.bestGame || Number(pick.points || 0) > Number(existing.bestGame.points || 0)) {
             existing.bestGame = { title: game.title, points: Number(pick.points || 0) };
           }
 
-          existing.owner = existing.pickedByAaron === existing.pickedByJulie
+          existing.owner = existing.pickedByFirst === existing.pickedBySecond
             ? 'Split'
-            : existing.pickedByAaron > existing.pickedByJulie ? 'Aaron' : 'Julie';
+            : existing.pickedByFirst > existing.pickedBySecond ? sideName(0) : sideName(1);
 
           existing.recordWhenPicked = `${existing.winsWhenPicked}-${Math.max(0, existing.gamesPicked - existing.winsWhenPicked)}`;
           existing.clutch = existing.totalPoints >= 10 ? 'Season-shaping chaos' : existing.totalPoints >= 6 ? 'Reliable momentum piece' : 'Quietly clutch';
@@ -125,32 +119,34 @@ window.CR = window.CR || {};
   function buildRecentRecord(games, users) {
     return buildRecentTen(games).reduce((acc, game) => {
       const winner = scoreWinner(game, users);
-      if (winner === 'Aaron') acc.aaron += 1;
-      else if (winner === 'Julie') acc.julie += 1;
+      if (winner === sideName(0)) acc.first += 1;
+      else if (winner === sideName(1)) acc.second += 1;
       else acc.ties += 1;
       return acc;
-    }, { aaron: 0, julie: 0, ties: 0 });
+    }, { first: 0, second: 0, ties: 0 });
   }
 
   function recentRecordText(games, users) {
     const recent = buildRecentRecord(games, users);
-    const base = `Last 10 ${recent.aaron}-${recent.julie}`;
+    const base = `Last 10 ${recent.first}-${recent.second}`;
     return recent.ties ? `${base}-${recent.ties}` : base;
   }
 
   function buildAllTimeBoard(model) {
     const bySeason = model.seasons || [];
     const users = model.users || [];
-    let aaron = 0;
-    let julie = 0;
+    let first = 0;
+    let second = 0;
     bySeason.forEach((season) => {
       const games = model.seasonGames?.[season.id] || [];
       const totals = seasonTotals(season, games, users);
-      aaron += totals.aaron;
-      julie += totals.julie;
+      first += totals.first;
+      second += totals.second;
     });
-    const lead = aaron === julie ? 'Rivalry tied all-time' : aaron > julie ? `Aaron leads the rivalry by ${aaron - julie}` : `Julie leads the rivalry by ${julie - aaron}`;
-    return { aaron, julie, lead, totalGames: model.games?.length || 0 };
+    const firstName = userForSide(users, 0)?.displayName || 'Player 1';
+    const secondName = userForSide(users, 1)?.displayName || 'Player 2';
+    const lead = first === second ? 'Rivalry tied all-time' : first > second ? `${firstName} leads the rivalry by ${first - second}` : `${secondName} leads the rivalry by ${second - first}`;
+    return { first, second, lead, totalGames: model.games?.length || 0 };
   }
 
   function buildHighlights(games, users) {
@@ -168,7 +164,7 @@ window.CR = window.CR || {};
       } else {
         current = { owner: '', count: 0 };
       }
-      const margin = Math.abs(sideScore(game, 'Aaron', users) - sideScore(game, 'Julie', users));
+      const margin = Math.abs(sideScore(game, 0, users) - sideScore(game, 1, users));
       if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game) };
       const scorer = firstGoalScorer(game, users);
       if (scorer && scorer !== '—') firstGoalCounts.set(scorer, (firstGoalCounts.get(scorer) || 0) + 1);
@@ -203,9 +199,9 @@ window.CR = window.CR || {};
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
     const totals = seasonTotals(season, gameLog, users);
-    const aaron = totals.aaron;
-    const julie = totals.julie;
-    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
+    const first = totals.first;
+    const second = totals.second;
+    return { seasonLabel: season?.label || summary?.label || 'Season', first, second, recordText: `${first}-${second}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
