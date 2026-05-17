@@ -236,17 +236,22 @@ window.CR = window.CR || {};
     return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog, users)[0]?.title || '' };
   }
 
-  function buildSeasonScopedData(model, seasonId, hqRecentGameLog) {
+  function buildSeasonScopedData(model, seasonId) {
     const selectedSeason = model.seasons.find((season) => season.id === seasonId) || model.seasons[0] || null;
     const resolvedSeasonId = selectedSeason?.id || seasonId;
     const selectedGames = model.seasonGames?.[resolvedSeasonId] || [];
     const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
-    const recentLog = hqRecentGameLog || gameLog;
-    const recentTen = buildRecentTen(recentLog, users);
     const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames, users), users);
-    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users, recentLog), momentum: buildMomentum(recentLog, users), recentGames: buildRecentTen(gameLog, users).slice(0, 4), gameLog, playerSpotlights };
+    return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog, users).slice(0, 4), gameLog, playerSpotlights };
+  }
+
+  function buildHqSeasonData(model, seasonId) {
+    const users = model.users || [];
+    const seasonData = buildSeasonScopedData(model, seasonId);
+    const globalRecentGameLog = buildGameLog(model.games || []);
+    return { ...seasonData, seasonBoard: { ...seasonData.seasonBoard, recentText: recentRecordText(globalRecentGameLog, users) }, momentum: buildMomentum(globalRecentGameLog, users) };
   }
 
   function buildStaticHistoryData(model) {
@@ -258,12 +263,9 @@ window.CR = window.CR || {};
   function getScopedData(model, state) {
     const cache = CR.historyCache || (CR.historyCache = { staticData: null, seasons: {} });
     const hqSeasonId = model.currentSeasonId || state.seasonId;
-    const hqRecentGameLog = buildGameLog(model.games || []);
     if (!cache.staticData) cache.staticData = buildStaticHistoryData(model);
     if (!cache.seasons[state.seasonId]) cache.seasons[state.seasonId] = buildSeasonScopedData(model, state.seasonId);
-    if (!cache.seasons[hqSeasonId]) cache.seasons[hqSeasonId] = buildSeasonScopedData(model, hqSeasonId, hqRecentGameLog);
-    else cache.seasons[hqSeasonId] = { ...cache.seasons[hqSeasonId], seasonBoard: buildSeasonBoard(cache.seasons[hqSeasonId].selectedSeason, cache.seasons[hqSeasonId].gameLog, cache.seasons[hqSeasonId].selectedSummary, model.users || [], hqRecentGameLog), momentum: buildMomentum(hqRecentGameLog, model.users || []) };
-    return { ...model, ...cache.staticData, ...cache.seasons[state.seasonId], hqSeasonData: cache.seasons[hqSeasonId] };
+    return { ...model, ...cache.staticData, ...cache.seasons[state.seasonId], hqSeasonData: buildHqSeasonData(model, hqSeasonId) };
   }
 
   function ensureHistoryShell(root) {
