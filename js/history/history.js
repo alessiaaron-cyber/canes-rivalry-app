@@ -229,6 +229,32 @@ window.CR = window.CR || {};
     return games.slice().sort((a, b) => gameSortValue(b) - gameSortValue(a));
   }
 
+  function debugGameRow(game, users) {
+    return {
+      id: game?.id,
+      date: game?.date,
+      title: game?.title,
+      playoff: Boolean(game?.playoff),
+      rawWinner: game?.winner,
+      scoreWinner: scoreWinner(game, users),
+      aaronScore: sideScore(game, 'Aaron', users),
+      julieScore: sideScore(game, 'Julie', users),
+      hasRealScore: hasRealScore(game, users)
+    };
+  }
+
+  function buildHistoryDebug(model, seasonGameLog, hqSeasonData) {
+    const users = model.users || [];
+    const globalLog = buildGameLog(model.games || []);
+    return {
+      firstTenModelGames: (model.games || []).slice(0, 10).map((game) => debugGameRow(game, users)),
+      firstTenGlobalLog: globalLog.slice(0, 10).map((game) => debugGameRow(game, users)),
+      firstTenAfterScoreFilter: buildRecentTen(globalLog, users).map((game) => debugGameRow(game, users)),
+      hqMomentum: (hqSeasonData?.momentum || []).map((item) => ({ id: item.id, winner: item.winner, playoff: item.playoff })),
+      seasonRecentCards: (seasonGameLog || []).slice(0, 10).map((game) => debugGameRow(game, users))
+    };
+  }
+
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
     const totals = seasonTotals(season, gameLog, users);
     const aaron = totals.aaron;
@@ -265,7 +291,8 @@ window.CR = window.CR || {};
     const hqSeasonId = model.currentSeasonId || state.seasonId;
     if (!cache.staticData) cache.staticData = buildStaticHistoryData(model);
     if (!cache.seasons[state.seasonId]) cache.seasons[state.seasonId] = buildSeasonScopedData(model, state.seasonId);
-    return { ...model, ...cache.staticData, ...cache.seasons[state.seasonId], hqSeasonData: buildHqSeasonData(model, hqSeasonId) };
+    const hqSeasonData = buildHqSeasonData(model, hqSeasonId);
+    return { ...model, ...cache.staticData, ...cache.seasons[state.seasonId], hqSeasonData, historyDebug: buildHistoryDebug(model, cache.seasons[state.seasonId].gameLog, hqSeasonData) };
   }
 
   function ensureHistoryShell(root) {
@@ -316,8 +343,9 @@ window.CR = window.CR || {};
     CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
     ensureHistoryShell(root);
     const scoped = getScopedData(CR.historyData, CR.historyState);
+    window.CR.historyDebug = scoped.historyDebug;
     const hqMomentumKey = momentumSignature(scoped.hqSeasonData?.momentum || []);
-    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}`;
+    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}:${JSON.stringify(scoped.historyDebug?.firstTenAfterScoreFilter?.map((game) => game.id) || [])}`;
     const seasonKey = `${CR.historyState.seasonId}`;
     renderPanel('hq', `hq:${hqKey}`, CR.historyRender.renderHQ(scoped), CR.historyDom.hq);
     renderPanel('seasons', 'seasons:static', CR.historyRender.renderSeasonsOverview(scoped), CR.historyDom.seasons);
