@@ -21,17 +21,13 @@ window.CR = window.CR || {};
     };
   }
 
-  function identityUsers() {
-    return CR.historyData?.users || CR.currentProfiles || [];
-  }
-
-  function userForSide(side) {
+  function userForSide(users, side) {
     const index = side === 'Julie' ? 1 : 0;
-    return identityUsers()[index] || {};
+    return users?.[index] || {};
   }
 
-  function pickKeysForSide(side) {
-    const user = userForSide(side);
+  function pickKeysForSide(users, side) {
+    const user = userForSide(users, side);
     return [
       user.scoreKey,
       user.score_key,
@@ -46,15 +42,15 @@ window.CR = window.CR || {};
     ].filter(Boolean);
   }
 
-  function picksForSide(game, side) {
-    const key = pickKeysForSide(side).find((candidate) => Array.isArray(game.picks?.[candidate]));
+  function picksForSide(game, side, users) {
+    const key = pickKeysForSide(users, side).find((candidate) => Array.isArray(game.picks?.[candidate]));
     return game.picks?.[key] || [];
   }
 
-  function firstGoalScorer(game) {
+  function firstGoalScorer(game, users) {
     if (game.firstGoalScorer) return game.firstGoalScorer;
     for (const side of ['Aaron', 'Julie']) {
-      const hit = picksForSide(game, side).find((pick) => pick.firstGoal);
+      const hit = picksForSide(game, side, users).find((pick) => pick.firstGoal);
       if (hit) return hit.playerName;
     }
     return '—';
@@ -66,13 +62,6 @@ window.CR = window.CR || {};
 
   function scoredGames(games = []) {
     return games.filter(hasRealScore);
-  }
-
-  function recentSortValue(game) {
-    const displayNumber = Number(game?.displayNumber || game?.display_number || 0);
-    if (Number.isFinite(displayNumber) && displayNumber > 0) return displayNumber;
-    const time = Date.parse(game?.date || game?.gameDate || game?.game_date || '');
-    return Number.isFinite(time) ? time / 100000000000 : 0;
   }
 
   function scoreWinner(game) {
@@ -87,12 +76,12 @@ window.CR = window.CR || {};
     return [game?.date, game?.opponent ? `vs ${game.opponent}` : ''].filter(Boolean).join(' • ') || game?.title || 'Game';
   }
 
-  function buildSeasonPlayerSpotlights(selectedGames) {
+  function buildSeasonPlayerSpotlights(selectedGames, users) {
     const byPlayer = new Map();
 
     selectedGames.forEach((game) => {
       ['Aaron', 'Julie'].forEach((side) => {
-        picksForSide(game, side).forEach((pick) => {
+        picksForSide(game, side, users).forEach((pick) => {
           const existing = byPlayer.get(pick.playerName) || {
             name: pick.playerName,
             position: pick.position,
@@ -131,11 +120,8 @@ window.CR = window.CR || {};
     return Array.from(byPlayer.values()).sort((a, b) => b.totalPoints - a.totalPoints || b.gamesPicked - a.gamesPicked).slice(0, 3);
   }
 
-  function buildRecentTen(selectedGames) {
-    return scoredGames(selectedGames)
-      .slice()
-      .sort((a, b) => recentSortValue(b) - recentSortValue(a))
-      .slice(0, 10);
+  function buildRecentTen(gameLog) {
+    return scoredGames(gameLog).slice(0, 10);
   }
 
   function buildRecentRecord(games) {
@@ -168,7 +154,7 @@ window.CR = window.CR || {};
     return { aaron, julie, lead, totalGames: model.games?.length || 0 };
   }
 
-  function buildHighlights(games) {
+  function buildHighlights(games, users) {
     const ordered = scoredGames(games).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
     let longest = { owner: 'Tie', count: 0 };
     let current = { owner: '', count: 0 };
@@ -185,7 +171,7 @@ window.CR = window.CR || {};
       }
       const margin = Math.abs(Number(game.aaronScore || 0) - Number(game.julieScore || 0));
       if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game) };
-      const scorer = firstGoalScorer(game);
+      const scorer = firstGoalScorer(game, users);
       if (scorer && scorer !== '—') firstGoalCounts.set(scorer, (firstGoalCounts.get(scorer) || 0) + 1);
     });
     const topFirstGoal = Array.from(firstGoalCounts.entries()).sort((a, b) => b[1] - a[1])[0];
@@ -194,29 +180,25 @@ window.CR = window.CR || {};
 
   function buildHighlightCards(highlights, games = []) {
     const completedCount = scoredGames(games).length;
-    return [
-      { label: 'Longest run', value: highlights.longest?.count ? `${highlights.longest.count} straight` : 'No streak yet', owner: highlights.longest?.count ? highlights.longest.owner : 'Tie', copy: highlights.longest?.count ? 'built the longest winning streak.' : 'No one has pulled away yet.' },
-      { label: 'Biggest swing', value: highlights.biggestBlowout?.margin ? `+${highlights.biggestBlowout.margin}` : 'Even', owner: highlights.biggestBlowout?.owner || 'Tie', copy: highlights.biggestBlowout?.margin ? `owned ${highlights.biggestBlowout.title}.` : 'No blowout result logged yet.' },
-      { label: 'First-goal magnet', value: highlights.topFirstGoal?.[0] || 'Waiting', owner: null, copy: highlights.topFirstGoal?.[0] ? `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` : 'First-goal patterns will appear here.' },
-      { label: 'Games logged', value: String(completedCount || games.length || 0), owner: null, copy: 'Completed rivalry games in the archive.' }
-    ];
+    const cards = [];
+    if (highlights.longest?.count) cards.push({ label: 'Longest run', value: `${highlights.longest.count} straight`, owner: highlights.longest.owner, copy: 'built the longest winning streak.' });
+    if (highlights.biggestBlowout?.margin) cards.push({ label: 'Biggest swing', value: `+${highlights.biggestBlowout.margin}`, owner: highlights.biggestBlowout.owner, copy: `owned ${highlights.biggestBlowout.title}.` });
+    if (highlights.topFirstGoal?.[0]) cards.push({ label: 'First-goal magnet', value: highlights.topFirstGoal[0], owner: null, copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` });
+    cards.push({ label: 'Games logged', value: String(completedCount || games.length || 0), owner: null, copy: 'Completed rivalry games in the archive.' });
+    return cards.slice(0, 4);
   }
 
-  function buildMomentum(games) {
-    return buildRecentTen(games).map((game) => ({
-      winner: scoreWinner(game),
-      playoff: Boolean(game.playoff),
-      id: game.id
-    }));
+  function buildMomentum(gameLog) {
+    return buildRecentTen(gameLog).map((game) => ({ winner: scoreWinner(game), playoff: Boolean(game.playoff), id: game.id }));
   }
 
   function buildGameLog(games) { return games.slice().sort((a, b) => Number(b.displayNumber || 0) - Number(a.displayNumber || 0)); }
 
-  function buildSeasonBoard(season, games, summary) {
-    const totals = seasonTotals(season, games);
+  function buildSeasonBoard(season, gameLog, summary) {
+    const totals = seasonTotals(season, gameLog);
     const aaron = totals.aaron;
     const julie = totals.julie;
-    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(games), bestGameTitle: buildRecentTen(games)[0]?.title || '' };
+    return { seasonLabel: season?.label || summary?.label || 'Season', aaron, julie, recordText: `${aaron}-${julie}`, recentText: recentRecordText(gameLog), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
   function buildSeasonScopedData(model, seasonId) {
@@ -224,14 +206,14 @@ window.CR = window.CR || {};
     const resolvedSeasonId = selectedSeason?.id || seasonId;
     const selectedGames = model.seasonGames?.[resolvedSeasonId] || [];
     const selectedSummary = model.seasonSummaries?.find((season) => season.seasonId === resolvedSeasonId) || null;
-    const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames));
     const gameLog = buildGameLog(selectedGames);
     const recentTen = buildRecentTen(gameLog);
+    const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames), model.users || []);
     return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary), momentum: buildMomentum(gameLog), recentGames: recentTen.slice(0, 4), gameLog, playerSpotlights };
   }
 
   function buildStaticHistoryData(model) {
-    const highlights = buildHighlights(model.games || []);
+    const highlights = buildHighlights(model.games || [], model.users || []);
     return { allTimeBoard: buildAllTimeBoard(model), highlights: { ...highlights, cards: buildHighlightCards(highlights, model.games || []) }, seasonSummaries: model.seasonSummaries || [] };
   }
 
