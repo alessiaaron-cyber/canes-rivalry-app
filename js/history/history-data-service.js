@@ -18,6 +18,10 @@ window.CR = window.CR || {};
     return Number.isFinite(n) ? n : fallback;
   }
 
+  function normalizeKey(value) {
+    return String(value ?? '').trim();
+  }
+
   function seasonLabel(row) {
     return row?.display_name || row?.label || row?.season_key || row?.name || String(row?.id || 'Season');
   }
@@ -67,14 +71,14 @@ window.CR = window.CR || {};
 
   function normalizeProfiles(rows = []) {
     const mapped = rows
-      .filter((user) => user?.is_active !== false && String(user?.id || '').trim())
+      .filter((user) => user?.is_active !== false && normalizeKey(user?.id))
       .sort((a, b) => toNumber(a.rivalry_slot, 99) - toNumber(b.rivalry_slot, 99))
       .slice(0, 2)
       .map((user, index) => {
         const slot = toNumber(user.rivalry_slot, index + 1);
         const sideKey = sideKeyForSlot(slot);
         const displayName = user.display_name || user.username || user.email || `Player ${slot}`;
-        const id = String(user.id || '').trim();
+        const id = normalizeKey(user.id);
         return {
           ...user,
           id,
@@ -110,7 +114,7 @@ window.CR = window.CR || {};
 
   function rowsByKey(rows = [], keyName) {
     return rows.reduce((acc, row) => {
-      const key = String(row?.[keyName] || '');
+      const key = normalizeKey(row?.[keyName]);
       if (!key) return acc;
       acc[key] = acc[key] || [];
       acc[key].push(row);
@@ -120,21 +124,21 @@ window.CR = window.CR || {};
 
   function normalizedScoreByUserId(rows = [], valueKey = 'points') {
     return (rows || []).reduce((acc, row) => {
-      const userId = String(row?.user_id || '').trim();
+      const userId = normalizeKey(row?.user_id);
       if (userId) acc[userId] = toNumber(row?.[valueKey]);
       return acc;
     }, {});
   }
 
   function scoreForUser(user, normalizedScores) {
-    const id = String(user?.id || '').trim();
+    const id = normalizeKey(user?.id);
     return id && Object.prototype.hasOwnProperty.call(normalizedScores, id) ? toNumber(normalizedScores[id]) : 0;
   }
 
   function scoresByUserIdFromValues(firstScore, secondScore) {
     return {
-      [userBySlot(1)?.id || 'player-1']: toNumber(firstScore),
-      [userBySlot(2)?.id || 'player-2']: toNumber(secondScore)
+      [normalizeKey(userBySlot(1)?.id) || 'player-1']: toNumber(firstScore),
+      [normalizeKey(userBySlot(2)?.id) || 'player-2']: toNumber(secondScore)
     };
   }
 
@@ -143,7 +147,7 @@ window.CR = window.CR || {};
     (rows || []).forEach((row) => {
       const name = row.player_name || row.name;
       if (!name) return;
-      const id = String(row.id || playerIdForName(name));
+      const id = normalizeKey(row.id || playerIdForName(name));
       byId.set(id, { id, name, position: row.position || row.pos || '—', vibe: row.vibe || '' });
     });
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -152,7 +156,7 @@ window.CR = window.CR || {};
   function buildPlayerLookup(players) {
     const lookup = new Map();
     (players || []).forEach((player) => {
-      lookup.set(String(player.id), player.id);
+      lookup.set(normalizeKey(player.id), player.id);
       lookup.set(String(player.name || '').toLowerCase(), player.id);
     });
     return lookup;
@@ -166,28 +170,28 @@ window.CR = window.CR || {};
   }
 
   function ownerSideKey(ownerUserId) {
-    const owner = users().find((user) => String(user.id) === String(ownerUserId));
+    const owner = users().find((user) => normalizeKey(user.id) === normalizeKey(ownerUserId));
     return sideKeyForSlot(owner?.rivalrySlot || owner?.rivalry_slot);
   }
 
   function mapPicksForGame(game, picks, playerLookup) {
     const bySide = { [SIDE_ONE]: [], [SIDE_TWO]: [] };
     const byUserId = users().reduce((acc, user) => {
-      acc[user.id] = [];
+      acc[normalizeKey(user.id)] = [];
       return acc;
     }, {});
 
     sortPicks(picks || [])
-      .filter((pick) => Number(pick.game_id) === Number(game.id))
+      .filter((pick) => normalizeKey(pick.game_id) === normalizeKey(game.id))
       .forEach((pick) => {
-        const ownerUserId = String(pick.owner_user_id || '').trim();
+        const ownerUserId = normalizeKey(pick.owner_user_id);
         const sideKey = pick.owner ? String(pick.owner) : ownerSideKey(ownerUserId);
-        const owner = users().find((user) => String(user.id) === ownerUserId) || userBySlot(sideIndexForKey(sideKey) + 1);
+        const owner = users().find((user) => normalizeKey(user.id) === ownerUserId) || userBySlot(sideIndexForKey(sideKey) + 1);
         const name = pick.player_name || '';
         const fallbackId = playerIdForName(name);
-        const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(String(pick.player_id || '')) || fallbackId;
+        const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(normalizeKey(pick.player_id)) || fallbackId;
         const normalizedPick = {
-          id: pick.id ? String(pick.id) : '',
+          id: pick.id ? normalizeKey(pick.id) : '',
           playerId,
           playerName: name,
           player: name,
@@ -195,19 +199,19 @@ window.CR = window.CR || {};
           assists: toNumber(pick.assists),
           firstGoal: Boolean(game.first_goal_scorer && name === game.first_goal_scorer && toNumber(pick.goals) > 0),
           points: toNumber(pick.points, pickPoints(pick, game.first_goal_scorer)),
-          ownerUserId: owner?.id || ownerUserId,
-          owner_user_id: owner?.id || ownerUserId
+          ownerUserId: normalizeKey(owner?.id || ownerUserId),
+          owner_user_id: normalizeKey(owner?.id || ownerUserId)
         };
         if (sideKey === SIDE_TWO) bySide[SIDE_TWO].push(normalizedPick);
         else bySide[SIDE_ONE].push(normalizedPick);
-        if (owner?.id) byUserId[owner.id] = (byUserId[owner.id] || []).concat(normalizedPick);
+        if (owner?.id) byUserId[normalizeKey(owner.id)] = (byUserId[normalizeKey(owner.id)] || []).concat(normalizedPick);
       });
 
     return { bySide, byUserId };
   }
 
   function winnerSideFromUserId(userId) {
-    const winner = users().find((user) => String(user.id) === String(userId));
+    const winner = users().find((user) => normalizeKey(user.id) === normalizeKey(userId));
     if (!winner) return '';
     return sideKeyForSlot(winner.rivalrySlot || winner.rivalry_slot);
   }
@@ -216,7 +220,7 @@ window.CR = window.CR || {};
     return sortGames(rows || [])
       .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
       .map((row) => {
-        const normalizedScores = normalizedScoreByUserId(scoresByGame[String(row.id)] || []);
+        const normalizedScores = normalizedScoreByUserId(scoresByGame[normalizeKey(row.id)] || []);
         const firstScore = scoreForUser(userBySlot(1), normalizedScores);
         const secondScore = scoreForUser(userBySlot(2), normalizedScores);
         const winnerSide = row.winner_user_id ? winnerSideFromUserId(row.winner_user_id) : (firstScore > secondScore ? SIDE_ONE : secondScore > firstScore ? SIDE_TWO : 'Tie');
@@ -225,9 +229,9 @@ window.CR = window.CR || {};
         const mappedPicks = mapPicksForGame(row, picks, playerLookup);
 
         return {
-          id: String(row.id),
-          seasonId: String(row.season_id),
-          season_id: String(row.season_id),
+          id: normalizeKey(row.id),
+          seasonId: normalizeKey(row.season_id),
+          season_id: normalizeKey(row.season_id),
           displayNumber: row.game_number ?? row.display_number ?? '',
           display_number: row.game_number ?? row.display_number ?? '',
           date: row.game_date || row.date || '',
@@ -258,14 +262,14 @@ window.CR = window.CR || {};
 
   function mapSeasons(rows, currentSeasonId, totalsBySeason) {
     return sortSeasons(rows || []).map((row) => {
-      const normalizedTotals = normalizedScoreByUserId(totalsBySeason[String(row.id)] || [], 'total_points');
+      const normalizedTotals = normalizedScoreByUserId(totalsBySeason[normalizeKey(row.id)] || [], 'total_points');
       const firstScore = scoreForUser(userBySlot(1), normalizedTotals);
       const secondScore = scoreForUser(userBySlot(2), normalizedTotals);
       return {
-        id: String(row.id),
+        id: normalizeKey(row.id),
         label: seasonLabel(row),
         shortLabel: seasonShortLabel(row),
-        isCurrent: String(row.id) === String(currentSeasonId),
+        isCurrent: normalizeKey(row.id) === normalizeKey(currentSeasonId),
         note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
         firstScore,
         secondScore,
@@ -288,7 +292,7 @@ window.CR = window.CR || {};
 
     const seasons = sortSeasons(seasonsRes.data || []);
     const activeSeason = seasons.find((season) => season.is_active) || seasons[seasons.length - 1] || null;
-    const currentSeasonId = activeSeason?.id ? String(activeSeason.id) : '';
+    const currentSeasonId = activeSeason?.id ? normalizeKey(activeSeason.id) : '';
 
     const [gamesRes, playersRes, gameScoresRes, seasonTotalsRes] = await Promise.all([
       db.from('games').select('*'),
