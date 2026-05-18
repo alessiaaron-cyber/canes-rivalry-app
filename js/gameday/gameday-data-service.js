@@ -11,7 +11,9 @@ window.CR = window.CR || {};
     return players.map((player) => ({
       id: String(player.id),
       name: rosterDisplayName(player),
+      displayName: rosterDisplayName(player),
       position: player.position || 'F',
+      detail: player.position || 'F',
       active: player.is_active !== false
     }));
   }
