@@ -180,9 +180,25 @@ window.CR = window.CR || {};
     return normalizePlayer(result.data);
   }
 
+  async function activatePlayer(id) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('players')
+      .update({
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, player_name, position, is_active, updated_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizePlayer(result.data);
+  }
+
   function mergeIntoState(state, live) {
     if (!state || !live) return state;
-    if (Array.isArray(live.players) && live.players.length) state.roster = live.players;
+    if (Array.isArray(live.players)) state.roster = live.players;
     if (Array.isArray(live.games)) state.schedule = live.games;
     if (live.activeSeason) {
       state.season = {
@@ -201,5 +217,5 @@ window.CR = window.CR || {};
     return state;
   }
 
-  CR.manageDataService = { load, mergeIntoState, createPlayer, updatePlayer, deactivatePlayer };
+  CR.manageDataService = { load, mergeIntoState, createPlayer, updatePlayer, deactivatePlayer, activatePlayer };
 })();
