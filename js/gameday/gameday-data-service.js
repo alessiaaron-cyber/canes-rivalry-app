@@ -17,17 +17,21 @@ window.CR = window.CR || {};
   }
 
   function mapRoster(players = []) {
-    return players.map((player) => {
-      const fullName = rosterDisplayName(player);
-      return {
-        id: String(player.id),
-        name: fullName,
-        displayName: lastNameFirstName(fullName),
-        position: player.position || 'F',
-        detail: player.position || 'F',
-        active: player.is_active !== false
-      };
-    });
+    return players
+      .map((player) => {
+        const fullName = rosterDisplayName(player);
+        const displayName = lastNameFirstName(fullName);
+        return {
+          id: String(player.id),
+          name: fullName,
+          displayName,
+          sortName: displayName.toLowerCase(),
+          position: player.position || 'F',
+          detail: player.position || 'F',
+          active: player.is_active !== false
+        };
+      })
+      .sort((a, b) => a.sortName.localeCompare(b.sortName));
   }
 
   function mapProfiles(profiles = []) {
