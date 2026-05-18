@@ -58,12 +58,6 @@ window.CR = window.CR || {};
     return selectedUser ? userDisplayName(selectedUser) : (draft?.firstPicker || current?.season?.firstPicker || 'TBD');
   }
 
-  async function reloadManageLiveData() {
-    if (typeof CR.hydrateManageData === 'function') {
-      await CR.hydrateManageData();
-    }
-  }
-
   function currentProfileDraft() {
     const profile = CR.currentProfile || {};
     return {
@@ -372,31 +366,15 @@ window.CR = window.CR || {};
         return;
       }
 
+      const restorePlayer = event.target.closest('[data-manage-restore-player]');
+      if (restorePlayer) {
+        await CR.manageActions?.roster?.restorePlayer?.(restorePlayer.dataset.manageRestorePlayer, restorePlayer);
+        return;
+      }
+
       const savePlayer = event.target.closest('[data-manage-save-player]');
       if (savePlayer) {
-        const draft = current.rosterDraft;
-        const name = String(draft.name || '').trim();
-        if (!name) { CR.showToast?.({ message: 'Add a player name first' }); return; }
-        const payload = { name, position: draft.position || 'F' };
-        try {
-          CR.ui?.setActionBusy?.(savePlayer, true, { label: 'Saving…' });
-          if (current.editingRosterPlayerId) {
-            await CR.manageDataService.updatePlayer(current.editingRosterPlayerId, payload);
-            resetRosterDraft(); current.rosterSheetOpen = false; rerender();
-            await reloadManageLiveData();
-            CR.showToast?.({ message: `${name} updated` });
-            return;
-          }
-          await CR.manageDataService.createPlayer(payload);
-          resetRosterDraft(); current.rosterSheetOpen = false; rerender();
-          await reloadManageLiveData();
-          CR.showToast?.({ message: `${name} added` });
-        } catch (error) {
-          console.error('Player save failed', error);
-          CR.showToast?.({ message: error?.message || 'Could not save player', tier: 'warning' });
-        } finally {
-          CR.ui?.setActionBusy?.(savePlayer, false);
-        }
+        await CR.manageActions?.roster?.savePlayer?.(savePlayer);
         return;
       }
 
@@ -469,19 +447,7 @@ window.CR = window.CR || {};
       if (confirmRemove) {
         const item = current.confirmRemove;
         if (item?.type === 'player') {
-          try {
-            CR.ui?.setActionBusy?.(confirmRemove, true, { label: 'Removing…' });
-            await CR.manageDataService.deactivatePlayer(item.id);
-            current.confirmRemove = null;
-            rerender();
-            await reloadManageLiveData();
-            CR.showToast?.({ message: 'Player removed from active roster' });
-          } catch (error) {
-            console.error('Player remove failed', error);
-            CR.showToast?.({ message: error?.message || 'Could not remove player', tier: 'warning' });
-          } finally {
-            CR.ui?.setActionBusy?.(confirmRemove, false);
-          }
+          await CR.manageActions?.roster?.removePlayer?.(item.id, confirmRemove);
           return;
         }
         if (item?.type === 'game') {
