@@ -3,14 +3,12 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
 
-  const STREAM_OPTIONS = [
-    { value: 'off', label: 'Realtime', note: 'Show live rivalry moments immediately.' },
-    { value: '30s', label: '30s', note: 'Small spoiler buffer for near-live streams.' },
-    { value: '60s', label: '60s', note: 'Balanced protection without feeling far behind.' },
-    { value: '90s', label: '90s', note: 'Recommended for most delayed broadcasts.' },
-    { value: '120s', label: '120s', note: 'Extra protection for laggier streams.' },
-    { value: 'period', label: 'Period Recaps', note: 'Hold visible moments until the horn.' },
-    { value: 'final', label: 'Final Only', note: 'Keep everything hidden until the game ends.' }
+  const DELAY_OPTIONS = [
+    { value: 0, label: 'Realtime', note: 'Show spoiler-sensitive alerts immediately.' },
+    { value: 30, label: '30 seconds', note: 'Small spoiler buffer for near-live streams.' },
+    { value: 60, label: '60 seconds', note: 'Balanced protection without feeling far behind.' },
+    { value: 90, label: '90 seconds', note: 'Recommended for most delayed broadcasts.' },
+    { value: 120, label: '120 seconds', note: 'Extra protection for laggier streams.' }
   ];
 
   const PROFILE_COLOR_OPTIONS = [
@@ -97,11 +95,27 @@ window.CR = window.CR || {};
     return `${startYear}-${endYear}`;
   }
 
+  function buildWatchExperience() {
+    const settings = CR.userSettingsService?.get?.() || CR.userSettingsService?.defaults?.() || {};
+    const stream = settings.stream_settings || {};
+    const notifications = settings.notification_settings || {};
+
+    return {
+      pushDelaySeconds: Number(stream.push_delay_seconds ?? 90),
+      toastDelaySeconds: Number(stream.toast_delay_seconds ?? 90),
+      pushEnabled: notifications.push_enabled !== false,
+      toastEnabled: notifications.toast_enabled !== false,
+      delayOptions: DELAY_OPTIONS,
+      saveState: 'idle'
+    };
+  }
+
   function build() {
     const users = getManageUsers();
     const firstPicker = users[0]?.displayName || 'Player 1';
     const currentSeason = '2025-26';
     const nextSeason = getNextSeasonLabel(currentSeason);
+    const watchExperience = buildWatchExperience();
 
     return {
       activeManageView: 'main',
@@ -109,16 +123,21 @@ window.CR = window.CR || {};
       profileColorOpen: false,
       editingScheduleGameId: null,
       editingRosterPlayerId: null,
+      watchExperience,
       streamMode: {
-        selected: '90s',
-        options: STREAM_OPTIONS,
-        delayPush: true,
-        delayToasts: true,
+        selected: `${watchExperience.toastDelaySeconds}s`,
+        options: DELAY_OPTIONS.map((option) => ({
+          ...option,
+          value: option.value,
+          label: option.label
+        })),
+        delayPush: watchExperience.pushDelaySeconds > 0,
+        delayToasts: watchExperience.toastDelaySeconds > 0,
         delayFeed: false
       },
       notifications: {
-        pushEnabled: true,
-        toastsEnabled: true
+        pushEnabled: watchExperience.pushEnabled,
+        toastsEnabled: watchExperience.toastEnabled
       },
       season: {
         activeSeasonLabel: currentSeason,
@@ -168,5 +187,5 @@ window.CR = window.CR || {};
     };
   }
 
-  window.CR.manageModel = { build, PROFILE_COLOR_OPTIONS };
+  window.CR.manageModel = { build, PROFILE_COLOR_OPTIONS, DELAY_OPTIONS };
 })();
