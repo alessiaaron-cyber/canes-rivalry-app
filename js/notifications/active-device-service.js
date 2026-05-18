@@ -30,6 +30,39 @@ window.CR = window.CR || {};
     ]);
   }
 
+  async function getSwDebug() {
+    const debug = {
+      controller: Boolean(navigator.serviceWorker?.controller),
+      path: window.location.pathname,
+      registrationCount: 0,
+      scopes: '',
+      matchingScope: '',
+      readyScope: '',
+      readyTimedOut: false
+    };
+
+    if (!('serviceWorker' in navigator)) return debug;
+
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations?.() || [];
+      const scopes = registrations.map((registration) => registration.scope || '').filter(Boolean);
+      debug.registrationCount = scopes.length;
+      debug.scopes = scopes.map((scope) => scope.replace(window.location.origin, '')).join('|');
+      debug.matchingScope = (scopes.find((scope) => window.location.href.startsWith(scope)) || '').replace(window.location.origin, '');
+    } catch (error) {
+      debug.scopes = `err:${error?.message || String(error)}`;
+    }
+
+    try {
+      const ready = await getReadyServiceWorker();
+      debug.readyScope = (ready?.scope || '').replace(window.location.origin, '');
+    } catch (error) {
+      debug.readyTimedOut = true;
+    }
+
+    return debug;
+  }
+
   async function getEmail() {
     if (CR.currentUser?.email) return CR.currentUser.email;
     const session = await CR.auth?.getSession?.();
@@ -59,6 +92,7 @@ window.CR = window.CR || {};
     let subscription = null;
     let endpoint = '';
     let errorMessage = '';
+    const swDebug = await getSwDebug();
 
     try {
       subscription = supported ? await getSubscription() : null;
@@ -73,6 +107,7 @@ window.CR = window.CR || {};
       permission,
       subscribed: Boolean(endpoint),
       endpoint,
+      swDebug,
       lastSeenAt: lastStatus?.lastSeenAt || null,
       lastActiveUpdateOk: Boolean(lastStatus?.ok),
       lastActiveError: lastStatus?.error || errorMessage,
@@ -158,6 +193,7 @@ window.CR = window.CR || {};
     stop,
     markActive,
     getDeviceStatus,
+    getSwDebug,
     canCheckPush,
     permissionState
   };
