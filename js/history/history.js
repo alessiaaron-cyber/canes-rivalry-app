@@ -313,6 +313,7 @@ window.CR = window.CR || {};
     const uid0 = userId(users, 0);
     const uid1 = userId(users, 1);
     CR.historyRawDebug = {
+      debugFetch: source?.debugFetch || null,
       users: users.map((user) => ({ id: user.id, name: user.displayName || user.display_name || user.username, slot: user.rivalrySlot || user.rivalry_slot })),
       seasons: (source?.seasons || []).map((season) => ({
         id: season.id,
@@ -321,7 +322,9 @@ window.CR = window.CR || {};
         secondScore: season.secondScore,
         total0: season.totalsByUserId?.[uid0] ?? season.scoresByUserId?.[uid0],
         total1: season.totalsByUserId?.[uid1] ?? season.scoresByUserId?.[uid1],
-        totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {})
+        totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {}),
+        debugSeasonRows: season.debugSeasonRows || [],
+        debugNormalizedTotals: season.debugNormalizedTotals || {}
       })),
       games: (source?.games || []).slice(0, 8).map((game) => ({
         id: game.id,
