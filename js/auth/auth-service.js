@@ -53,16 +53,14 @@ window.CR = window.CR || {};
   }
 
   function sortActiveProfiles(profiles = []) {
-    const preferred = ['aaron', 'julie'];
     return profiles.slice().sort((a, b) => {
+      const aSlot = Number(a.rivalry_slot || a.rivalrySlot || 99);
+      const bSlot = Number(b.rivalry_slot || b.rivalrySlot || 99);
+
+      if (aSlot !== bSlot) return aSlot - bSlot;
+
       const aName = String(a.display_name || a.username || '').trim().toLowerCase();
       const bName = String(b.display_name || b.username || '').trim().toLowerCase();
-      const aIndex = preferred.indexOf(aName);
-      const bIndex = preferred.indexOf(bName);
-
-      if (aIndex !== -1 || bIndex !== -1) {
-        return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
-      }
 
       return aName.localeCompare(bName);
     });
