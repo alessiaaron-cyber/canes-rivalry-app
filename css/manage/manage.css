@@ -1,11 +1,11 @@
 .manage-stack { gap: 16px; }
 .manage-card { overflow: hidden; }
 .manage-card-header { gap: 14px; }
-.manage-support-copy { margin-top: 7px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); max-width: 34ch; }
+.manage-support-copy { margin-top: 7px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); width: 100%; max-width: none; }
 
 .manage-watch-card { overflow: visible; }
 .manage-watch-card .manage-setting-stack { margin-top: 18px; }
-.manage-watch-card .manage-support-copy { max-width: none; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.manage-watch-card .manage-support-copy { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
 .manage-delay-group { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-subtle); }
 .manage-delay-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .manage-delay-heading strong { flex: 0 0 auto; margin-left: auto; text-align: right; font-size: 15px; font-weight: var(--font-heavy, 900); letter-spacing: -0.02em; color: var(--ink-strong); }
