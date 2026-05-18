@@ -163,6 +163,7 @@ window.CR = window.CR || {};
     CR.currentProfile = null;
     CR.currentProfiles = [];
     CR.session = null;
+    CR.userSettingsService?.clear?.();
     await boot();
   }
 
@@ -257,6 +258,7 @@ window.CR = window.CR || {};
       const hasExistingSession = !!existingSession?.user;
 
       if (!hasExistingSession) {
+        CR.userSettingsService?.clear?.();
         if (!root()?.firstElementChild) {
           render(CR.authUi.renderBoot(), 'boot-stage auth-stage');
         } else {
@@ -268,16 +270,19 @@ window.CR = window.CR || {};
 
       switch (resolved.state) {
         case STATES.SIGNED_OUT:
+          CR.userSettingsService?.clear?.();
           await swapStage(CR.authUi.renderSignedOut(CR.pendingAuthEmail), 'boot-stage auth-stage');
           bindAuthUi();
           return;
 
         case STATES.UNAUTHORIZED:
+          CR.userSettingsService?.clear?.();
           await swapStage(CR.authUi.renderUnauthorized(resolved.email), 'boot-stage auth-stage');
           bindAuthUi();
           return;
 
         case STATES.PROFILE_MISSING:
+          CR.userSettingsService?.clear?.();
           await swapStage(CR.authUi.renderProfileMissing(resolved.email), 'boot-stage auth-stage');
           bindAuthUi();
           return;
@@ -291,9 +296,12 @@ window.CR = window.CR || {};
           CR.currentProfile = resolved.profile;
           CR.currentProfiles = resolved.profiles || [];
 
+          await CR.userSettingsService?.load?.(resolved.user);
+
           if (sameUserAlreadyMounted) {
             CR.identity?.applyUserColorVariables?.();
             CR.renderAccountIdentity?.();
+            CR.renderManage?.();
             return;
           }
 
