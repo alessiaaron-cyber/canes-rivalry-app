@@ -2,6 +2,7 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
+  let watchSaveTimer = null;
 
   function state() {
     return CR.manageStore?.getState?.() || CR.manageState;
@@ -162,6 +163,63 @@ window.CR = window.CR || {};
     CR.manageState = current;
     CR.manageStore?.replaceState?.(current, { render: false });
     CR.renderManage?.({ scrollTop: options.scrollTop });
+  }
+
+  function setWatchSaveState(value) {
+    const current = state();
+    if (!current?.watchExperience) return;
+    current.watchExperience.saveState = value;
+    rerender();
+  }
+
+  async function persistWatchExperience() {
+    const current = state();
+    const watch = current?.watchExperience;
+    if (!watch || !CR.userSettingsService?.save) return;
+
+    window.clearTimeout(watchSaveTimer);
+    setWatchSaveState('saving');
+
+    try {
+      const saved = await CR.userSettingsService.save({
+        stream_settings: {
+          push_delay_seconds: watch.pushDelaySeconds,
+          toast_delay_seconds: watch.toastDelaySeconds
+        },
+        notification_settings: {
+          push_enabled: watch.pushEnabled !== false,
+          toast_enabled: watch.toastEnabled !== false
+        }
+      });
+
+      const refreshed = CR.manageModel?.build?.();
+      if (refreshed?.watchExperience) {
+        current.watchExperience = {
+          ...refreshed.watchExperience,
+          saveState: 'saved'
+        };
+        current.notifications = refreshed.notifications || current.notifications;
+        current.streamMode = refreshed.streamMode || current.streamMode;
+      } else {
+        current.watchExperience.saveState = 'saved';
+      }
+
+      CR.userSettings = saved;
+      rerender();
+      watchSaveTimer = window.setTimeout(() => {
+        const latest = state();
+        if (latest?.watchExperience?.saveState === 'saved') {
+          latest.watchExperience.saveState = 'idle';
+          rerender();
+        }
+      }, 1600);
+    } catch (error) {
+      console.error('Watch Experience save failed', error);
+      const latest = state();
+      if (latest?.watchExperience) latest.watchExperience.saveState = 'error';
+      rerender();
+      CR.showToast?.({ message: error?.message || 'Could not save notification settings', tier: 'warning' });
+    }
   }
 
   function refreshGameDayAfterMockChange() {
@@ -398,10 +456,27 @@ window.CR = window.CR || {};
         const key = toggleButton.dataset.manageToggle;
         if (key === 'mock.playoffs') { setMockOptions({ enabled: true, playoffs: !CR.gameDayMockService?.isPlayoffs?.() }); CR.showToast?.({ message: 'Mock playoff setting updated' }); return; }
         if (key === 'mock.carryover') { setMockOptions({ enabled: true, carryover: !CR.gameDayMockService?.isCarryover?.() }); CR.showToast?.({ message: 'Mock carryover setting updated' }); return; }
+        if (key === 'watchExperience.pushEnabled' || key === 'watchExperience.toastEnabled') {
+          const currentValue = Boolean(getNestedValue(current, key));
+          setNestedValue(current, key, !currentValue);
+          rerender();
+          persistWatchExperience();
+          return;
+        }
         const currentValue = Boolean(getNestedValue(current, key));
         setNestedValue(current, key, !currentValue);
         rerender();
         CR.showToast?.({ message: `${toggleButton.querySelector('.manage-toggle-label')?.textContent || 'Setting'} ${!currentValue ? 'on' : 'off'}` });
+        return;
+      }
+      const delayOption = event.target.closest('[data-manage-delay-group][data-manage-delay-seconds]');
+      if (delayOption) {
+        const seconds = CR.userSettingsService?.normalizeDelay?.(delayOption.dataset.manageDelaySeconds, 90) ?? 90;
+        const group = delayOption.dataset.manageDelayGroup;
+        if (group === 'push') current.watchExperience.pushDelaySeconds = seconds;
+        if (group === 'toast') current.watchExperience.toastDelaySeconds = seconds;
+        rerender();
+        persistWatchExperience();
         return;
       }
       const streamOption = event.target.closest('[data-manage-stream-option]');
