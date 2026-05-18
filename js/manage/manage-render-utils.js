@@ -43,7 +43,7 @@ window.CR = window.CR || {};
 
   function renderCardHeader(eyebrow, title, copy, badge, actionHtml = '') {
     const badgeHtml = badge ? `<span class="cr-pill ${escapeHtml(badge.className || 'neutral')}">${escapeHtml(badge.label || '')}</span>` : '';
-    return `<div class="panel-header compact-header manage-card-header"><div><div class="eyebrow">${escapeHtml(eyebrow)}</div><h2>${escapeHtml(title)}</h2>${copy ? `<p class="manage-support-copy">${escapeHtml(copy)}</p>` : ''}</div><div class="cr-card-actions">${badgeHtml}${actionHtml}</div></div>`;
+    return `<div class="panel-header compact-header manage-card-header"><div class="manage-card-header-main"><div class="eyebrow">${escapeHtml(eyebrow)}</div><h2>${escapeHtml(title)}</h2></div><div class="cr-card-actions">${badgeHtml}${actionHtml}</div></div>${copy ? `<div class="manage-card-header-divider"></div><p class="manage-card-header-copy">${escapeHtml(copy)}</p>` : ''}`;
   }
 
   function renderSubviewHeader(label, title, copy) {
