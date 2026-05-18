@@ -3,6 +3,7 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   let notificationStatusInFlight = false;
+  let manageDataInFlight = false;
 
   function scrollManageToTop() {
     const manageView = document.querySelector('#manageView');
@@ -82,6 +83,39 @@ window.CR = window.CR || {};
     }
   }
 
+  async function hydrateManageData() {
+    if (manageDataInFlight) return;
+    if (!CR.manageDataService?.load) return;
+
+    manageDataInFlight = true;
+
+    try {
+      const liveData = await CR.manageDataService.load();
+      const current = CR.manageStore?.getState?.() || CR.manageState;
+      CR.manageDataService.mergeIntoState(current, liveData);
+      CR.manageState = current;
+      CR.manageStore?.replaceState?.(current, { render: false });
+      CR.manageStore?.render?.();
+    } catch (error) {
+      console.warn('Could not hydrate Manage live data', error);
+      const current = CR.manageStore?.getState?.() || CR.manageState;
+      if (current) {
+        current.manageDataLoaded = false;
+        current.manageDataError = error?.message || String(error || 'Could not load Manage data');
+        current.appHealth = {
+          ...current.appHealth,
+          syncStatus: 'Preview data',
+          lastSyncLabel: 'Live load failed'
+        };
+        CR.manageState = current;
+        CR.manageStore?.replaceState?.(current, { render: false });
+        CR.manageStore?.render?.();
+      }
+    } finally {
+      manageDataInFlight = false;
+    }
+  }
+
   function renderManageView(state) {
     const root = document.querySelector('#manageContent');
     if (!root || !CR.manageRender) return;
@@ -132,6 +166,7 @@ window.CR = window.CR || {};
       renderManage();
     }
 
+    requestAnimationFrame(hydrateManageData);
     requestAnimationFrame(hydrateNotificationDeviceStatus);
     CR.manageEvents?.bindManageEvents?.();
   }
@@ -140,5 +175,6 @@ window.CR = window.CR || {};
   CR.scrollManageToTop = scrollManageToTop;
   CR.syncManageSheetScrollLock = syncManageSheetScrollLock;
   CR.hydrateNotificationDeviceStatus = hydrateNotificationDeviceStatus;
+  CR.hydrateManageData = hydrateManageData;
   CR.initManage = initManage;
 })();
