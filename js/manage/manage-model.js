@@ -110,6 +110,20 @@ window.CR = window.CR || {};
     };
   }
 
+  function buildNotificationDevice() {
+    return {
+      supported: false,
+      permission: 'checking',
+      subscribed: false,
+      endpoint: '',
+      lastSeenAt: null,
+      lastActiveUpdateOk: false,
+      lastActiveError: '',
+      checkedAt: null,
+      loading: true
+    };
+  }
+
   function build() {
     const users = getManageUsers();
     const firstPicker = users[0]?.displayName || 'Player 1';
@@ -124,6 +138,7 @@ window.CR = window.CR || {};
       editingScheduleGameId: null,
       editingRosterPlayerId: null,
       watchExperience,
+      notificationDevice: buildNotificationDevice(),
       streamMode: {
         selected: `${watchExperience.toastDelaySeconds}s`,
         options: DELAY_OPTIONS.map((option) => ({
