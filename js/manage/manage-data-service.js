@@ -105,8 +105,8 @@ window.CR = window.CR || {};
         .from('games')
         .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
         .eq('season_id', activeSeason.id)
-        .order('game_date', { ascending: true, nullsFirst: false })
-        .order('game_number', { ascending: true });
+        .order('game_date', { ascending: false, nullsFirst: true })
+        .order('game_number', { ascending: false });
 
       if (gamesResult.error) throw gamesResult.error;
       games = gamesResult.data || [];
