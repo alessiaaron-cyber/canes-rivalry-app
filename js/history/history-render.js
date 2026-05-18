@@ -70,6 +70,7 @@ window.CR = window.CR || {};
       totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {})
     }));
     const payload = {
+      fetchDebug: CR.historyRawDebug?.debugFetch || null,
       rawBeforeModel: CR.historyRawDebug || null,
       modelAfterBuild: {
         view: CR.historyState?.view,
@@ -92,7 +93,7 @@ window.CR = window.CR || {};
         sampleSeasons
       }
     };
-    return `<section class="panel-card history-debug-card" style="margin:12px 0;border:2px dashed #ef4444;background:#fff7ed;color:#111827;"><div class="eyebrow">TEMP DEBUG</div><h3>History score diagnostics</h3><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;max-height:620px;overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre></section>`;
+    return `<section class="panel-card history-debug-card" style="margin:12px 0;border:2px dashed #ef4444;background:#fff7ed;color:#111827;"><div class="eyebrow">TEMP DEBUG</div><h3>History score diagnostics</h3><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;max-height:680px;overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre></section>`;
   }
 
   function picksFor(data, game, index) {
