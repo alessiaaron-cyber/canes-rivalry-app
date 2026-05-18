@@ -21,11 +21,6 @@ window.CR = window.CR || {};
     return user.displayName || user.display_name || user.username || `Player ${index + 1}`;
   }
 
-  function scoreFor(row = {}, users = [], index = 0) {
-    const id = userId(users, index);
-    return toNumber(row.scoresByUserId?.[id] ?? row.totalsByUserId?.[id] ?? row.firstScore);
-  }
-
   function scoreForSide(row = {}, users = [], index = 0) {
     const id = userId(users, index);
     const sideValue = index === 1 ? row.secondScore : row.firstScore;
@@ -308,36 +303,6 @@ window.CR = window.CR || {};
     return { ...model, ...buildStaticHistoryData(model), ...scopedSeason, hqSeasonData: buildHqSeasonData(model, hqSeasonId), scoreSignature: signature };
   }
 
-  function setRawHistoryDebug(source) {
-    const users = source?.users || [];
-    const uid0 = userId(users, 0);
-    const uid1 = userId(users, 1);
-    CR.historyRawDebug = {
-      debugFetch: source?.debugFetch || null,
-      users: users.map((user) => ({ id: user.id, name: user.displayName || user.display_name || user.username, slot: user.rivalrySlot || user.rivalry_slot })),
-      seasons: (source?.seasons || []).map((season) => ({
-        id: season.id,
-        label: season.label,
-        firstScore: season.firstScore,
-        secondScore: season.secondScore,
-        total0: season.totalsByUserId?.[uid0] ?? season.scoresByUserId?.[uid0],
-        total1: season.totalsByUserId?.[uid1] ?? season.scoresByUserId?.[uid1],
-        totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {}),
-        debugSeasonRows: season.debugSeasonRows || [],
-        debugNormalizedTotals: season.debugNormalizedTotals || {}
-      })),
-      games: (source?.games || []).slice(0, 8).map((game) => ({
-        id: game.id,
-        seasonId: game.seasonId || game.season_id,
-        firstScore: game.firstScore,
-        secondScore: game.secondScore,
-        score0: game.scoresByUserId?.[uid0],
-        score1: game.scoresByUserId?.[uid1],
-        scoreKeys: Object.keys(game.scoresByUserId || {})
-      }))
-    };
-  }
-
   function ensureHistoryShell(root) {
     if (CR.historyDom?.root === root) return;
     root.innerHTML = CR.historyRender.renderRootShell();
@@ -387,10 +352,10 @@ window.CR = window.CR || {};
     ensureHistoryShell(root);
     const scoped = getScopedData(CR.historyData, CR.historyState);
     const hqMomentumKey = momentumSignature(scoped.hqSeasonData?.momentum || []);
-    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}:${scoped.scoreSignature || ''}:${JSON.stringify(CR.historyRawDebug || {})}`;
-    const seasonKey = `${CR.historyState.seasonId}:${scoped.scoreSignature || ''}:${JSON.stringify(CR.historyRawDebug || {})}`;
+    const hqKey = `${CR.historyData.currentSeasonId}:${hqMomentumKey}:${scoped.scoreSignature || ''}`;
+    const seasonKey = `${CR.historyState.seasonId}:${scoped.scoreSignature || ''}`;
     renderPanel('hq', `hq:${hqKey}`, CR.historyRender.renderHQ(scoped), CR.historyDom.hq);
-    renderPanel('seasons', `seasons:${scoped.scoreSignature || ''}:${JSON.stringify(CR.historyRawDebug || {})}`, CR.historyRender.renderSeasonsOverview(scoped), CR.historyDom.seasons);
+    renderPanel('seasons', `seasons:${scoped.scoreSignature || ''}`, CR.historyRender.renderSeasonsOverview(scoped), CR.historyDom.seasons);
     renderPanel('all_games', `all_games:${seasonKey}`, CR.historyRender.renderAllGames(scoped), CR.historyDom.allGames);
     const sheetState = CR.historyState.sheet?.open ? `${CR.historyState.sheet.title}|${CR.historyState.sheet.message}|${CR.historyState.sheet.primaryAction}|${scoped.scoreSignature || ''}` : 'closed';
     renderPanel('admin', `admin:${sheetState}`, CR.historyRender.renderAdminSheet(CR.historyState), CR.historyDom.admin);
@@ -418,7 +383,6 @@ window.CR = window.CR || {};
     try {
       const previousState = CR.historyState || {};
       const source = await CR.historyDataService.fetchHistoryData();
-      setRawHistoryDebug(source);
       CR.historyData = CR.historyModel.build(source);
       CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
       CR.historyCache = { staticData: null, seasons: {}, signature: '' };
@@ -433,7 +397,6 @@ window.CR = window.CR || {};
   async function initHistory() {
     try {
       const source = await CR.historyDataService.fetchHistoryData();
-      setRawHistoryDebug(source);
       CR.historyData = CR.historyModel.build(source);
       CR.identity?.applyUserColorVariables?.({ users: CR.historyData.users });
       CR.historyCache = { staticData: null, seasons: {}, signature: '' };
