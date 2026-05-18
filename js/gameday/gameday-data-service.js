@@ -7,15 +7,27 @@ window.CR = window.CR || {};
     return player?.player_name || player?.name || 'Player';
   }
 
+  function lastNameFirstName(name) {
+    const value = String(name || '').trim();
+    if (!value || !value.includes(' ')) return value || 'Player';
+    const parts = value.split(/\s+/).filter(Boolean);
+    const first = parts.shift();
+    const last = parts.join(' ');
+    return last && first ? `${last}, ${first}` : value;
+  }
+
   function mapRoster(players = []) {
-    return players.map((player) => ({
-      id: String(player.id),
-      name: rosterDisplayName(player),
-      displayName: rosterDisplayName(player),
-      position: player.position || 'F',
-      detail: player.position || 'F',
-      active: player.is_active !== false
-    }));
+    return players.map((player) => {
+      const fullName = rosterDisplayName(player);
+      return {
+        id: String(player.id),
+        name: fullName,
+        displayName: lastNameFirstName(fullName),
+        position: player.position || 'F',
+        detail: player.position || 'F',
+        active: player.is_active !== false
+      };
+    });
   }
 
   function mapProfiles(profiles = []) {
