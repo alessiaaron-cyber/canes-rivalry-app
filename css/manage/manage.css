@@ -1,7 +1,15 @@
 .manage-stack { gap: 16px; }
 .manage-card { overflow: hidden; }
-.manage-card-header { gap: 14px; }
-.manage-support-copy { margin-top: 7px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); width: 100%; max-width: none; }
+.manage-card > * { min-width: 0; }
+.manage-card-header { gap: 14px; width: 100%; }
+.manage-card-header > div:first-child { flex: 1 1 auto; min-width: 0; max-width: none; }
+.manage-card-header p,
+.manage-card-header .panel-copy,
+.manage-card-header .manage-support-copy { max-width: none; width: 100%; }
+.manage-card hr,
+.manage-card .cr-divider,
+.manage-card .panel-divider { width: 100%; max-width: none; }
+.manage-support-copy { display: block; margin-top: 7px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); width: 100%; max-width: none; }
 
 .manage-watch-card { overflow: visible; }
 .manage-watch-card .manage-setting-stack { margin-top: 18px; }
