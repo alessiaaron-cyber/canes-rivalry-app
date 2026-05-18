@@ -3,7 +3,6 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   const escapeHtml = CR.ui?.escapeHtml || ((value) => String(value ?? ''));
-  const HISTORY_DEBUG = true;
 
   function pickLine(pick) {
     const points = Number(pick.points || 0);
@@ -42,58 +41,6 @@ window.CR = window.CR || {};
       first: Number(row?.firstScore ?? row?.totalsByUserId?.[userId(data, 0)] ?? row?.scoresByUserId?.[userId(data, 0)] ?? 0),
       second: Number(row?.secondScore ?? row?.totalsByUserId?.[userId(data, 1)] ?? row?.scoresByUserId?.[userId(data, 1)] ?? 0)
     };
-  }
-
-  function renderDebugPanel(data) {
-    if (!HISTORY_DEBUG) return '';
-    const uid0 = userId(data, 0);
-    const uid1 = userId(data, 1);
-    const games = data?.gameLog || data?.games || [];
-    const seasons = data?.seasonSummaries || data?.seasons || [];
-    const sampleGames = games.slice(0, 8).map((game) => ({
-      id: game.id,
-      seasonId: game.seasonId || game.season_id,
-      title: game.title,
-      firstScore: game.firstScore,
-      secondScore: game.secondScore,
-      score0: game.scoresByUserId?.[uid0],
-      score1: game.scoresByUserId?.[uid1],
-      scoreKeys: Object.keys(game.scoresByUserId || {})
-    }));
-    const sampleSeasons = seasons.slice(0, 8).map((season) => ({
-      id: season.id || season.seasonId,
-      label: season.label,
-      firstScore: season.firstScore,
-      secondScore: season.secondScore,
-      total0: season.totalsByUserId?.[uid0] ?? season.scoresByUserId?.[uid0],
-      total1: season.totalsByUserId?.[uid1] ?? season.scoresByUserId?.[uid1],
-      totalKeys: Object.keys(season.totalsByUserId || season.scoresByUserId || {})
-    }));
-    const payload = {
-      fetchDebug: CR.historyRawDebug?.debugFetch || null,
-      rawBeforeModel: CR.historyRawDebug || null,
-      modelAfterBuild: {
-        view: CR.historyState?.view,
-        selectedSeasonId: CR.historyState?.seasonId,
-        currentSeasonId: data?.currentSeasonId,
-        users: [0, 1].map((index) => ({
-          id: userId(data, index),
-          name: userName(data, index),
-          slot: getUser(data, index).rivalrySlot || getUser(data, index).rivalry_slot
-        })),
-        counts: {
-          allGames: data?.games?.length || 0,
-          gameLog: data?.gameLog?.length || 0,
-          seasons: data?.seasons?.length || 0,
-          summaries: data?.seasonSummaries?.length || 0
-        },
-        board: data?.seasonBoard || null,
-        allTimeBoard: data?.allTimeBoard || null,
-        sampleGames,
-        sampleSeasons
-      }
-    };
-    return `<section class="panel-card history-debug-card" style="margin:12px 0;border:2px dashed #ef4444;background:#fff7ed;color:#111827;"><div class="eyebrow">TEMP DEBUG</div><h3>History score diagnostics</h3><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;max-height:680px;overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre></section>`;
   }
 
   function picksFor(data, game, index) {
@@ -255,18 +202,18 @@ window.CR = window.CR || {};
 
   function renderSeasonsOverview(data) {
     const summaries = (data.seasonSummaries || []).slice().sort((a, b) => String(b.label || '').localeCompare(String(a.label || '')));
-    return `<section class="history-seasons-view"><section class="panel-card history-all-games-header-card history-seasons-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Seasons</div><h2>All Seasons</h2></div><button class="cr-button back" type="button" data-history-back-hq="1">Back</button></div><p class="history-support-copy">Tap any season to revisit the scoreline, swings, and rivalry details.</p></section>${renderDebugPanel(data)}<div class="history-seasons-stack">${summaries.map((summary) => renderSeasonCard(data, summary)).join('')}</div></section>`;
+    return `<section class="history-seasons-view"><section class="panel-card history-all-games-header-card history-seasons-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Seasons</div><h2>All Seasons</h2></div><button class="cr-button back" type="button" data-history-back-hq="1">Back</button></div><p class="history-support-copy">Tap any season to revisit the scoreline, swings, and rivalry details.</p></section><div class="history-seasons-stack">${summaries.map((summary) => renderSeasonCard(data, summary)).join('')}</div></section>`;
   }
 
   function renderAllGames(data) {
     const playoffCount = (data.gameLog || []).filter((game) => game.playoff).length;
     const regularCount = Math.max(0, (data.gameLog?.length || 0) - playoffCount);
     const leaderClass = leaderClassFromRecord(data, data.seasonBoard?.recordText);
-    return `<section class="history-all-games-view"><section class="panel-card history-all-games-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Season archive</div><h2>${escapeHtml(data.selectedSeason?.label || 'Season')} Games</h2></div><button class="cr-button back" type="button" data-history-back="1">Back</button></div><p class="history-support-copy">Browse every rivalry game for the active season and make commissioner edits where needed.</p><div class="history-season-meta-row history-archive-meta-row"><span class="history-meta-pill">${escapeHtml(String(data.gameLog?.length || 0))} games</span><span class="history-meta-pill">${escapeHtml(String(regularCount))} regular</span><span class="history-meta-pill">${escapeHtml(String(playoffCount))} playoff</span><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(data.seasonBoard?.recordText || '—')}</span></div></section>${renderDebugPanel(data)}<section class="panel-card history-all-games-list-card"><div class="history-section-head"><div><div class="eyebrow">Game archive</div><h3>Games</h3><p class="history-support-copy">${escapeHtml(String(data.gameLog?.length || 0))} games in this season</p></div></div><div class="history-log-stack archive-log-stack">${(data.gameLog || []).map((game) => renderGameCard(data, game, true)).join('')}</div></section></section>`;
+    return `<section class="history-all-games-view"><section class="panel-card history-all-games-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Season archive</div><h2>${escapeHtml(data.selectedSeason?.label || 'Season')} Games</h2></div><button class="cr-button back" type="button" data-history-back="1">Back</button></div><p class="history-support-copy">Browse every rivalry game for the active season and make commissioner edits where needed.</p><div class="history-season-meta-row history-archive-meta-row"><span class="history-meta-pill">${escapeHtml(String(data.gameLog?.length || 0))} games</span><span class="history-meta-pill">${escapeHtml(String(regularCount))} regular</span><span class="history-meta-pill">${escapeHtml(String(playoffCount))} playoff</span><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(data.seasonBoard?.recordText || '—')}</span></div></section><section class="panel-card history-all-games-list-card"><div class="history-section-head"><div><div class="eyebrow">Game archive</div><h3>Games</h3><p class="history-support-copy">${escapeHtml(String(data.gameLog?.length || 0))} games in this season</p></div></div><div class="history-log-stack archive-log-stack">${(data.gameLog || []).map((game) => renderGameCard(data, game, true)).join('')}</div></section></section>`;
   }
 
   function renderHQ(data) {
-    return `<div class="history-feed rivalry-command-feed">${renderDebugPanel(data)}${renderBoard(data)}${renderSeasonSnapshot(data)}${renderMomentum(data)}${renderHighlights(data)}${renderRecentGames(data)}</div>`;
+    return `<div class="history-feed rivalry-command-feed">${renderBoard(data)}${renderSeasonSnapshot(data)}${renderMomentum(data)}${renderHighlights(data)}${renderRecentGames(data)}</div>`;
   }
 
   function renderAdminSheet(state) {
