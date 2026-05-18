@@ -2,6 +2,7 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
+  let notificationStatusInFlight = false;
 
   function scrollManageToTop() {
     const manageView = document.querySelector('#manageView');
@@ -46,6 +47,41 @@ window.CR = window.CR || {};
     }
   }
 
+  async function hydrateNotificationDeviceStatus() {
+    if (notificationStatusInFlight) return;
+    if (!CR.activeDeviceService?.getDeviceStatus) return;
+
+    notificationStatusInFlight = true;
+
+    try {
+      const status = await CR.activeDeviceService.getDeviceStatus();
+      const current = CR.manageStore?.getState?.() || CR.manageState;
+      if (!current?.notificationDevice) return;
+
+      current.notificationDevice = {
+        ...current.notificationDevice,
+        ...status,
+        loading: false
+      };
+
+      CR.manageState = current;
+      CR.manageStore?.replaceState?.(current, { render: false });
+      CR.manageStore?.render?.();
+    } catch (error) {
+      console.warn('Could not hydrate notification status', error);
+      const current = CR.manageStore?.getState?.() || CR.manageState;
+      if (current?.notificationDevice) {
+        current.notificationDevice.loading = false;
+        current.notificationDevice.lastActiveError = error?.message || String(error || 'Could not read notification status');
+        CR.manageState = current;
+        CR.manageStore?.replaceState?.(current, { render: false });
+        CR.manageStore?.render?.();
+      }
+    } finally {
+      notificationStatusInFlight = false;
+    }
+  }
+
   function renderManageView(state) {
     const root = document.querySelector('#manageContent');
     if (!root || !CR.manageRender) return;
@@ -61,14 +97,17 @@ window.CR = window.CR || {};
       if (options.scrollTop) {
         CR.manageStore.render();
         requestAnimationFrame(scrollManageToTop);
+        requestAnimationFrame(hydrateNotificationDeviceStatus);
         return;
       }
 
       CR.manageStore.scheduleRender();
+      requestAnimationFrame(hydrateNotificationDeviceStatus);
       return;
     }
 
     renderManageView(CR.manageState);
+    requestAnimationFrame(hydrateNotificationDeviceStatus);
 
     if (options.scrollTop) {
       requestAnimationFrame(scrollManageToTop);
@@ -93,11 +132,13 @@ window.CR = window.CR || {};
       renderManage();
     }
 
+    requestAnimationFrame(hydrateNotificationDeviceStatus);
     CR.manageEvents?.bindManageEvents?.();
   }
 
   CR.renderManage = renderManage;
   CR.scrollManageToTop = scrollManageToTop;
   CR.syncManageSheetScrollLock = syncManageSheetScrollLock;
+  CR.hydrateNotificationDeviceStatus = hydrateNotificationDeviceStatus;
   CR.initManage = initManage;
 })();
