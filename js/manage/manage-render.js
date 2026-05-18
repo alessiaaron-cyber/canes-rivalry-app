@@ -55,6 +55,32 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     `;
   }
 
+  function renderProfileSummary() {
+    const utils = CR.manageRenderUtils || {};
+    const renderCardHeader = utils.renderCardHeader || fallback('renderCardHeader');
+    const escapeHtml = utils.escapeHtml || CR.ui?.escapeHtml || ((value) => String(value ?? ''));
+    const profile = CR.currentProfile || {};
+    const user = CR.currentUser || {};
+    const displayName = profile.display_name || profile.username || 'Player';
+    const username = profile.username ? `@${profile.username}` : 'Profile';
+    const color = profile.color_hex || '#111827';
+
+    return `
+      <section class="panel-card manage-card manage-profile-card">
+        ${renderCardHeader('Profile', username, 'Personalize your rivalry identity and display color.', { className: 'neutral', label: 'Account' })}
+        <div class="account-panel-body manage-profile-summary-body">
+          <div class="account-panel-avatar" style="--profile-color:${escapeHtml(color)}">${escapeHtml(String(displayName).charAt(0).toUpperCase())}</div>
+          <div class="account-panel-copy">
+            <div class="account-panel-name">${escapeHtml(displayName)}</div>
+            <div class="account-panel-meta">${escapeHtml(profile.role || 'member')}</div>
+            <div class="account-panel-email">${escapeHtml(user.email || profile.email || '—')}</div>
+          </div>
+        </div>
+        <button class="mini-button cr-button secondary" id="manageEditProfileButtonInline" type="button" data-manage-open-profile-editor>Edit Profile</button>
+      </section>
+    `;
+  }
+
   function renderMain(state) {
     const modules = CR.manageRenderModules || {};
     const notifications = modules.notifications || {};
@@ -65,7 +91,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     const renderWatchExperience = notifications.renderWatchExperience || fallback('notifications.renderWatchExperience');
     const renderNotificationDeviceStatus = notifications.renderNotificationDeviceStatus || fallback('notifications.renderNotificationDeviceStatus');
     const renderManageTools = dashboard.renderManageTools || fallback('dashboard.renderManageTools');
-    const renderStatus = dashboard.renderStatus || fallback('dashboard.renderStatus');
     const renderSeasonSetup = season.renderSeasonSetup || fallback('season.renderSeasonSetup');
     const renderEditSheet = sheets.renderEditSheet || fallback('sheets.renderEditSheet');
     const renderStartSeasonSheet = sheets.renderStartSeasonSheet || fallback('sheets.renderStartSeasonSheet');
@@ -73,11 +98,11 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
 
     return `
       <div class="content-stack manage-stack">
+        ${renderProfileSummary()}
         ${renderWatchExperience(state)}
-        ${renderNotificationDeviceStatus(state)}
-        ${renderManageTools(state)}
         ${renderSeasonSetup(state)}
-        ${renderStatus(state)}
+        ${renderManageTools(state)}
+        ${renderNotificationDeviceStatus(state)}
         ${renderDeveloperTools(state)}
       </div>
       ${renderEditSheet(state)}
