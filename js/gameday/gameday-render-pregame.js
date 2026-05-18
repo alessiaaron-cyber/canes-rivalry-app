@@ -54,6 +54,15 @@ window.CR = window.CR || {};
     return `<button class="gd-manage-tiny gd-header-action" data-action="open-manage" type="button">Manage</button>`;
   }
 
+  function lastNameFirstName(name) {
+    const value = String(name || '').trim();
+    if (!value || !value.includes(' ')) return value || 'Player';
+    const parts = value.split(/\s+/).filter(Boolean);
+    const first = parts.shift();
+    const last = parts.join(' ');
+    return last && first ? `${last}, ${first}` : value;
+  }
+
   function renderPickSlot({ pick, isPlayoffs, isFocus, picksEnabled }) {
     if (!pick) {
       return `<div class="gd-pick-row is-empty ${!picksEnabled ? 'is-disabled' : ''}"><div class="gd-pick-icon">…</div><div class="gd-pick-main"><strong>Open slot</strong><small>${picksEnabled ? (isPlayoffs ? 'Waiting for the next playoff pick' : 'Waiting for next pick') : draftDisabledLabel()}</small></div></div>`;
@@ -69,7 +78,7 @@ window.CR = window.CR || {};
   function renderRosterRow(entry, claimedOwner, isPlayoffs, picksEnabled) {
     const owner = claimedOwner(entry.name);
     const ownerClass = owner ? (CR.identity?.ownerClass?.(owner) || '') : '';
-    const displayName = entry.displayName || entry.name;
+    const displayName = lastNameFirstName(entry.name);
     const label = picksEnabled ? 'Draft' : draftDisabledLabel();
     return `<div class="gd-roster-row ${owner ? 'claimed' : ''} ${!picksEnabled ? 'is-disabled' : ''}"><div class="gd-pick-main"><strong>${displayName}</strong><small>${entry.detail}</small></div>${owner ? `<span class="gd-tag ${ownerClass}">${owner}</span>` : `<button class="gd-draft-btn ${isPlayoffs && picksEnabled ? 'gd-draft-btn-playoff' : ''}" data-player="${entry.name}" type="button" ${picksEnabled ? '' : 'disabled'}>${label}</button>`}</div>`;
   }
