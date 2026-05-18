@@ -3,6 +3,7 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   let watchSaveTimer = null;
+  let watchSaveSequence = 0;
 
   function state() {
     return CR.manageStore?.getState?.() || CR.manageState;
@@ -172,11 +173,24 @@ window.CR = window.CR || {};
     rerender();
   }
 
+  function scheduleWatchSaveReset(sequence, delay = 1400) {
+    window.clearTimeout(watchSaveTimer);
+    watchSaveTimer = window.setTimeout(() => {
+      if (sequence !== watchSaveSequence) return;
+      const latest = state();
+      if (!latest?.watchExperience) return;
+      latest.watchExperience.saveState = 'idle';
+      rerender();
+    }, delay);
+  }
+
   async function persistWatchExperience() {
     const current = state();
     const watch = current?.watchExperience;
     if (!watch || !CR.userSettingsService?.save) return;
 
+    watchSaveSequence += 1;
+    const sequence = watchSaveSequence;
     window.clearTimeout(watchSaveTimer);
     setWatchSaveState('saving');
 
@@ -192,32 +206,32 @@ window.CR = window.CR || {};
         }
       });
 
-      const refreshed = CR.manageModel?.build?.();
-      if (refreshed?.watchExperience) {
-        current.watchExperience = {
-          ...refreshed.watchExperience,
-          saveState: 'saved'
-        };
-        current.notifications = refreshed.notifications || current.notifications;
-        current.streamMode = refreshed.streamMode || current.streamMode;
-      } else {
-        current.watchExperience.saveState = 'saved';
+      if (sequence !== watchSaveSequence) return;
+
+      const latest = state();
+      if (latest?.watchExperience) {
+        latest.watchExperience.pushDelaySeconds = Number(saved.stream_settings?.push_delay_seconds ?? latest.watchExperience.pushDelaySeconds);
+        latest.watchExperience.toastDelaySeconds = Number(saved.stream_settings?.toast_delay_seconds ?? latest.watchExperience.toastDelaySeconds);
+        latest.watchExperience.pushEnabled = saved.notification_settings?.push_enabled !== false;
+        latest.watchExperience.toastEnabled = saved.notification_settings?.toast_enabled !== false;
+        latest.watchExperience.saveState = 'saved';
+      }
+
+      if (latest?.notifications) {
+        latest.notifications.pushEnabled = saved.notification_settings?.push_enabled !== false;
+        latest.notifications.toastsEnabled = saved.notification_settings?.toast_enabled !== false;
       }
 
       CR.userSettings = saved;
       rerender();
-      watchSaveTimer = window.setTimeout(() => {
-        const latest = state();
-        if (latest?.watchExperience?.saveState === 'saved') {
-          latest.watchExperience.saveState = 'idle';
-          rerender();
-        }
-      }, 1600);
+      scheduleWatchSaveReset(sequence);
     } catch (error) {
       console.error('Watch Experience save failed', error);
+      if (sequence !== watchSaveSequence) return;
       const latest = state();
       if (latest?.watchExperience) latest.watchExperience.saveState = 'error';
       rerender();
+      scheduleWatchSaveReset(sequence, 2600);
       CR.showToast?.({ message: error?.message || 'Could not save notification settings', tier: 'warning' });
     }
   }
