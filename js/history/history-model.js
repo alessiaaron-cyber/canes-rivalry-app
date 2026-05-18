@@ -193,7 +193,7 @@ window.CR = window.CR || {};
 
   CR.historyModel = {
     build(rawInput) {
-      const raw = clone(rawInput || CR.historyMockData || {});
+      const raw = clone(rawInput || {});
       const users = getUsers(raw);
       const seasons = (raw.seasons || []).map((season) => normalizeSeason(season, users));
       const players = raw.players || [];
