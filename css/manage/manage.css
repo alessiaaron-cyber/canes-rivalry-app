@@ -3,6 +3,15 @@
 .manage-card-header { gap: 14px; }
 .manage-support-copy { margin-top: 7px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); max-width: 34ch; }
 
+.manage-watch-card { overflow: visible; }
+.manage-watch-card .manage-setting-stack { margin-top: 18px; }
+.manage-watch-card .manage-support-copy { max-width: none; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.manage-delay-group { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-subtle); }
+.manage-delay-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.manage-delay-heading strong { flex: 0 0 auto; margin-left: auto; text-align: right; font-size: 15px; font-weight: var(--font-heavy, 900); letter-spacing: -0.02em; color: var(--ink-strong); }
+.manage-delay-heading .eyebrow { min-width: 0; }
+.manage-delay-group .manage-option-grid { margin-top: 12px; }
+
 .manage-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
 .manage-option-pill { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 18px); padding: 13px; background: #f8fafc; color: var(--text-primary); text-align: left; transition: transform var(--motion-fast, 140ms) var(--ease-standard, ease), box-shadow var(--motion-fast, 140ms) ease, border-color var(--motion-fast, 140ms) ease; }
 .manage-option-pill:active { transform: scale(.992); }
@@ -111,6 +120,8 @@
   .manage-color-grid { grid-template-columns: 1fr; }
   .manage-card-header { flex-direction: column; align-items: flex-start; }
   .manage-card-header .cr-card-actions { align-self: flex-end; margin-top: -42px; }
+  .manage-watch-card .manage-card-header { flex-direction: row; align-items: flex-start; }
+  .manage-watch-card .manage-card-header .cr-card-actions { align-self: flex-start; margin-top: 0; }
   .cr-action-row { align-items: flex-start; }
   .manage-row-actions { gap: 10px; }
 }
