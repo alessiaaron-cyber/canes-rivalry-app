@@ -58,6 +58,12 @@ window.CR = window.CR || {};
     return selectedUser ? userDisplayName(selectedUser) : (draft?.firstPicker || current?.season?.firstPicker || 'TBD');
   }
 
+  async function reloadManageLiveData() {
+    if (typeof CR.hydrateManageData === 'function') {
+      await CR.hydrateManageData();
+    }
+  }
+
   function currentProfileDraft() {
     const profile = CR.currentProfile || {};
     return {
@@ -372,13 +378,26 @@ window.CR = window.CR || {};
         const name = String(draft.name || '').trim();
         if (!name) { CR.showToast?.({ message: 'Add a player name first' }); return; }
         const payload = { name, position: draft.position || 'F' };
-        if (current.editingRosterPlayerId) {
-          const player = current.roster.find((item) => item.id === current.editingRosterPlayerId);
-          if (player) Object.assign(player, payload);
-          resetRosterDraft(); current.rosterSheetOpen = false; rerender(); CR.showToast?.({ message: `${name} updated` }); return;
+        try {
+          CR.ui?.setActionBusy?.(savePlayer, true, { label: 'Saving…' });
+          if (current.editingRosterPlayerId) {
+            await CR.manageDataService.updatePlayer(current.editingRosterPlayerId, payload);
+            resetRosterDraft(); current.rosterSheetOpen = false; rerender();
+            await reloadManageLiveData();
+            CR.showToast?.({ message: `${name} updated` });
+            return;
+          }
+          await CR.manageDataService.createPlayer(payload);
+          resetRosterDraft(); current.rosterSheetOpen = false; rerender();
+          await reloadManageLiveData();
+          CR.showToast?.({ message: `${name} added` });
+        } catch (error) {
+          console.error('Player save failed', error);
+          CR.showToast?.({ message: error?.message || 'Could not save player', tier: 'warning' });
+        } finally {
+          CR.ui?.setActionBusy?.(savePlayer, false);
         }
-        current.roster.push({ id: makeId('player'), ...payload, active: true });
-        resetRosterDraft(); current.rosterSheetOpen = false; rerender(); CR.showToast?.({ message: `${name} added` }); return;
+        return;
       }
 
       const openGameSheet = event.target.closest('[data-manage-open-game-sheet]');
@@ -449,7 +468,22 @@ window.CR = window.CR || {};
       const confirmRemove = event.target.closest('[data-manage-confirm-remove]');
       if (confirmRemove) {
         const item = current.confirmRemove;
-        if (item?.type === 'player') current.roster = current.roster.filter((player) => player.id !== item.id);
+        if (item?.type === 'player') {
+          try {
+            CR.ui?.setActionBusy?.(confirmRemove, true, { label: 'Removing…' });
+            await CR.manageDataService.deactivatePlayer(item.id);
+            current.confirmRemove = null;
+            rerender();
+            await reloadManageLiveData();
+            CR.showToast?.({ message: 'Player removed from active roster' });
+          } catch (error) {
+            console.error('Player remove failed', error);
+            CR.showToast?.({ message: error?.message || 'Could not remove player', tier: 'warning' });
+          } finally {
+            CR.ui?.setActionBusy?.(confirmRemove, false);
+          }
+          return;
+        }
         if (item?.type === 'game') {
           const game = current.schedule.find((entry) => entry.id === item.id);
           if (game?.locked) { current.confirmRemove = null; rerender(); CR.showToast?.({ message: 'Finalized games are protected from deletion', tier: 'warning' }); return; }
