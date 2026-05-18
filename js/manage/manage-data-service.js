@@ -130,6 +130,56 @@ window.CR = window.CR || {};
     };
   }
 
+  async function createPlayer({ name, position }) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('players')
+      .insert({
+        player_name: String(name || '').trim(),
+        position: position || 'F',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .select('id, player_name, position, is_active, updated_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizePlayer(result.data);
+  }
+
+  async function updatePlayer(id, { name, position }) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('players')
+      .update({
+        player_name: String(name || '').trim(),
+        position: position || 'F',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, player_name, position, is_active, updated_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizePlayer(result.data);
+  }
+
+  async function deactivatePlayer(id) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('players')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, player_name, position, is_active, updated_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizePlayer(result.data);
+  }
+
   function mergeIntoState(state, live) {
     if (!state || !live) return state;
     if (Array.isArray(live.players) && live.players.length) state.roster = live.players;
@@ -151,5 +201,5 @@ window.CR = window.CR || {};
     return state;
   }
 
-  CR.manageDataService = { load, mergeIntoState };
+  CR.manageDataService = { load, mergeIntoState, createPlayer, updatePlayer, deactivatePlayer };
 })();
