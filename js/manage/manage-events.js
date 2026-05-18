@@ -45,6 +45,19 @@ window.CR = window.CR || {};
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function userDisplayName(user) {
+    return user?.displayName || user?.display_name || user?.username || 'Player';
+  }
+
+  function userById(id, current = state()) {
+    return (current?.users || []).find((user) => String(user.id || '') === String(id || '')) || null;
+  }
+
+  function pickerLabelFromDraft(draft, current = state()) {
+    const selectedUser = userById(draft?.firstPickerUserId, current);
+    return selectedUser ? userDisplayName(selectedUser) : (draft?.firstPicker || current?.season?.firstPicker || 'TBD');
+  }
+
   function currentProfileDraft() {
     const profile = CR.currentProfile || {};
     return {
@@ -155,7 +168,14 @@ window.CR = window.CR || {};
 
   function resetScheduleDraft() {
     const current = state();
-    current.scheduleDraft = { date: '', opponent: '', type: 'Regular', firstPicker: current.season.firstPicker };
+    const firstUser = (current.users || [])[0] || null;
+    current.scheduleDraft = {
+      date: '',
+      opponent: '',
+      type: 'Regular Season',
+      firstPicker: firstUser ? userDisplayName(firstUser) : current.season.firstPicker,
+      firstPickerUserId: firstUser?.id || ''
+    };
     current.editingScheduleGameId = null;
   }
 
@@ -281,7 +301,12 @@ window.CR = window.CR || {};
       const rosterInput = event.target.closest('[data-manage-roster-input]');
       if (rosterInput) { current.rosterDraft[rosterInput.dataset.manageRosterInput] = rosterInput.value; return; }
       const scheduleInput = event.target.closest('[data-manage-schedule-input]');
-      if (scheduleInput) current.scheduleDraft[scheduleInput.dataset.manageScheduleInput] = event.target.value;
+      if (scheduleInput) {
+        current.scheduleDraft[scheduleInput.dataset.manageScheduleInput] = event.target.value;
+        if (scheduleInput.dataset.manageScheduleInput === 'firstPickerUserId') {
+          current.scheduleDraft.firstPicker = pickerLabelFromDraft(current.scheduleDraft, current);
+        }
+      }
     });
 
     root.addEventListener('click', async (event) => {
@@ -368,7 +393,13 @@ window.CR = window.CR || {};
         if (game) {
           closeAllSheets();
           current.editingScheduleGameId = game.id;
-          current.scheduleDraft = { date: game.date, opponent: game.opponent, type: game.type, firstPicker: game.firstPicker };
+          current.scheduleDraft = {
+            date: game.date,
+            opponent: game.opponent,
+            type: game.type,
+            firstPicker: game.firstPicker,
+            firstPickerUserId: game.firstPickerUserId || ''
+          };
           current.scheduleSheetOpen = true;
           rerender();
         }
@@ -381,13 +412,19 @@ window.CR = window.CR || {};
         const opponent = String(draft.opponent || '').trim().toUpperCase();
         const date = String(draft.date || '').trim();
         if (!date || !opponent) { CR.showToast?.({ message: 'Add a date and opponent first' }); return; }
-        const payload = { date, opponent, type: draft.type || 'Regular', firstPicker: draft.firstPicker || current.season.firstPicker };
+        const payload = {
+          date,
+          opponent,
+          type: draft.type || 'Regular Season',
+          firstPicker: pickerLabelFromDraft(draft, current),
+          firstPickerUserId: draft.firstPickerUserId || null
+        };
         if (current.editingScheduleGameId) {
           const game = current.schedule.find((item) => item.id === current.editingScheduleGameId);
           if (game) Object.assign(game, payload);
           resetScheduleDraft(); current.scheduleSheetOpen = false; rerender(); CR.showToast?.({ message: `${opponent} game updated` }); return;
         }
-        current.schedule.push({ id: makeId('game'), ...payload });
+        current.schedule.push({ id: makeId('game'), ...payload, status: 'Scheduled', draftStatus: 'open', locked: false });
         resetScheduleDraft(); current.scheduleSheetOpen = false; rerender(); CR.showToast?.({ message: `${opponent} game added` }); return;
       }
 
@@ -401,7 +438,8 @@ window.CR = window.CR || {};
       const confirmRemoveGame = event.target.closest('[data-manage-confirm-remove-game]');
       if (confirmRemoveGame) {
         const game = current.schedule.find((item) => item.id === confirmRemoveGame.dataset.manageConfirmRemoveGame);
-        if (game) { closeAllSheets(); current.confirmRemove = { type: 'game', id: game.id, label: `${game.date} · ${game.opponent}` }; rerender(); }
+        if (game?.locked) { CR.showToast?.({ message: 'Finalized games are protected from deletion', tier: 'warning' }); return; }
+        if (game) { closeAllSheets(); current.confirmRemove = { type: 'game', id: game.id, label: `${game.date || 'Date TBD'} · ${game.opponent}` }; rerender(); }
         return;
       }
 
@@ -412,7 +450,11 @@ window.CR = window.CR || {};
       if (confirmRemove) {
         const item = current.confirmRemove;
         if (item?.type === 'player') current.roster = current.roster.filter((player) => player.id !== item.id);
-        if (item?.type === 'game') current.schedule = current.schedule.filter((game) => game.id !== item.id);
+        if (item?.type === 'game') {
+          const game = current.schedule.find((entry) => entry.id === item.id);
+          if (game?.locked) { current.confirmRemove = null; rerender(); CR.showToast?.({ message: 'Finalized games are protected from deletion', tier: 'warning' }); return; }
+          current.schedule = current.schedule.filter((game) => game.id !== item.id);
+        }
         current.confirmRemove = null;
         rerender();
         CR.showToast?.({ message: 'Removed' });
@@ -424,7 +466,7 @@ window.CR = window.CR || {};
       const closeStartSeason = event.target.closest('[data-manage-close-start-season]');
       if (closeStartSeason) { current.startSeasonOpen = false; rerender(); return; }
       const newSeasonPicker = event.target.closest('[data-manage-new-season-picker]');
-      if (newSeasonPicker) { current.newSeasonDraft.firstPicker = newSeasonPicker.dataset.manageNewSeasonPicker; rerender(); return; }
+      if (newSeasonPicker) { current.newSeasonDraft.firstPickerUserId = newSeasonPicker.dataset.manageNewSeasonPicker; current.newSeasonDraft.firstPicker = newSeasonPicker.dataset.pickerLabel || current.newSeasonDraft.firstPicker; rerender(); return; }
       const confirmStartSeason = event.target.closest('[data-manage-confirm-start-season]');
       if (confirmStartSeason) {
         const draft = current.newSeasonDraft;
@@ -432,18 +474,17 @@ window.CR = window.CR || {};
         if (!seasonLabel) { CR.showToast?.({ message: 'Add a season name first' }); return; }
         current.season.activeSeasonLabel = seasonLabel;
         current.season.firstPicker = draft.firstPicker;
-        current.season.playoffMode = false;
         current.schedule = [];
         resetScheduleDraft(); current.startSeasonOpen = false; rerender(); CR.showToast?.({ message: `${seasonLabel} season started` }); return;
       }
 
       const editScoring = event.target.closest('[data-manage-edit-scoring]');
-      if (editScoring) { closeAllSheets(); current.scoringEditOpen = true; rerender(); return; }
+      if (editScoring) { closeAllSheets(); current.scoringEditProfile = editScoring.dataset.manageEditScoring || 'Regular'; current.scoringEditOpen = true; rerender(); return; }
       const closeScoring = event.target.closest('[data-manage-close-scoring]');
-      if (closeScoring) { current.scoringEditOpen = false; rerender(); return; }
+      if (closeScoring) { current.scoringEditOpen = false; current.scoringEditProfile = null; rerender(); return; }
       const scoreStep = event.target.closest('[data-manage-score-step]');
       if (scoreStep) {
-        const profile = current.season.scoringProfile;
+        const profile = current.scoringEditProfile || 'Regular';
         const key = scoreStep.dataset.manageScoreStep;
         const delta = Number(scoreStep.dataset.step || 0);
         const scoring = current.season.scoringSystems?.[profile];
