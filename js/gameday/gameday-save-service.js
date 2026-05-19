@@ -16,6 +16,25 @@ window.CR = window.CR || {};
     return CR.gameDayStateUtils || {};
   }
 
+  function pickLabel(value) {
+    const helper = stateUtils().pickLabel;
+    if (typeof helper === 'function') return helper(value);
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return pickLabel(parsed);
+        } catch (error) {
+          return trimmed;
+        }
+      }
+      return trimmed;
+    }
+    if (!value || typeof value !== 'object') return '';
+    return value.player || value.name || value.playerName || value.player_name || '';
+  }
+
   function users() {
     const source = { users: CR.gameDay?.users };
     const resolved = stateUtils().users?.(source) || CR.identity?.getUsers?.(source) || [];
@@ -89,17 +108,18 @@ window.CR = window.CR || {};
   }
 
   function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '', index = 0) {
+    const cleanPlayerName = pickLabel(playerName);
     return {
       game_id: gameId,
       owner: ownerValue(ownerProfile, index),
       owner_user_id: ownerProfile?.id || null,
       pick_slot: pickSlot,
-      player_name: playerName || '',
-      original_pick_text: playerName || null,
+      player_name: cleanPlayerName,
+      original_pick_text: cleanPlayerName || null,
       goals: 0,
       assists: 0,
       points: 0,
-      picked_by_user_id: playerName ? (currentUserId() || null) : null,
+      picked_by_user_id: cleanPlayerName ? (currentUserId() || null) : null,
       updated_by_user_id: currentUserId() || null,
       updated_at: new Date().toISOString()
     };
@@ -125,9 +145,10 @@ window.CR = window.CR || {};
   }
 
   async function saveDraftPick(gameId, playerName) {
+    const cleanPlayerName = pickLabel(playerName);
     if (!hasScheduledGame()) throw new Error('Picks cannot be made until a game is scheduled.');
     if (!gameId) throw new Error('No active game is available for saving picks.');
-    if (!playerName) throw new Error('Choose a player first.');
+    if (!cleanPlayerName) throw new Error('Choose a player first.');
     const draft = CR.gameDay?.draft || {};
     const pickNumber = Number(draft.currentPickNumber || 1);
     const ownerProfile = draftTurnProfile(pickNumber);
@@ -135,12 +156,12 @@ window.CR = window.CR || {};
     if (!profileDisplayName(ownerProfile)) throw new Error('Could not determine current picker.');
     if (!userId || ownerProfile.id !== userId) throw new Error(`It is ${profileDisplayName(ownerProfile)}'s turn to pick.`);
     const db = await CR.getSupabase();
-    const existingRes = await db.from('picks').select('id').eq('game_id', gameId).neq('player_name', '').ilike('player_name', playerName).limit(1);
+    const existingRes = await db.from('picks').select('id').eq('game_id', gameId).neq('player_name', '').ilike('player_name', cleanPlayerName).limit(1);
     if (existingRes.error) throw existingRes.error;
     if ((existingRes.data || []).length) throw new Error('That player has already been picked.');
     const slot = draftPickSlot(pickNumber);
     const ownerIndex = users().findIndex((profile) => String(profile.id || '') === String(ownerProfile?.id || ''));
-    const row = rowForSlot(gameId, ownerProfile, slot, playerName, Math.max(0, ownerIndex));
+    const row = rowForSlot(gameId, ownerProfile, slot, cleanPlayerName, Math.max(0, ownerIndex));
     row.picked_by_user_id = userId;
     const upsertRes = await db.from('picks').upsert(row, { onConflict: 'game_id,owner_user_id,pick_slot' }).select('*').single();
     if (upsertRes.error) throw upsertRes.error;
