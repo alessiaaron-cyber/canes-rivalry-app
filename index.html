@@ -2,55 +2,87 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+
   <title>Canes Rivalry</title>
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#c8102e" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/base.css?v=v2base7" />
-  <link rel="stylesheet" href="css/layout.css?v=v2layout4" />
-  <link rel="stylesheet" href="css/components.css?v=v2components11" />
-  <link rel="stylesheet" href="css/gameday/gameday.css?v=v2gameday16" />
-  <link rel="stylesheet" href="css/history/history.css?v=v2history8" />
-  <link rel="stylesheet" href="css/manage/manage.css?v=v2manage12" />
+
+  <meta name="theme-color" content="#f8fafc" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Canes Rivalry" />
+
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <link rel="icon" type="image/png" href="./assets/app-icon.png?v=v2gameday3" />
+  <link rel="apple-touch-icon" href="./assets/app-icon.png?v=v2gameday3" />
+
+  <link rel="stylesheet" href="css/app-shell.css?v=shell19" />
+  <link rel="stylesheet" href="css/app-foundation.css?v=foundation15" />
+  <link rel="stylesheet" href="css/app-semantics.css?v=semantics3" />
+  <link rel="stylesheet" href="css/app-icons.css?v=icons1" />
+  <link rel="stylesheet" href="css/auth.css?v=auth5" />
+  <link rel="stylesheet" href="css/gameday/gameday.css?v=v2gameday25" />
+  <link rel="stylesheet" href="css/gameday/gameday-overrides.css?v=v2gameday-override12" />
+  <link rel="stylesheet" href="css/gameday/gameday-tokens.css?v=v2gameday-tokens5" />
+  <link rel="stylesheet" href="css/gameday/gameday-refinements.css?v=v2gameday-refine5" />
+  <link rel="stylesheet" href="css/gameday/gameday-motion.css?v=v2gameday-motion6" />
+  <link rel="stylesheet" href="css/history/history.css?v=v2history45" />
+  <link rel="stylesheet" href="css/manage/manage.css?v=v2manage31" />
 </head>
 <body>
-  <div id="app"></div>
+  <div id="appRoot"></div>
 
-  <template id="appTemplate">
+  <template id="appShellTemplate">
+    <div class="sync-flash" id="syncFlash"></div>
+    <div class="pull-refresh" id="pullRefresh" aria-hidden="true">
+      <div class="pull-refresh-indicator">
+        <span class="pull-refresh-icon">↻</span>
+        <span class="pull-refresh-label" id="pullRefreshLabel">Pull to refresh</span>
+      </div>
+    </div>
+
     <div class="app-shell">
-      <header class="topbar">
-        <div class="brand-lockup">
-          <div class="brand-mark">🏒</div>
-          <div>
-            <div class="eyebrow">Canes Rivalry</div>
-            <h1>Game Day</h1>
+      <header class="app-header">
+        <div>
+          <div class="app-header-topline">
+            <span class="eyebrow">Canes Rivalry</span>
+            <span class="global-live-indicator is-hidden" id="globalLiveIndicator"><span class="global-live-dot"></span>Live</span>
+            <span class="global-mock-indicator is-hidden" id="globalMockIndicator">Mock</span>
           </div>
+          <h1 id="pageTitle">Game Day</h1>
         </div>
 
-        <div class="topbar-actions">
-          <button id="installButton" class="ghost-button" hidden>Install</button>
-          <button id="accountButton" class="avatar-button" aria-label="Account"></button>
+        <div class="app-header-actions">
+          <div class="account-chip" id="accountChip">
+            <div class="account-chip-avatar" id="accountChipAvatar">C</div>
+            <div class="account-chip-copy">
+              <div class="account-chip-name" id="accountChipName">Canes Rivalry</div>
+              <div class="account-chip-meta" id="accountChipMeta">Signed in</div>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main id="tabContent" class="tab-content"></main>
+      <section class="app-view active-view" id="gameDayView" data-view="gameday">
+        <main class="content-stack gameday-stack" id="gameDayContent"></main>
+      </section>
 
-      <nav class="bottom-nav">
-        <button class="nav-item active" data-tab="gameday">
-          <span>🏒</span>
-          <strong>Game Day</strong>
-        </button>
-        <button class="nav-item" data-tab="history">
-          <span>📚</span>
-          <strong>History</strong>
-        </button>
-        <button class="nav-item" data-tab="manage">
-          <span>⚙️</span>
-          <strong>Manage</strong>
-        </button>
-      </nav>
+      <section class="app-view" id="historyView" data-view="history"></section>
+
+      <section class="app-view" id="manageView" data-view="manage">
+        <main class="content-stack">
+          <div id="manageContent"></div>
+        </main>
+      </section>
     </div>
+
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="active" data-tab="gameday" type="button">Game Day</button>
+      <button data-tab="history" type="button">History</button>
+      <button data-tab="manage" type="button">Manage</button>
+    </nav>
 
     <div class="toast-stack">
       <div id="toast" class="toast">Preview event</div>
