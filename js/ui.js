@@ -160,13 +160,7 @@ window.CR.showToast = (input) => {
   window.__toastTimer = setTimeout(() => toast.classList.remove('show'), prefersReducedMotion ? 1800 : 2400);
 };
 
-window.CR.flashSync = () => {
-  const syncFlash = window.CR.$('#syncFlash');
-  syncFlash?.classList.remove('show');
-  void syncFlash?.offsetWidth;
-  syncFlash?.classList.add('show');
-  setTimeout(() => syncFlash?.classList.remove('show'), 720);
-};
+window.CR.flashSync = () => {};
 
 window.CR.initPullRefresh = () => {
   const indicator = window.CR.$('#pullRefresh');
@@ -266,7 +260,6 @@ window.CR.initPullRefresh = () => {
       indicator.classList.remove('ready');
       if (label) label.textContent = 'Refreshing…';
       try {
-        window.CR.flashSync?.();
         window.CR.showToast?.('Refreshing rivalry data');
         if (typeof window.CR.refreshApp === 'function') await window.CR.refreshApp();
         else window.location.reload();
