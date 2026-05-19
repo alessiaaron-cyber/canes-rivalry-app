@@ -2,10 +2,12 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const INTERVAL_MS = 60 * 1000;
+  const INTERVAL_MS = 25 * 1000;
   const SERVICE_WORKER_READY_TIMEOUT_MS = 1800;
+  const ACTIVITY_THROTTLE_MS = 8000;
   let timer = null;
   let lastStatus = null;
+  let lastActivityWriteMs = 0;
 
   function canCheckPush() {
     return 'serviceWorker' in navigator && 'PushManager' in window;
@@ -115,40 +117,54 @@ window.CR = window.CR || {};
     };
   }
 
-  async function markActive() {
-    if (document.hidden) return null;
+  async function updateRows(queryBuilder, payload) {
+    const result = await queryBuilder.select('id, last_seen_at');
+    if (result.error) throw result.error;
+    return Array.isArray(result.data) ? result.data : [];
+  }
+
+  async function markActive(options = {}) {
+    if (document.hidden && !options.force) return null;
 
     try {
       const email = await getEmail();
       const userId = await getUserId();
-      const endpoint = await getEndpoint();
-      if (!endpoint || (!email && !userId)) return null;
+      const endpoint = await getEndpoint().catch(() => '');
+      if (!email && !userId && !endpoint) return null;
 
       const db = await CR.getSupabase();
       const payload = { last_seen_at: new Date().toISOString() };
-      let result = null;
+      let updatedRows = [];
 
-      if (userId) {
-        result = await db
-          .from('push_subscriptions')
-          .update(payload)
-          .eq('endpoint', endpoint)
-          .eq('user_id', userId);
+      if (endpoint) {
+        updatedRows = await updateRows(
+          db.from('push_subscriptions').update(payload).eq('endpoint', endpoint),
+          payload
+        );
       }
 
-      if (!result?.error && email) {
-        result = await db
-          .from('push_subscriptions')
-          .update(payload)
-          .eq('endpoint', endpoint)
-          .eq('user_email', email);
+      if (!updatedRows.length && userId) {
+        updatedRows = await updateRows(
+          db.from('push_subscriptions').update(payload).eq('user_id', userId),
+          payload
+        );
       }
 
-      if (result?.error) throw result.error;
+      if (!updatedRows.length && email) {
+        updatedRows = await updateRows(
+          db.from('push_subscriptions').update(payload).ilike('user_email', email),
+          payload
+        );
+      }
+
+      if (!updatedRows.length) {
+        throw new Error('No push subscription rows matched active heartbeat update');
+      }
 
       lastStatus = {
         ok: true,
         lastSeenAt: payload.last_seen_at,
+        updatedRows: updatedRows.length,
         error: ''
       };
 
@@ -158,15 +174,23 @@ window.CR = window.CR || {};
       lastStatus = {
         ok: false,
         lastSeenAt: lastStatus?.lastSeenAt || null,
+        updatedRows: 0,
         error: error?.message || String(error || 'Active device update failed')
       };
       return lastStatus;
     }
   }
 
+  function markActiveFromActivity() {
+    const now = Date.now();
+    if (now - lastActivityWriteMs < ACTIVITY_THROTTLE_MS) return;
+    lastActivityWriteMs = now;
+    markActive();
+  }
+
   function start() {
     if (timer) return;
-    markActive();
+    markActive({ force: true });
     timer = setInterval(markActive, INTERVAL_MS);
   }
 
@@ -181,10 +205,12 @@ window.CR = window.CR || {};
     CR.__activeDeviceBound = true;
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) markActive();
+      if (!document.hidden) markActive({ force: true });
     });
-    window.addEventListener('focus', markActive);
-    window.addEventListener('pageshow', markActive);
+    window.addEventListener('focus', () => markActive({ force: true }));
+    window.addEventListener('pageshow', () => markActive({ force: true }));
+    window.addEventListener('pointerdown', markActiveFromActivity, { passive: true });
+    window.addEventListener('touchstart', markActiveFromActivity, { passive: true });
   }
 
   CR.activeDeviceService = {
