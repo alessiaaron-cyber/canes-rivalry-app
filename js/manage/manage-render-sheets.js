@@ -15,6 +15,20 @@ window.CR = window.CR || {};
     return String(draft?.firstPickerUserId || '') === String(user?.id || '') || String(draft?.firstPicker || '') === displayName || String(draft?.firstPicker || '') === String(user?.username || '');
   }
 
+  function renderProfileSheet(state) {
+    if (!state.profileEditOpen) return '';
+    const profile = CR.currentProfile || {};
+    const user = CR.currentUser || {};
+    const draft = state.profileDraft || { displayName: profile.display_name || profile.username || '', colorHex: profile.color_hex || '#111827' };
+    const selectedHex = String(draft.colorHex || profile.color_hex || '#111827').toLowerCase();
+    const options = state.profileColorOptions || [];
+    const colorButtons = options.map((option) => {
+      const active = String(option.hex || '').toLowerCase() === selectedHex;
+      return `<button class="manage-edit-option ${active ? 'is-active' : ''}" type="button" data-manage-profile-color="${escapeHtml(option.hex)}"><span>${escapeHtml(option.label)}</span>${active ? '<strong>Selected</strong>' : ''}</button>`;
+    }).join('');
+    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="manageProfileTitle"><div class="manage-edit-backdrop" data-manage-close-profile></div><section class="manage-edit-card">${renderSheetHeader('Profile', 'Edit profile', 'Update your display name and rivalry color. Email is read-only.', 'data-manage-close-profile')}<label class="cr-form-field"><span class="eyebrow">Email</span><input class="cr-input" value="${escapeHtml(user.email || profile.email || '—')}" readonly aria-readonly="true" /></label><label class="cr-form-field"><span class="eyebrow">Display name</span><input class="cr-input" value="${escapeHtml(draft.displayName || '')}" placeholder="Display name" data-manage-profile-input="displayName" /></label><div class="manage-edit-options manage-edit-options-spaced">${colorButtons}</div><button class="cr-button save" type="button" data-manage-save-profile>Save Profile</button></section></div>`;
+  }
+
   function renderRosterSheet(state) {
     if (!state.rosterSheetOpen) return '';
     const isEditing = Boolean(state.editingRosterPlayerId);
@@ -66,6 +80,7 @@ window.CR = window.CR || {};
   }
 
   CR.manageRenderSheets = {
+    renderProfileSheet,
     renderRosterSheet,
     renderScheduleSheet,
     renderConfirmSheet,
