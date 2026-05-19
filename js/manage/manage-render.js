@@ -55,28 +55,53 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     `;
   }
 
-  function renderProfileSummary() {
+  function initialsFromName(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'C';
+    if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+    return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+  }
+
+  function roleLabel(profile) {
+    const role = String(profile?.role || '').trim().toLowerCase();
+    return role ? `${role.charAt(0).toUpperCase()}${role.slice(1)}` : 'Member';
+  }
+
+  function renderAccountPanel() {
     const utils = CR.manageRenderUtils || {};
-    const renderCardHeader = utils.renderCardHeader || fallback('renderCardHeader');
     const escapeHtml = utils.escapeHtml || CR.ui?.escapeHtml || ((value) => String(value ?? ''));
     const profile = CR.currentProfile || {};
     const user = CR.currentUser || {};
-    const displayName = profile.display_name || profile.username || 'Player';
-    const username = profile.username ? `@${profile.username}` : 'Profile';
-    const color = profile.color_hex || '#111827';
+    const displayName = profile.display_name || profile.username || 'Canes Rivalry';
+    const username = profile.username ? `@${profile.username}` : 'Authenticated session active';
+    const role = roleLabel(profile);
+    const email = user.email || profile.email || '—';
+    const avatarClass = CR.identity?.getAvatarClass?.(profile.id || profile.display_name || profile.username) || 'avatar-primary';
 
     return `
-      <section class="panel-card manage-card manage-profile-card">
-        ${renderCardHeader('Profile', username, 'Personalize your rivalry identity and display color.', { className: 'neutral', label: 'Account' })}
-        <div class="account-panel-body manage-profile-summary-body">
-          <div class="account-panel-avatar" style="--profile-color:${escapeHtml(color)}">${escapeHtml(String(displayName).charAt(0).toUpperCase())}</div>
+      <section class="panel-card account-panel manage-card">
+        <div class="panel-header compact-header">
+          <div>
+            <div class="eyebrow">Account</div>
+            <h2>${escapeHtml(displayName)}</h2>
+          </div>
+          <span class="panel-tag dark">${escapeHtml(role)}</span>
+        </div>
+
+        <div class="account-panel-body">
+          <div class="account-panel-avatar ${escapeHtml(avatarClass)}">${escapeHtml(initialsFromName(displayName))}</div>
+
           <div class="account-panel-copy">
             <div class="account-panel-name">${escapeHtml(displayName)}</div>
-            <div class="account-panel-meta">${escapeHtml(profile.role || 'member')}</div>
-            <div class="account-panel-email">${escapeHtml(user.email || profile.email || '—')}</div>
+            <div class="account-panel-meta">${escapeHtml(username)}</div>
+            <div class="account-panel-email">${escapeHtml(email)}</div>
           </div>
         </div>
-        <button class="mini-button cr-button secondary" id="manageEditProfileButtonInline" type="button" data-manage-open-profile-editor>Edit Profile</button>
+
+        <div class="account-panel-actions">
+          <button class="mini-button cr-button secondary" type="button" data-manage-open-profile-editor>Edit Profile</button>
+          <button class="mini-button cr-button signout" type="button" data-manage-sign-out>Sign out</button>
+        </div>
       </section>
     `;
   }
@@ -99,7 +124,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
 
     return `
       <div class="content-stack manage-stack">
-        ${renderProfileSummary()}
+        ${renderAccountPanel()}
         ${renderWatchExperience(state)}
         ${renderTempNotificationTest(state)}
         ${renderSeasonSetup(state)}
