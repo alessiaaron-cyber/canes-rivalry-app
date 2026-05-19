@@ -26,7 +26,10 @@ window.CR = window.CR || {};
   function draftContext() {
     const game = CR.gameDay?.game || {};
     const draft = CR.gameDay?.draft || {};
+    const context = { ...game, ...draft };
     return {
+      loadedAt: new Date().toISOString(),
+      script: 'gameday-draft-debug v2draftdebug2',
       fromGame: {
         first_picker: game.first_picker,
         first_picker_user_id: game.first_picker_user_id,
@@ -36,10 +39,10 @@ window.CR = window.CR || {};
       },
       fromDraft: draft,
       users: userSummary(),
-      orderedUsers: CR.gameDayDraftService?.orderedUsers?.(CR.gameDay?.users || [], { ...game, ...draft }),
-      draftSlots: CR.gameDayDraftService?.draftSlots?.(CR.gameDay?.users || [], { ...game, ...draft }),
-      firstUnfilledSlot: CR.gameDayDraftService?.firstUnfilledSlot?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [], { ...game, ...draft }),
-      computedDraft: CR.gameDayDraftService?.computeDraftState?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [], { ...game, ...draft }),
+      orderedUsers: CR.gameDayDraftService?.orderedUsers?.(CR.gameDay?.users || [], context),
+      draftSlots: CR.gameDayDraftService?.draftSlots?.(CR.gameDay?.users || [], context),
+      firstUnfilledSlot: CR.gameDayDraftService?.firstUnfilledSlot?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [], context),
+      computedDraft: CR.gameDayDraftService?.computeDraftState?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [], context),
       pregame: CR.gameDay?.pregame || {}
     };
   }
@@ -47,30 +50,34 @@ window.CR = window.CR || {};
   function renderPanel() {
     const existing = $('#draftDebugPanel');
     if (existing) existing.remove();
-    const container = $('#gameDayContent');
-    if (!container) return;
+    const container = $('#gameDayContent') || document.body;
     const panel = document.createElement('details');
     panel.id = 'draftDebugPanel';
-    panel.style.cssText = 'margin:16px 0;padding:12px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:420px;';
-    panel.innerHTML = `<summary style="font-weight:800;cursor:pointer;">Debug Draft State</summary><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;">${safe(draftContext())}</pre>`;
+    panel.open = true;
+    panel.style.cssText = 'margin:16px 0 96px;padding:12px;border:2px solid #c8102e;border-radius:14px;background:#fff;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:70vh;position:relative;z-index:9999;';
+    panel.innerHTML = `<summary style="font-weight:900;cursor:pointer;">Debug Draft State</summary><pre style="white-space:pre-wrap;font-size:11px;line-height:1.35;">${safe(draftContext())}</pre>`;
     container.appendChild(panel);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function installButton() {
+    if ($('#draftDebugButton')) return;
+    const button = document.createElement('button');
+    button.id = 'draftDebugButton';
+    button.type = 'button';
+    button.textContent = 'Draft Debug';
+    button.style.cssText = 'position:fixed;right:12px;bottom:86px;z-index:10000;border:0;border-radius:999px;background:#111827;color:white;font-weight:800;padding:10px 12px;box-shadow:0 10px 24px rgba(0,0,0,.25);';
+    button.addEventListener('click', renderPanel);
+    document.body.appendChild(button);
   }
 
   function install() {
-    const originalRender = CR.renderGameDayState;
-    if (typeof originalRender === 'function' && !originalRender.__draftDebugWrapped) {
-      const wrapped = function(...args) {
-        const result = originalRender.apply(this, args);
-        window.setTimeout(renderPanel, 0);
-        return result;
-      };
-      wrapped.__draftDebugWrapped = true;
-      CR.renderGameDayState = wrapped;
-    }
-    window.setTimeout(renderPanel, 0);
+    installButton();
+    window.setTimeout(installButton, 1000);
   }
 
   document.addEventListener('DOMContentLoaded', install);
   window.setTimeout(install, 500);
-  CR.gameDayDraftDebug = { renderPanel, draftContext };
+  window.setTimeout(installButton, 2000);
+  CR.gameDayDraftDebug = { renderPanel, draftContext, installButton };
 })();
