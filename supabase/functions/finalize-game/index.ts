@@ -568,7 +568,7 @@ Deno.serve(async (req) => {
     const finalWinnerLegacy = legacyWinnerKey(winnerProfile);
     const recap = buildRecap(game, winnerProfile, slot1, slot2, slot1Points, slot2Points);
 
-    const { error: updateError } = await serviceDb
+    const { data: finalizedGame, error: updateError } = await serviceDb
       .from("games")
       .update({
         status: "Final",
@@ -580,9 +580,38 @@ Deno.serve(async (req) => {
         last_synced_at: new Date().toISOString(),
       })
       .eq("id", gameId)
-      .neq("status", "Final");
+      .neq("status", "Final")
+      .select("id")
+      .maybeSingle();
 
     if (updateError) throw updateError;
+
+    if (!finalizedGame) {
+      return json({
+        ok: true,
+        alreadyFinal: true,
+        raceProtected: true,
+        authorizedVia: auth.via,
+        game_id: gameId,
+        scoringProfile,
+        scoringRulesUsed: scoring,
+        score: {
+          [slot1.id]: slot1Points,
+          [slot2.id]: slot2Points,
+        },
+        legacyScore: {
+          Aaron: aaronPoints,
+          Julie: juliePoints,
+        },
+        winner_user_id: winnerProfile?.id || null,
+        winner: finalWinnerLegacy,
+        recap,
+        notification: {
+          skipped: "already-final-race",
+          sent: false,
+        },
+      });
+    }
 
     for (const [userId, totalPoints] of totalsByUserId.entries()) {
       const { error: scoreError } = await serviceDb
