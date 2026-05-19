@@ -30,6 +30,10 @@ window.CR = window.CR || {};
     return profile.displayName || profile.display_name || profile.username || `Player ${index + 1}`;
   }
 
+  function ownerValue(profile = {}, index = 0) {
+    return profileDisplayName(profile, index) || profile.username || profileKey(profile, index);
+  }
+
   function profileById(id) {
     const lookup = String(id || '').trim();
     if (!lookup) return null;
@@ -87,6 +91,7 @@ window.CR = window.CR || {};
   function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '', index = 0) {
     return {
       game_id: gameId,
+      owner: ownerValue(ownerProfile, index),
       owner_user_id: ownerProfile?.id || null,
       pick_slot: pickSlot,
       player_name: playerName || '',
