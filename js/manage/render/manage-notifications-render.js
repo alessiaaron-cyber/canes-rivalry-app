@@ -54,6 +54,36 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     `;
   }
 
+  function renderTempNotificationTest(state) {
+    const { escapeHtml, renderCardHeader, renderHealthItem } = deps();
+    const test = state.tempNotificationTest || {};
+    const response = test.response ? JSON.stringify(test.response, null, 2) : 'Run a test to see the notify-rivalry-event response here.';
+    const badge = test.status === 'ok'
+      ? { className: 'success', label: 'ok' }
+      : test.status === 'error'
+        ? { className: 'warning', label: 'error' }
+        : test.status === 'running'
+          ? { className: 'neutral', label: 'Running…' }
+          : { className: 'neutral', label: 'Temporary' };
+
+    return `
+      <section class="panel-card manage-card manage-temp-notification-test-card">
+        ${renderCardHeader('TEMP Notification Test — Remove After Testing', 'Direct Edge Function test', 'Verify notify-rivalry-event from the logged-in Supabase session. Remove this card immediately after testing.', badge)}
+        <div class="manage-dev-button-row">
+          <button class="cr-button primary" type="button" data-manage-temp-notification-test="immediate">Immediate Test Push</button>
+          <button class="cr-button secondary" type="button" data-manage-temp-notification-test="delayed">Delayed Spoiler Test</button>
+        </div>
+        <div class="manage-health-grid">
+          ${renderHealthItem('Result', test.status || 'Not run', test.status === 'ok' ? 'good' : test.status === 'error' ? 'bad' : 'neutral')}
+          ${renderHealthItem('Routing', test.routingCounts || '—', test.routingCounts ? 'good' : 'neutral')}
+          ${renderHealthItem('Push', test.pushCounts || '—', test.pushCounts ? 'good' : 'neutral')}
+          ${renderHealthItem('Visible after', test.visibleAfter || '—', test.visibleAfter ? 'neutral' : 'neutral')}
+        </div>
+        <pre class="manage-json-output" data-manage-temp-notification-response>${escapeHtml(response)}</pre>
+      </section>
+    `;
+  }
+
   function labelForPermission(permission) {
     if (permission === 'granted') return 'Allowed';
     if (permission === 'denied') return 'Blocked';
@@ -98,6 +128,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
 
   CR.manageRenderModules.notifications = {
     renderWatchExperience,
+    renderTempNotificationTest,
     renderNotificationDeviceStatus
   };
 })();
