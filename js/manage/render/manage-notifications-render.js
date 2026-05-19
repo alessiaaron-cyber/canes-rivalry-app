@@ -54,42 +54,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     `;
   }
 
-  function renderTempNotificationTest(state) {
-    const { escapeHtml, renderCardHeader, renderHealthItem } = deps();
-    const test = state.tempNotificationTest || {};
-    const notification = test.response?.notification || {};
-    const routing = notification.routing || {};
-    const push = notification.push || {};
-    const routingCounts = test.routingCounts || (routing.recipients !== undefined ? `${routing.immediate_recipients || 0} immediate / ${routing.delayed_recipients || 0} delayed / ${routing.recipients || 0} total` : '');
-    const pushCounts = test.pushCounts || (push.sent !== undefined ? `${push.sent || 0} sent / ${push.attempted || 0} attempted` : '');
-    const visibleAfter = test.visibleAfter || notification.visible_after || '';
-    const response = test.response ? JSON.stringify(test.response, null, 2) : 'Run a test to see the notify-rivalry-event response here.';
-    const badge = test.status === 'ok'
-      ? { className: 'success', label: 'ok' }
-      : test.status === 'error'
-        ? { className: 'warning', label: 'error' }
-        : test.status === 'running'
-          ? { className: 'neutral', label: 'Running…' }
-          : { className: 'neutral', label: 'Temporary' };
-
-    return `
-      <section class="panel-card manage-card manage-temp-notification-test-card">
-        ${renderCardHeader('TEMP Notification Test — Remove After Testing', 'Direct Edge Function test', 'Verify notify-rivalry-event from the logged-in Supabase session. Remove this card immediately after testing.', badge)}
-        <div class="manage-dev-button-row">
-          <button class="cr-button primary" type="button" data-manage-temp-notification-test="immediate">Immediate Test Push</button>
-          <button class="cr-button secondary" type="button" data-manage-temp-notification-test="delayed">Delayed Spoiler Test</button>
-        </div>
-        <div class="manage-health-grid">
-          ${renderHealthItem('Result', test.status || 'Not run', test.status === 'ok' ? 'good' : test.status === 'error' ? 'bad' : 'neutral')}
-          ${renderHealthItem('Routing', routingCounts || '—', routingCounts ? 'good' : 'neutral')}
-          ${renderHealthItem('Push', pushCounts || '—', pushCounts ? 'good' : 'neutral')}
-          ${renderHealthItem('Visible after', visibleAfter || '—', visibleAfter ? 'neutral' : 'neutral')}
-        </div>
-        <pre class="manage-json-output" data-manage-temp-notification-response>${escapeHtml(response)}</pre>
-      </section>
-    `;
-  }
-
   function labelForPermission(permission) {
     if (permission === 'granted') return 'Allowed';
     if (permission === 'denied') return 'Blocked';
@@ -109,7 +73,10 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     const enabled = state.watchExperience?.pushEnabled !== false;
     const hasSwRegistration = Number(device.swDebug?.registrationCount || 0) > 0;
     const canPushHere = !previewMode && hasSwRegistration;
-    const badgeLabel = previewMode ? 'Preview' : device.loading ? 'Checking' : device.subscribed && device.permission === 'granted' && enabled ? 'Ready' : 'Review';
+    const ready = device.subscribed && device.permission === 'granted' && enabled;
+    const badgeLabel = previewMode ? 'Preview' : device.loading ? 'Checking' : ready ? 'Ready' : 'Review';
+    const enableDisabled = previewMode || device.supported === false;
+    const testDisabled = previewMode || !device.subscribed || device.permission !== 'granted';
     const message = previewMode
       ? 'Push testing is unavailable on htmlpreview.github.io because this preview host cannot use your app service worker. Test push after deploying V2 to GitHub Pages / the installed PWA.'
       : !hasSwRegistration
@@ -120,12 +87,16 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
 
     return `
       <section class="panel-card manage-card manage-notification-device-card">
-        ${renderCardHeader('Notification Status', 'Current device', 'Read-only status for this browser/PWA before test push tools are added.', { className: badgeLabel === 'Ready' ? 'success' : 'neutral', label: badgeLabel })}
+        ${renderCardHeader('Notification Status', 'Current device', 'Enable this browser/PWA for push alerts and send a safe test notification.', { className: ready ? 'success' : 'neutral', label: badgeLabel })}
         <div class="manage-health-grid">
           ${renderHealthItem('Browser support', device.supported ? 'Supported' : 'Unavailable', device.supported ? 'good' : 'neutral')}
           ${renderHealthItem('Permission', previewMode ? 'Preview only' : labelForPermission(device.permission), device.permission === 'granted' ? 'good' : device.permission === 'denied' ? 'bad' : 'neutral')}
           ${renderHealthItem('Push subscription', device.subscribed ? 'Subscribed' : canPushHere ? 'Missing' : 'Unavailable', device.subscribed ? 'good' : 'neutral')}
           ${renderHealthItem('Active heartbeat', device.lastActiveUpdateOk ? 'Active' : canPushHere ? 'Waiting' : 'Unavailable', device.lastActiveUpdateOk ? 'good' : 'neutral')}
+        </div>
+        <div class="manage-dev-button-row">
+          <button class="cr-button primary" type="button" data-manage-enable-notifications ${enableDisabled ? 'disabled' : ''}>Enable Notifications</button>
+          <button class="cr-button secondary" type="button" data-manage-test-notification ${testDisabled ? 'disabled' : ''}>Test Notification</button>
         </div>
         <p class="manage-support-copy">${message}</p>
       </section>
@@ -134,7 +105,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
 
   CR.manageRenderModules.notifications = {
     renderWatchExperience,
-    renderTempNotificationTest,
     renderNotificationDeviceStatus
   };
 })();
