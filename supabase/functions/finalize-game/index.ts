@@ -8,7 +8,7 @@ const CRON_SECRET = Deno.env.get("CRON_SECRET")!;
 const serviceDb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const authDb = createClient(SUPABASE_URL, ANON_KEY);
 
-const SPOILER_DELAY_MS = 90_000;
+const DEFAULT_PUSH_DELAY_SECONDS = 90;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,11 +17,48 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type Recipient = {
+  user_id: string | null;
+  user_email: string;
+};
+
+type NotificationSettings = {
+  push_enabled: boolean;
+  push_delay_seconds: number;
+};
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function normalizeDelaySeconds(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_PUSH_DELAY_SECONDS;
+  return Math.max(0, Math.min(600, Math.round(n)));
+}
+
+function normalizeSettings(row: any): NotificationSettings {
+  const stream =
+    row?.stream_settings && typeof row.stream_settings === "object"
+      ? row.stream_settings
+      : {};
+
+  const notifications =
+    row?.notification_settings && typeof row.notification_settings === "object"
+      ? row.notification_settings
+      : {};
+
+  return {
+    push_enabled: notifications.push_enabled !== false,
+    push_delay_seconds: normalizeDelaySeconds(stream.push_delay_seconds),
+  };
 }
 
 async function isAuthorized(req: Request) {
@@ -42,7 +79,7 @@ async function isAuthorized(req: Request) {
     return { ok: false, via: "auth", user: null, email: null, error: "Unauthorized", status: 401 };
   }
 
-  const userEmail = String(data.user.email || "").toLowerCase().trim();
+  const userEmail = cleanEmail(data.user.email);
   if (!userEmail) {
     return { ok: false, via: "auth", user: data.user, email: null, error: "Missing user email", status: 401 };
   }
@@ -121,7 +158,14 @@ function getWinnerProfile(slot1: any, slot2: any, slot1Points: number, slot2Poin
   return null;
 }
 
-function buildRecap(game: any, winnerProfile: any | null, slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
+function buildRecap(
+  game: any,
+  winnerProfile: any | null,
+  slot1: any,
+  slot2: any,
+  slot1Points: number,
+  slot2Points: number,
+) {
   const matchup =
     game?.opponent && game.opponent !== "Next Game"
       ? `vs ${game.opponent}`
@@ -154,59 +198,137 @@ function buildFinalMessage(winnerProfile: any | null, scoreLabel: string) {
   };
 }
 
-async function enqueueFinalNotification(gameId: number, title: string, body: string) {
+async function loadRecipients(): Promise<Recipient[]> {
+  const { data, error } = await serviceDb
+    .from("push_subscriptions")
+    .select("user_id, user_email");
+
+  if (error) throw error;
+
+  const seen = new Set<string>();
+  const recipients: Recipient[] = [];
+
+  for (const row of data || []) {
+    const userId = row.user_id ? String(row.user_id) : "";
+    const email = cleanEmail(row.user_email);
+
+    if (!userId && !email) continue;
+
+    const key = userId || email;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    recipients.push({
+      user_id: userId || null,
+      user_email: email,
+    });
+  }
+
+  return recipients;
+}
+
+async function loadSettingsByUserId(userIds: string[]) {
+  const map = new Map<string, NotificationSettings>();
+
+  if (!userIds.length) return map;
+
+  const { data, error } = await serviceDb
+    .from("user_settings")
+    .select("user_id, stream_settings, notification_settings")
+    .in("user_id", userIds);
+
+  if (error) throw error;
+
+  for (const row of data || []) {
+    map.set(String(row.user_id), normalizeSettings(row));
+  }
+
+  return map;
+}
+
+async function enqueueFinalNotifications(gameId: number, title: string, body: string) {
   const eventKey = `final-${gameId}`;
-  const visibleAfter = new Date(Date.now() + SPOILER_DELAY_MS).toISOString();
+  const recipients = await loadRecipients();
+  const userIds = recipients.map((r) => r.user_id).filter(Boolean) as string[];
+  const settingsByUserId = await loadSettingsByUserId(userIds);
 
-  const payload = {
+  let inserted = 0;
+  let deduped = 0;
+  let skippedDisabled = 0;
+  let firstVisibleAfter: string | null = null;
+
+  for (const recipient of recipients) {
+    const settings = recipient.user_id
+      ? settingsByUserId.get(recipient.user_id) || normalizeSettings(null)
+      : normalizeSettings(null);
+
+    if (!settings.push_enabled) {
+      skippedDisabled += 1;
+      continue;
+    }
+
+    const delaySeconds = settings.push_delay_seconds;
+    const visibleAfter = new Date(Date.now() + delaySeconds * 1000).toISOString();
+
+    const payload = {
+      title,
+      message: body,
+      tag: eventKey,
+      url: "/",
+      game_id: gameId,
+      triggered_by: "finalize-game",
+      triggered_by_name: "Finalize Game",
+      delay_visible: true,
+      suppress_self: false,
+      target_user_id: recipient.user_id,
+      target_user_email: recipient.user_email,
+      delay_seconds_applied: delaySeconds,
+    };
+
+    const { error } = await serviceDb.from("delayed_notifications").insert({
+      game_id: gameId,
+      event_key: eventKey,
+      title,
+      message: body,
+      payload,
+      triggered_by: "finalize-game",
+      suppress_self: false,
+      visible_after: visibleAfter,
+      target_user_id: recipient.user_id,
+      target_user_email: recipient.user_email,
+    });
+
+    if (!error) {
+      inserted += 1;
+      firstVisibleAfter = firstVisibleAfter || visibleAfter;
+      continue;
+    }
+
+    if ((error as any).code === "23505") {
+      deduped += 1;
+      firstVisibleAfter = firstVisibleAfter || visibleAfter;
+      continue;
+    }
+
+    console.error("delayed final notification insert failed:", error);
+    throw error;
+  }
+
+  return {
+    delayed: inserted > 0,
+    deduped: inserted === 0 && deduped > 0,
     title,
-    message: body,
-    tag: eventKey,
-    url: "/",
-    game_id: gameId,
-    triggered_by: "finalize-game",
-    triggered_by_name: "Finalize Game",
-    delay_visible: true,
-    suppress_self: false,
-  };
-
-  const { error } = await serviceDb.from("delayed_notifications").insert({
-    game_id: gameId,
+    body,
     event_key: eventKey,
-    title,
-    message: body,
-    payload,
-    triggered_by: "finalize-game",
-    suppress_self: false,
-    visible_after: visibleAfter,
-  });
-
-  if (!error) {
-    return {
-      delayed: true,
-      deduped: false,
-      title,
-      body,
-      event_key: eventKey,
-      visible_after: visibleAfter,
-      push: { attempted: 0, sent: 0, removed: 0 },
-    };
-  }
-
-  if ((error as any).code === "23505") {
-    return {
-      delayed: true,
-      deduped: true,
-      title,
-      body,
-      event_key: eventKey,
-      visible_after: visibleAfter,
-      push: { attempted: 0, sent: 0, removed: 0 },
-    };
-  }
-
-  console.error("delayed final notification insert failed:", error);
-  throw error;
+    visible_after: firstVisibleAfter,
+    routing: {
+      recipients: recipients.length,
+      delayed_recipients: inserted,
+      delayed_deduped: deduped,
+      skipped_disabled: skippedDisabled,
+    },
+    push: { attempted: 0, sent: 0, removed: 0 },
+  };
 }
 
 Deno.serve(async (req) => {
@@ -363,7 +485,6 @@ Deno.serve(async (req) => {
         totalsByUserId.set(ownerUserId, Number(totalsByUserId.get(ownerUserId) || 0) + points);
       }
 
-      // v1 compatibility only
       if (pick.owner === "Aaron") aaronPoints += points;
       if (pick.owner === "Julie") juliePoints += points;
     }
@@ -379,15 +500,10 @@ Deno.serve(async (req) => {
       .from("games")
       .update({
         status: "Final",
-
-        // v1 compatibility
         aaron_points: aaronPoints,
         julie_points: juliePoints,
         winner: finalWinnerLegacy,
-
-        // v2 canonical winner
         winner_user_id: winnerProfile?.id || null,
-
         recap,
         last_synced_at: new Date().toISOString(),
       })
@@ -413,7 +529,7 @@ Deno.serve(async (req) => {
 
     const scoreLabel = buildScoreLabel(slot1, slot2, slot1Points, slot2Points);
     const finalMessage = buildFinalMessage(winnerProfile, scoreLabel);
-    const notification = await enqueueFinalNotification(
+    const notification = await enqueueFinalNotifications(
       gameId,
       finalMessage.title,
       finalMessage.body,
