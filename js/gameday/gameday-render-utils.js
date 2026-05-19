@@ -35,6 +35,16 @@ window.CR = window.CR || {};
     return profileUser.themeClass || profileUser.theme_class || identity().ownerClass?.(index) || (index === 0 ? 'owner-primary' : 'owner-secondary');
   }
 
+  function colorHex(index) {
+    const profileUser = user(index);
+    return profileUser.colorHex || profileUser.color_hex || identity().getColor?.(index) || '';
+  }
+
+  function colorStyle(index) {
+    const color = colorHex(index);
+    return /^#[0-9A-Fa-f]{6}$/.test(String(color || '').trim()) ? `style="color:${color}"` : '';
+  }
+
   function changedClass(key, className = 'is-realtime-changed') {
     return CR.ui?.changedClass?.(key, className) || '';
   }
@@ -98,6 +108,8 @@ window.CR = window.CR || {};
       key: profileKey(index),
       profileKey: profileKey(index),
       ownerClass: ownerClass(index),
+      colorHex: colorHex(index),
+      colorStyle: colorStyle(index),
       picks: getUserPicks(data.users, index),
       score: getUserScore(data.scores, index)
     };
@@ -107,5 +119,5 @@ window.CR = window.CR || {};
     return [getSideContext(0, data), getSideContext(1, data)];
   }
 
-  CR.gameDayRenderUtils = { user, userName, profileKey, scoreKey, ownerClass, changedClass, normalizeKeyPart, scoreChangedKey, pickChangedKey, firstGoalChangedKey, feedChangedKey, lookupKeys, getUserPicks, getUserScore, getSideContext, sides };
+  CR.gameDayRenderUtils = { user, userName, profileKey, scoreKey, ownerClass, colorHex, colorStyle, changedClass, normalizeKeyPart, scoreChangedKey, pickChangedKey, firstGoalChangedKey, feedChangedKey, lookupKeys, getUserPicks, getUserScore, getSideContext, sides };
 })();
