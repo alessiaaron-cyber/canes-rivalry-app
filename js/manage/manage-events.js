@@ -18,6 +18,20 @@ window.CR = window.CR || {};
   function isColorAvailable(hex, current = state()) { const option = colorOptionFor(hex, current); if (!option) return false; const profile = CR.currentProfile || {}; const currentId = String(profile.id || ''); const normalized = String(hex || '').trim().toLowerCase(); return !(current.users || []).some((user) => { if (String(user.id || '') === currentId) return false; const userHex = String(user.colorHex || user.color_hex || '').trim().toLowerCase(); const userOption = colorOptionFor(userHex, current); return userHex === normalized || (userOption?.family && userOption.family === option.family); }); }
   async function refreshManageAndGameDay() { if (typeof CR.hydrateManageData === 'function') await CR.hydrateManageData(); try { if (typeof CR.refreshGameDayData === 'function') await CR.refreshGameDayData({ skipIfEditing: true, flash: false }); else CR.renderGameDayState?.(); } catch (error) { console.warn('Game Day refresh after Manage change failed', error); } }
 
+  async function handleManageSignOut() {
+    try {
+      await CR.auth?.signOut?.();
+    } catch (error) {
+      console.error('Manage sign out failed', error);
+    }
+
+    CR.currentUser = null;
+    CR.currentProfile = null;
+    CR.currentProfiles = [];
+    CR.session = null;
+    window.location.reload();
+  }
+
   async function runTempNotificationTest(mode = 'immediate') {
     const current = state();
     const test = current.tempNotificationTest || {};
@@ -66,25 +80,6 @@ window.CR = window.CR || {};
       const data = result.data || {};
       test.status = data.ok ? 'ok' : 'error';
       test.response = data;
-
-      const routed = [
-        data.routed_count,
-        data.routing_count,
-        data.devices_routed,
-        data.total_routed
-      ].find((value) => value !== undefined && value !== null);
-
-      const pushed = [
-        data.push_sent,
-        data.push_count,
-        data.sent_count,
-        data.pushes_sent
-      ].find((value) => value !== undefined && value !== null);
-
-      test.routingCounts = routed !== undefined ? String(routed) : '—';
-      test.pushCounts = pushed !== undefined ? String(pushed) : '—';
-      test.visibleAfter = data.visible_after || data.visibleAt || data.delayed_until || '—';
-
       rerender();
     } catch (error) {
       console.error('Temporary notification test failed', error);
@@ -92,39 +87,39 @@ window.CR = window.CR || {};
       test.response = {
         error: error?.message || String(error || 'Unknown error')
       };
-      test.routingCounts = '—';
-      test.pushCounts = '—';
-      test.visibleAfter = '—';
       rerender();
       CR.showToast?.({ message: error?.message || 'Notification test failed', tier: 'warning' });
     }
   }
 
-  async function saveProfile(button) { const current = state(); const profile = CR.currentProfile || {}; const draft = current.profileDraft || currentProfileDraft(); const displayName = String(draft.displayName || '').trim(); const colorHex = String(draft.colorHex || '').trim().toLowerCase(); const colorOption = colorOptionFor(colorHex, current); if (!profile.id) throw new Error('No profile is loaded.'); if (!displayName) throw new Error('Display name is required.'); if (!colorOption) throw new Error('Choose an available profile color.'); if (!isColorAvailable(colorHex, current)) throw new Error('That color is already used or too similar to another player.'); CR.ui?.setActionBusy?.(button, true, { label: 'Saving…' }); const db = await CR.getSupabase(); const result = await db.from('user_profiles').update({ display_name: displayName, color_hex: colorOption.hex, color_label: colorOption.label, updated_at: new Date().toISOString() }).eq('id', profile.id).select('*').single(); if (result.error) throw result.error; CR.currentProfile = result.data; try { CR.currentProfiles = await CR.auth?.loadActiveProfiles?.() || [result.data]; } catch (_) {} current.profileEditOpen = false; current.profileDraft = null; rerender(); CR.showToast?.({ message: 'Profile updated' }); CR.identity?.applyUserColorVariables?.(); CR.renderAccountIdentity?.(); await refreshManageAndGameDay(); }
-  function resetRosterDraft() { const current = state(); current.rosterDraft = { name: '', position: 'F' }; current.editingRosterPlayerId = null; }
-  function resetScheduleDraft() { const current = state(); const firstUser = (current.users || [])[0] || null; current.scheduleDraft = { date: '', opponent: '', type: 'Regular Season', firstPicker: firstUser ? userDisplayName(firstUser) : current.season.firstPicker, firstPickerUserId: firstUser?.id || '' }; current.editingScheduleGameId = null; }
-  function resetNewSeasonDraft() { const current = state(); const firstUser = (current.users || [])[0] || null; current.newSeasonDraft = { ...(current.newSeasonDraft || {}), seasonLabel: '', firstPicker: firstUser ? userDisplayName(firstUser) : current.season?.firstPicker, firstPickerUserId: firstUser?.id || '' }; }
   function rerender(options = {}) { const current = state(); CR.manageState = current; CR.manageStore?.replaceState?.(current, { render: false }); CR.renderManage?.({ scrollTop: options.scrollTop }); }
-  function scoringIsLocked(profile, current = state()) { if (profile === 'Regular') return current?.season?.regularScoringLocked === true; return current?.season?.playoffScoringLocked === true; }
-  function setWatchSaveState(value) { const current = state(); if (!current?.watchExperience) return; current.watchExperience.saveState = value; rerender(); }
-  function scheduleWatchSaveReset(sequence, delay = 1400) { window.clearTimeout(watchSaveTimer); watchSaveTimer = window.setTimeout(() => { if (sequence !== watchSaveSequence) return; const latest = state(); if (!latest?.watchExperience) return; latest.watchExperience.saveState = 'idle'; rerender(); }, delay); }
-  async function persistWatchExperience() { const current = state(); const watch = current?.watchExperience; if (!watch || !CR.userSettingsService?.save) return; watchSaveSequence += 1; const sequence = watchSaveSequence; window.clearTimeout(watchSaveTimer); setWatchSaveState('saving'); try { const saved = await CR.userSettingsService.save({ stream_settings: { push_delay_seconds: watch.pushDelaySeconds, toast_delay_seconds: watch.toastDelaySeconds }, notification_settings: { push_enabled: watch.pushEnabled !== false, toast_enabled: watch.toastEnabled !== false } }); if (sequence !== watchSaveSequence) return; const latest = state(); if (latest?.watchExperience) { latest.watchExperience.pushDelaySeconds = Number(saved.stream_settings?.push_delay_seconds ?? latest.watchExperience.pushDelaySeconds); latest.watchExperience.toastDelaySeconds = Number(saved.stream_settings?.toast_delay_seconds ?? latest.watchExperience.toastDelaySeconds); latest.watchExperience.pushEnabled = saved.notification_settings?.push_enabled !== false; latest.watchExperience.toastEnabled = saved.notification_settings?.toast_enabled !== false; latest.watchExperience.saveState = 'saved'; } if (latest?.notifications) { latest.notifications.pushEnabled = saved.notification_settings?.push_enabled !== false; latest.notifications.toastsEnabled = saved.notification_settings?.toast_enabled !== false; } CR.userSettings = saved; rerender(); scheduleWatchSaveReset(sequence); } catch (error) { console.error('Watch Experience save failed', error); if (sequence !== watchSaveSequence) return; const latest = state(); if (latest?.watchExperience) latest.watchExperience.saveState = 'error'; rerender(); scheduleWatchSaveReset(sequence, 2600); CR.showToast?.({ message: error?.message || 'Could not save notification settings', tier: 'warning' }); } }
-  function refreshGameDayAfterMockChange() { CR.refreshGameDayData?.({ flash: true }); CR.renderGameDayState?.(); }
-  function setMockOptions(patch = {}) { const service = CR.gameDayMockService; if (!service) return; service.setMockOptions?.({ enabled: patch.enabled ?? service.isEnabled?.(), mode: patch.mode || service.currentMode?.() || 'pregame', playoffs: patch.playoffs ?? service.isPlayoffs?.(), carryover: patch.carryover ?? service.isCarryover?.() }); refreshGameDayAfterMockChange(); rerender(); }
-  function schedulePayloadFromDraft(current) { const draft = current.scheduleDraft || {}; const opponent = String(draft.opponent || '').trim().toUpperCase(); const date = String(draft.date || '').trim(); if (!date || !opponent) throw new Error('Add a date and opponent first'); return { date, opponent, type: draft.type || 'Regular Season', firstPicker: pickerLabelFromDraft(draft, current), firstPickerUserId: draft.firstPickerUserId || null }; }
-  async function saveGame(button) { const current = state(); const wasEditing = Boolean(current.editingScheduleGameId); const payload = schedulePayloadFromDraft(current); CR.ui?.setActionBusy?.(button, true, { label: 'Saving…' }); if (wasEditing) await CR.manageDataService.updateGame(current.editingScheduleGameId, payload); else await CR.manageDataService.createGame(payload); resetScheduleDraft(); current.scheduleSheetOpen = false; rerender(); await refreshManageAndGameDay(); CR.showToast?.({ message: `${payload.opponent} game ${wasEditing ? 'updated' : 'added'}` }); }
 
   function bindManageEvents() {
     const root = document.querySelector('#manageContent');
-    const editProfileButton = document.querySelector('#manageEditProfileButton');
-    editProfileButton?.addEventListener('click', () => { const current = state(); closeAllSheets(); current.profileDraft = currentProfileDraft(); current.profileEditOpen = true; rerender(); });
-    if (!root) return;
+    if (!root || root.dataset.eventsBound === 'true') return;
+
+    root.dataset.eventsBound = 'true';
 
     root.addEventListener('click', async (event) => {
+      const profileButton = event.target.closest('[data-manage-open-profile-editor]');
+      if (profileButton) {
+        const current = state();
+        closeAllSheets();
+        current.profileDraft = currentProfileDraft();
+        current.profileEditOpen = true;
+        rerender();
+        return;
+      }
+
+      const signOutButton = event.target.closest('[data-manage-sign-out]');
+      if (signOutButton) {
+        await handleManageSignOut();
+        return;
+      }
+
       const tempNotificationTest = event.target.closest('[data-manage-temp-notification-test]');
       if (tempNotificationTest) {
         await runTempNotificationTest(tempNotificationTest.dataset.manageTempNotificationTest || 'immediate');
-        return;
       }
     });
   }
