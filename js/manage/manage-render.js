@@ -99,7 +99,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
         </div>
 
         <div class="account-panel-actions">
-          <button class="mini-button cr-button secondary" type="button" data-manage-open-profile-editor>Edit Profile</button>
+          <button class="mini-button cr-button secondary" type="button" disabled aria-disabled="true">Edit Profile</button>
           <button class="mini-button cr-button signout" type="button" data-manage-sign-out>Sign out</button>
         </div>
       </section>
