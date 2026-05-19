@@ -107,6 +107,17 @@ window.CR = window.CR || {};
     return { draft_status: 'open', current_pick_number: rollbackPickNumber, current_pick_user_id: picker?.id || null };
   }
 
+  function gamePatchFromDraft(draft = {}) {
+    const currentPickerId = draft.currentPicker?.id || draft.current_pick_user_id || null;
+    const currentPickNumber = Number(draft.currentPickNumber || draft.current_pick_number || 1);
+    const status = draft.status || draft.draft_status || (currentPickNumber > 4 ? 'complete' : 'open');
+    return {
+      draft_status: status,
+      current_pick_number: currentPickNumber,
+      current_pick_user_id: status === 'complete' ? null : currentPickerId
+    };
+  }
+
   function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '', index = 0) {
     const cleanPlayerName = pickLabel(playerName);
     return {
@@ -132,7 +143,7 @@ window.CR = window.CR || {};
     });
   }
 
-  async function savePregamePicks(gameId, pregame) {
+  async function savePregamePicks(gameId, pregame, draft = null) {
     if (!hasScheduledGame()) throw new Error('Picks cannot be saved until a game is scheduled.');
     if (!gameId) throw new Error('No active game is available for saving picks.');
     const db = await CR.getSupabase();
@@ -141,7 +152,15 @@ window.CR = window.CR || {};
     if (upsertRes.error) throw upsertRes.error;
     const savedRows = upsertRes.data || nextRows;
     savedRows.forEach((row) => CR.realtime?.markLocalWrite?.('picks', row, 3000));
-    return { savedRows };
+    let game = null;
+    if (draft) {
+      const gamePatch = gamePatchFromDraft(draft);
+      const gameUpdateRes = await db.from('games').update(gamePatch).eq('id', gameId).select('*').single();
+      if (gameUpdateRes.error) throw gameUpdateRes.error;
+      game = gameUpdateRes.data || { id: gameId, ...gamePatch };
+      CR.realtime?.markLocalWrite?.('games', game, 3000);
+    }
+    return { savedRows, game };
   }
 
   async function saveDraftPick(gameId, playerName) {
@@ -200,5 +219,5 @@ window.CR = window.CR || {};
     return { clearedRow: pickUpdateRes.data, game: gameUpdateRes.data, undonePickNumber: undoPickNumber };
   }
 
-  CR.gameDaySaveService = { savePregamePicks, saveDraftPick, undoLastDraftPick, rowsFromPregameState, hasScheduledGame, draftTurnProfile, draftPickSlot, nextDraftStateAfterPick, rollbackDraftStateToPick };
+  CR.gameDaySaveService = { savePregamePicks, saveDraftPick, undoLastDraftPick, rowsFromPregameState, hasScheduledGame, draftTurnProfile, draftPickSlot, nextDraftStateAfterPick, rollbackDraftStateToPick, gamePatchFromDraft };
 })();
