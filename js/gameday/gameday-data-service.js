@@ -96,6 +96,12 @@ window.CR = window.CR || {};
     return !isFinalGame(game) && ['LIVE', 'CRIT'].includes(state);
   }
 
+  function modeFromGame(game) {
+    if (isFinalGame(game)) return 'final';
+    if (isLiveGame(game)) return 'live';
+    return 'pregame';
+  }
+
   function selectGameForGameDay(games = []) {
     const visibleGames = games.filter((game) => !isHiddenGame(game));
     const now = Date.now();
@@ -164,7 +170,7 @@ window.CR = window.CR || {};
     return {
       source: 'supabase',
       currentGameId: String(game.id),
-      mode: 'pregame',
+      mode: modeFromGame(game),
       game: gameMeta(game),
       playoffMode: String(game.game_type || '').toLowerCase().includes('playoff') ? 'playoffs' : 'regular',
       carryover: { active: false },
@@ -245,5 +251,5 @@ window.CR = window.CR || {};
     return normalizeGameDayState({ game, picks: picksRes.data || [], roster, profiles, gameUserScores });
   }
 
-  CR.gameDayDataService = { fetchGameDayData, normalizeGameDayState, rosterDisplayName, selectGameForGameDay };
+  CR.gameDayDataService = { fetchGameDayData, normalizeGameDayState, rosterDisplayName, selectGameForGameDay, modeFromGame };
 })();
