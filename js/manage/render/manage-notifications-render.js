@@ -62,6 +62,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     const push = notification.push || {};
     const routingCounts = test.routingCounts || (routing.recipients !== undefined ? `${routing.immediate_recipients || 0} immediate / ${routing.delayed_recipients || 0} delayed / ${routing.recipients || 0} total` : '');
     const pushCounts = test.pushCounts || (push.sent !== undefined ? `${push.sent || 0} sent / ${push.attempted || 0} attempted` : '');
+    const activeCounts = push.skipped_active !== undefined ? `${push.skipped_active || 0} active skipped` : '';
     const visibleAfter = test.visibleAfter || notification.visible_after || '';
     const response = test.response ? JSON.stringify(test.response, null, 2) : 'Run a test to see the notify-rivalry-event response here.';
     const badge = test.status === 'ok'
@@ -78,11 +79,13 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
         <div class="manage-dev-button-row">
           <button class="cr-button primary" type="button" data-manage-temp-notification-test="immediate">Immediate Test Push</button>
           <button class="cr-button secondary" type="button" data-manage-temp-notification-test="delayed">Delayed Spoiler Test</button>
+          <button class="cr-button secondary" type="button" data-manage-temp-notification-test="active">Active Device Suppression Test</button>
         </div>
         <div class="manage-health-grid">
           ${renderHealthItem('Result', test.status || 'Not run', test.status === 'ok' ? 'good' : test.status === 'error' ? 'bad' : 'neutral')}
           ${renderHealthItem('Routing', routingCounts || '—', routingCounts ? 'good' : 'neutral')}
           ${renderHealthItem('Push', pushCounts || '—', pushCounts ? 'good' : 'neutral')}
+          ${renderHealthItem('Active skip', activeCounts || '—', activeCounts ? 'neutral' : 'neutral')}
           ${renderHealthItem('Visible after', visibleAfter || '—', visibleAfter ? 'neutral' : 'neutral')}
         </div>
         <pre class="manage-json-output" data-manage-temp-notification-response>${escapeHtml(response)}</pre>
