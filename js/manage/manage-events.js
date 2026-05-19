@@ -133,6 +133,41 @@ window.CR = window.CR || {};
       const colorButton = event.target.closest('[data-manage-profile-color]'); if (colorButton && !colorButton.disabled) { current.profileDraft = current.profileDraft || currentProfileDraft(); current.profileDraft.colorHex = colorButton.dataset.manageProfileColor; rerender(); return; }
       const saveProfileButton = event.target.closest('[data-manage-save-profile]'); if (saveProfileButton) { try { await saveProfile(saveProfileButton); } catch (error) { console.error('Profile save failed', error); CR.showToast?.({ message: error?.message || 'Could not save profile', tier: 'warning' }); } finally { CR.ui?.setActionBusy?.(saveProfileButton, false); } return; }
       const signOutButton = event.target.closest('[data-manage-sign-out]'); if (signOutButton) { await handleManageSignOut(); return; }
+
+      const enableNotificationsButton = event.target.closest('[data-manage-enable-notifications]');
+      if (enableNotificationsButton) {
+        try {
+          CR.ui?.setActionBusy?.(enableNotificationsButton, true, { label: 'Enabling…' });
+          await CR.activeDeviceService?.enableNotifications?.();
+          await CR.activeDeviceService?.markActive?.({ force: true });
+          const latest = await CR.activeDeviceService?.getDeviceStatus?.();
+          current.notificationDevice = { ...(current.notificationDevice || {}), ...(latest || {}) };
+          rerender();
+          CR.showToast?.({ message: 'Notifications enabled on this device' });
+        } catch (error) {
+          console.error('Enable notifications failed', error);
+          CR.showToast?.({ message: error?.message || 'Could not enable notifications', tier: 'warning' });
+        } finally {
+          CR.ui?.setActionBusy?.(enableNotificationsButton, false);
+        }
+        return;
+      }
+
+      const testNotificationButton = event.target.closest('[data-manage-test-notification]');
+      if (testNotificationButton) {
+        try {
+          CR.ui?.setActionBusy?.(testNotificationButton, true, { label: 'Sending…' });
+          await CR.activeDeviceService?.sendTestNotification?.();
+          CR.showToast?.({ message: 'Test notification sent' });
+        } catch (error) {
+          console.error('Test notification failed', error);
+          CR.showToast?.({ message: error?.message || 'Could not send test notification', tier: 'warning' });
+        } finally {
+          CR.ui?.setActionBusy?.(testNotificationButton, false);
+        }
+        return;
+      }
+      
       const tempNotificationTest = event.target.closest('[data-manage-temp-notification-test]'); if (tempNotificationTest) { await runTempNotificationTest(tempNotificationTest.dataset.manageTempNotificationTest || 'immediate'); return; }
 
       const viewTrigger = event.target.closest('[data-manage-view]'); if (viewTrigger) { closeAllSheets(); current.activeManageView = viewTrigger.dataset.manageView || 'main'; rerender({ scrollTop: true }); return; }
