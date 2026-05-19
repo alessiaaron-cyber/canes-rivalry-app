@@ -9,6 +9,10 @@ const serviceDb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const authDb = createClient(SUPABASE_URL, ANON_KEY);
 
 const DEFAULT_PUSH_DELAY_SECONDS = 90;
+const DEFAULT_SCORING_RULES = {
+  regular: { goal: 2, assist: 1, first_goal_bonus: 1 },
+  playoffs: { goal: 2, assist: 1, first_goal_bonus: 1 },
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +30,9 @@ type NotificationSettings = {
   push_enabled: boolean;
   push_delay_seconds: number;
 };
+
+type ScoringRules = typeof DEFAULT_SCORING_RULES;
+type ScoringProfile = ScoringRules["regular"];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -125,13 +132,62 @@ function nameMatches(a: any, b: any) {
   return !!ap.at(-1) && !!bp.at(-1) && ap.at(-1) === bp.at(-1);
 }
 
-function pickPoints(playerName: string, goals: number, assists: number, firstGoal: string) {
+function safeNumber(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeScoringRules(value: any): ScoringRules {
+  const rules = value && typeof value === "object" ? value : {};
+  const regular = rules.regular && typeof rules.regular === "object" ? rules.regular : {};
+  const playoffs = rules.playoffs && typeof rules.playoffs === "object" ? rules.playoffs : {};
+
+  return {
+    regular: {
+      goal: safeNumber(regular.goal, DEFAULT_SCORING_RULES.regular.goal),
+      assist: safeNumber(regular.assist, DEFAULT_SCORING_RULES.regular.assist),
+      first_goal_bonus: safeNumber(
+        regular.first_goal_bonus,
+        DEFAULT_SCORING_RULES.regular.first_goal_bonus,
+      ),
+    },
+    playoffs: {
+      goal: safeNumber(playoffs.goal, DEFAULT_SCORING_RULES.playoffs.goal),
+      assist: safeNumber(playoffs.assist, DEFAULT_SCORING_RULES.playoffs.assist),
+      first_goal_bonus: safeNumber(
+        playoffs.first_goal_bonus,
+        DEFAULT_SCORING_RULES.playoffs.first_goal_bonus,
+      ),
+    },
+  };
+}
+
+function scoringProfileForGame(game: any, rules: ScoringRules) {
+  const profile = String(game?.game_type || "").toLowerCase().includes("playoff")
+    ? "playoffs"
+    : "regular";
+
+  return {
+    profile,
+    scoring: rules[profile],
+  };
+}
+
+function pickPoints(
+  playerName: string,
+  goals: number,
+  assists: number,
+  firstGoal: string,
+  scoring: ScoringProfile,
+) {
   const g = Number(goals || 0);
   const a = Number(assists || 0);
   const bonus =
-    playerName && firstGoal && nameMatches(playerName, firstGoal) && g > 0 ? 1 : 0;
+    playerName && firstGoal && nameMatches(playerName, firstGoal) && g > 0
+      ? Number(scoring.first_goal_bonus || 0)
+      : 0;
 
-  return g * 2 + a + bonus;
+  return g * Number(scoring.goal || 0) + a * Number(scoring.assist || 0) + bonus;
 }
 
 function legacyScoreKey(profile: any) {
@@ -418,6 +474,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { data: season, error: seasonError } = await serviceDb
+      .from("seasons")
+      .select("id, scoring_rules")
+      .eq("id", game.season_id)
+      .single();
+
+    if (seasonError) throw seasonError;
+
+    const scoringRules = normalizeScoringRules(season?.scoring_rules);
+    const { profile: scoringProfile, scoring } = scoringProfileForGame(game, scoringRules);
+
     const { data: picks, error: picksError } = await serviceDb
       .from("picks")
       .select("*")
@@ -438,6 +505,8 @@ Deno.serve(async (req) => {
           error: "Pick all 4 players first.",
           game_id: gameId,
           filledPicks: filledPicks.length,
+          scoringProfile,
+          scoringRulesUsed: scoring,
         },
         400,
       );
@@ -450,6 +519,8 @@ Deno.serve(async (req) => {
           ok: false,
           error: "Each player can only be picked once for this game.",
           game_id: gameId,
+          scoringProfile,
+          scoringRulesUsed: scoring,
         },
         400,
       );
@@ -468,6 +539,7 @@ Deno.serve(async (req) => {
         Number(pick.goals || 0),
         Number(pick.assists || 0),
         String(game.first_goal_scorer || ""),
+        scoring,
       );
 
       if (Number(points) !== Number(pick.points || 0)) {
@@ -540,6 +612,8 @@ Deno.serve(async (req) => {
       alreadyFinal: false,
       authorizedVia: auth.via,
       game_id: gameId,
+      scoringProfile,
+      scoringRulesUsed: scoring,
       score: {
         [slot1.id]: slot1Points,
         [slot2.id]: slot2Points,
