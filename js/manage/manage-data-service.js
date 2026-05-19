@@ -86,6 +86,35 @@ window.CR = window.CR || {};
     return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  async function getActiveSeasonRow() {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('seasons')
+      .select('id, season_key, display_name, is_active, scoring_rules, regular_scoring_locked, playoff_scoring_locked')
+      .eq('is_active', true)
+      .single();
+
+    if (result.error) throw result.error;
+    return result.data;
+  }
+
+  function normalizeGameType(value) {
+    return String(value || '').toLowerCase().includes('playoff') ? 'Playoffs' : 'Regular Season';
+  }
+
+  async function nextGameNumber(seasonId) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('games')
+      .select('game_number')
+      .eq('season_id', seasonId)
+      .order('game_number', { ascending: false })
+      .limit(1);
+
+    if (result.error) throw result.error;
+    return Number(result.data?.[0]?.game_number || 0) + 1;
+  }
+
   async function load() {
     const db = await CR.getSupabase();
 
@@ -105,6 +134,7 @@ window.CR = window.CR || {};
         .from('games')
         .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
         .eq('season_id', activeSeason.id)
+        .neq('status', 'Hidden')
         .order('game_date', { ascending: false, nullsFirst: true })
         .order('game_number', { ascending: false });
 
@@ -196,6 +226,117 @@ window.CR = window.CR || {};
     return normalizePlayer(result.data);
   }
 
+  async function createGame(payload) {
+    const db = await CR.getSupabase();
+    const activeSeason = await getActiveSeasonRow();
+    const gameNumber = await nextGameNumber(activeSeason.id);
+
+    const result = await db
+      .from('games')
+      .insert({
+        season_id: activeSeason.id,
+        game_number: gameNumber,
+        game_date: payload.date || null,
+        opponent: String(payload.opponent || '').trim().toUpperCase(),
+        home_away: payload.homeAway || null,
+        game_type: normalizeGameType(payload.type),
+        first_picker: payload.firstPicker || null,
+        first_picker_user_id: payload.firstPickerUserId || null,
+        status: 'Scheduled',
+        draft_status: 'open',
+        current_pick_number: 1,
+        current_pick_user_id: payload.firstPickerUserId || null
+      })
+      .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizeGame(result.data, CR.currentProfiles || []);
+  }
+
+  async function updateGame(id, payload) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('games')
+      .update({
+        game_date: payload.date || null,
+        opponent: String(payload.opponent || '').trim().toUpperCase(),
+        home_away: payload.homeAway || null,
+        game_type: normalizeGameType(payload.type),
+        first_picker: payload.firstPicker || null,
+        first_picker_user_id: payload.firstPickerUserId || null,
+        current_pick_user_id: payload.firstPickerUserId || null
+      })
+      .eq('id', id)
+      .neq('status', 'Final')
+      .neq('draft_status', 'complete')
+      .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizeGame(result.data, CR.currentProfiles || []);
+  }
+
+  async function removeGame(id) {
+    const db = await CR.getSupabase();
+    const result = await db
+      .from('games')
+      .update({ status: 'Hidden' })
+      .eq('id', id)
+      .neq('status', 'Final')
+      .neq('draft_status', 'complete')
+      .select('id')
+      .single();
+
+    if (result.error) throw result.error;
+    return true;
+  }
+
+  function scoringPayload(scoringSystems = {}) {
+    const regular = scoringSystems.Regular || {};
+    const playoffs = scoringSystems.Playoffs || {};
+    return {
+      regular: {
+        goal: Number(regular.goal ?? 2),
+        assist: Number(regular.assist ?? 1),
+        first_goal_bonus: Number(regular.firstGoal ?? 1)
+      },
+      playoffs: {
+        goal: Number(playoffs.goal ?? 2),
+        assist: Number(playoffs.assist ?? 1),
+        first_goal_bonus: Number(playoffs.firstGoal ?? 1)
+      }
+    };
+  }
+
+  async function saveScoringRules(season) {
+    const db = await CR.getSupabase();
+    const activeSeason = await getActiveSeasonRow();
+
+    const result = await db
+      .from('seasons')
+      .update({
+        scoring_rules: scoringPayload(season.scoringSystems),
+        scoring_override_note: season.scoringOverrideNote || null,
+        scoring_override_updated_at: new Date().toISOString(),
+        scoring_override_updated_by: CR.currentUser?.id || null
+      })
+      .eq('id', activeSeason.id)
+      .select('id, season_key, display_name, is_active, scoring_rules, regular_scoring_locked, playoff_scoring_locked, regular_scoring_locked_at, playoff_scoring_locked_at, scoring_override_note')
+      .single();
+
+    if (result.error) throw result.error;
+    return normalizeSeason(result.data, CR.currentProfiles || []);
+  }
+
+  async function importNhlSchedule() {
+    const db = await CR.getSupabase();
+    const result = await db.functions.invoke('import-nhl-schedule', { body: {} });
+    if (result.error) throw result.error;
+    if (!result.data?.ok) throw new Error(result.data?.error || 'Schedule import failed');
+    return result.data;
+  }
+
   function mergeIntoState(state, live) {
     if (!state || !live) return state;
     if (Array.isArray(live.players)) state.roster = live.players;
@@ -217,5 +358,17 @@ window.CR = window.CR || {};
     return state;
   }
 
-  CR.manageDataService = { load, mergeIntoState, createPlayer, updatePlayer, deactivatePlayer, activatePlayer };
+  CR.manageDataService = {
+    load,
+    mergeIntoState,
+    createPlayer,
+    updatePlayer,
+    deactivatePlayer,
+    activatePlayer,
+    createGame,
+    updateGame,
+    removeGame,
+    saveScoringRules,
+    importNhlSchedule
+  };
 })();
