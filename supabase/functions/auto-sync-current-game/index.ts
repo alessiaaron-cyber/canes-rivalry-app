@@ -28,6 +28,10 @@ const POST_GAME_WINDOW_MS = 4.5 * 60 * 60 * 1000;
 const PICK_REMINDER_WINDOW_MS = 75 * 60 * 1000;
 const ACTIVE_DEVICE_SUPPRESS_MS = 60 * 1000;
 const DEFAULT_PUSH_DELAY_SECONDS = 90;
+const DEFAULT_SCORING_RULES = {
+  regular: { goal: 2, assist: 1, first_goal_bonus: 1 },
+  playoffs: { goal: 2, assist: 1, first_goal_bonus: 1 },
+};
 
 type Recipient = {
   user_id: string | null;
@@ -38,6 +42,9 @@ type NotificationSettings = {
   push_enabled: boolean;
   push_delay_seconds: number;
 };
+
+type ScoringRules = typeof DEFAULT_SCORING_RULES;
+type ScoringProfile = ScoringRules["regular"];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -244,12 +251,61 @@ function findStatForPick(stats: Map<string, { goals: number; assists: number }>,
 // POINTS / SCORE
 // =========================
 
-function pickPoints(playerName: string, goals: number, assists: number, firstGoal: string) {
+function safeNumber(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeScoringRules(value: any): ScoringRules {
+  const rules = value && typeof value === "object" ? value : {};
+  const regular = rules.regular && typeof rules.regular === "object" ? rules.regular : {};
+  const playoffs = rules.playoffs && typeof rules.playoffs === "object" ? rules.playoffs : {};
+
+  return {
+    regular: {
+      goal: safeNumber(regular.goal, DEFAULT_SCORING_RULES.regular.goal),
+      assist: safeNumber(regular.assist, DEFAULT_SCORING_RULES.regular.assist),
+      first_goal_bonus: safeNumber(
+        regular.first_goal_bonus,
+        DEFAULT_SCORING_RULES.regular.first_goal_bonus,
+      ),
+    },
+    playoffs: {
+      goal: safeNumber(playoffs.goal, DEFAULT_SCORING_RULES.playoffs.goal),
+      assist: safeNumber(playoffs.assist, DEFAULT_SCORING_RULES.playoffs.assist),
+      first_goal_bonus: safeNumber(
+        playoffs.first_goal_bonus,
+        DEFAULT_SCORING_RULES.playoffs.first_goal_bonus,
+      ),
+    },
+  };
+}
+
+function scoringProfileForGame(game: any, rules: ScoringRules) {
+  const profile = String(game?.game_type || "").toLowerCase().includes("playoff")
+    ? "playoffs"
+    : "regular";
+
+  return {
+    profile,
+    scoring: rules[profile],
+  };
+}
+
+function pickPoints(
+  playerName: string,
+  goals: number,
+  assists: number,
+  firstGoal: string,
+  scoring: ScoringProfile,
+) {
   const g = Number(goals || 0);
   const a = Number(assists || 0);
-  const bonus = playerName && firstGoal && nameMatches(playerName, firstGoal) && g > 0 ? 1 : 0;
+  const bonus = playerName && firstGoal && nameMatches(playerName, firstGoal) && g > 0
+    ? Number(scoring.first_goal_bonus || 0)
+    : 0;
 
-  return g * 2 + a + bonus;
+  return g * Number(scoring.goal || 0) + a * Number(scoring.assist || 0) + bonus;
 }
 
 function bonusIncluded(playerName: string, goals: number, firstGoal: string) {
@@ -776,7 +832,7 @@ Deno.serve(async (req) => {
   try {
     const { data: season, error: seasonError } = await db
       .from("seasons")
-      .select("id")
+      .select("id, scoring_rules")
       .eq("is_active", true)
       .single();
 
@@ -786,6 +842,9 @@ Deno.serve(async (req) => {
     const game = await getCurrentCandidateGame(Number(season.id));
 
     if (!game) return json({ ok: true, skipped: "no-current-game" });
+
+    const scoringRules = normalizeScoringRules(season.scoring_rules);
+    const { profile: scoringProfile, scoring } = scoringProfileForGame(game, scoringRules);
 
     const { data: picks, error: picksError } = await db
       .from("picks")
@@ -821,6 +880,8 @@ Deno.serve(async (req) => {
         game_id: game.id,
         skipped: "missing-nhl-game-id",
         pickedCount,
+        scoringProfile,
+        scoringRulesUsed: scoring,
         reminderNotification,
       });
     }
@@ -849,6 +910,8 @@ Deno.serve(async (req) => {
         game_id: game.id,
         state,
         skipped: "unsupported-nhl-state",
+        scoringProfile,
+        scoringRulesUsed: scoring,
         reminderNotification,
       });
     }
@@ -869,6 +932,8 @@ Deno.serve(async (req) => {
         skipped: "outside-game-window",
         inWindow,
         forceSync,
+        scoringProfile,
+        scoringRulesUsed: scoring,
         reminderNotification,
       });
     }
@@ -922,7 +987,7 @@ Deno.serve(async (req) => {
 
       const goals = Number(stat.goals || 0);
       const assists = Number(stat.assists || 0);
-      const points = pickPoints(playerName, goals, assists, firstGoalResolved);
+      const points = pickPoints(playerName, goals, assists, firstGoalResolved, scoring);
 
       const oldHadBonus = bonusIncluded(playerName, oldGoals, firstGoalResolved);
       const newHasBonus = bonusIncluded(playerName, goals, firstGoalResolved);
@@ -1030,6 +1095,8 @@ Deno.serve(async (req) => {
       inWindow,
       forceSync,
       pickedCount,
+      scoringProfile,
+      scoringRulesUsed: scoring,
       firstGoalRaw: firstGoal,
       firstGoalSaved: firstGoalResolved,
       changed,
