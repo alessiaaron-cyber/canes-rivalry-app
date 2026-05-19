@@ -27,17 +27,29 @@ window.CR = window.CR || {};
     return state().user?.(index, currentSource()) || CR.gameDay?.users?.[index] || null;
   }
 
-  function recomputeDraftFromPregame() {
+  function draftSlots() {
     const keys = state().sideKeys?.(currentSource()) || [];
-    const counts = keys.map((key) => pickLabelsForKey(key).length);
-    const total = counts.reduce((sum, count) => sum + count, 0);
-    const nextPickNumber = Math.min(total + 1, 5);
-    const nextSideIndex = nextPickNumber > 4 ? -1 : ((nextPickNumber - 1) % 2);
-    const nextProfile = nextSideIndex >= 0 ? profileForSideIndex(nextSideIndex) : null;
+    return [
+      { pickNumber: 1, sideIndex: 0, sideKey: keys[0], pickIndex: 0 },
+      { pickNumber: 2, sideIndex: 1, sideKey: keys[1], pickIndex: 0 },
+      { pickNumber: 3, sideIndex: 0, sideKey: keys[0], pickIndex: 1 },
+      { pickNumber: 4, sideIndex: 1, sideKey: keys[1], pickIndex: 1 }
+    ].filter((slot) => slot.sideKey);
+  }
+
+  function isDraftSlotFilled(slot) {
+    return Boolean(pickLabel(CR.gameDay.pregame?.[slot.sideKey]?.[slot.pickIndex] || ''));
+  }
+
+  function recomputeDraftFromPregame() {
+    const slots = draftSlots();
+    const nextSlot = slots.find((slot) => !isDraftSlotFilled(slot));
+    const nextPickNumber = nextSlot?.pickNumber || 5;
+    const nextProfile = nextSlot ? profileForSideIndex(nextSlot.sideIndex) : null;
 
     CR.gameDay.draft = {
       ...(CR.gameDay.draft || {}),
-      status: nextPickNumber > 4 ? 'complete' : 'open',
+      status: nextSlot ? 'open' : 'complete',
       currentPickNumber: nextPickNumber,
       currentPicker: nextProfile || { id: '', displayName: '', profileKey: '' }
     };
@@ -90,95 +102,25 @@ window.CR = window.CR || {};
     return (Number(pick.goals || 0) * 2) + Number(pick.assists || 0) + (pick.firstGoal ? 2 : 0);
   }
 
-  function isPlayoffs() {
-    return CR.gameDay.playoffMode === 'playoffs';
-  }
-
-  function isUserEditing() {
-    return Boolean(CR.gameDayEditState?.isEditing);
-  }
-
-  function hasScheduledGame() {
-    const game = CR.gameDay?.game || {};
-    return Boolean(game.hasGame && game.scheduleText && game.scheduleText !== 'Schedule pending');
-  }
-
-  function canManagePicks() {
-    return hasScheduledGame() && CR.gameDay.mode !== 'final';
-  }
-
-  function getRoster() {
-    return CR.gameDay.roster || CR.gameDayRoster || fallbackRoster;
-  }
-
-  function modeLabel(mode) {
-    if (mode === 'pregame') return 'Pregame';
-    if (mode === 'live') return 'Live';
-    return 'Final';
-  }
-
-  function getPregameStructured() {
-    return state().structuredPregame?.(CR.gameDay) || {};
-  }
-
-  function getFinalData() {
-    return {
-      scores: clone(CR.gameDay.live?.scores),
-      users: clone(CR.gameDay.live?.users)
-    };
-  }
-
-  function winnerText(scores = {}) {
-    return state().winnerText?.(scores, currentSource()) || 'Rivalry Tie';
-  }
-
-  function nextDraftSide() {
-    if (!hasScheduledGame()) return null;
-    return state().nextDraftSide?.(CR.gameDay) || null;
-  }
-
-  function claimedOwner(name) {
-    return state().claimedOwner?.(CR.gameDay, name) || '';
-  }
-
-  function allLivePicks(users = {}) {
-    return Object.values(users || {}).flat();
-  }
-
-  function totalGoals(users = {}) {
-    return allLivePicks(users).reduce((total, pick) => total + Number(pick.goals || 0), 0);
-  }
-
-  function totalAssists(users = {}) {
-    return allLivePicks(users).reduce((total, pick) => total + Number(pick.assists || 0), 0);
-  }
-
-  function firstGoalHit(users = {}) {
-    return allLivePicks(users).find((pick) => pick.firstGoal);
-  }
-
-  function firstGoalSummary(users = {}, mode = CR.gameDay.mode) {
-    const bonus = firstGoalHit(users);
-    if (bonus) return `${bonus.player} hit the first goal bonus.`;
-    return mode === 'final' ? 'No first goal bonus recorded.' : 'First goal bonus still live.';
-  }
-
-  function leadingStatType(users = {}) {
-    const goals = totalGoals(users);
-    const assists = totalAssists(users);
-    if (goals > assists) return 'Goals carried the night.';
-    if (assists > goals) return 'Assists drove the scoring.';
-    return 'Goals and assists stayed balanced.';
-  }
-
-  function totalEventsText(users = {}) {
-    return `${totalGoals(users)} goals • ${totalAssists(users)} assists`;
-  }
-
-  function mvpText(users = {}) {
-    const picks = allLivePicks(users).slice().sort((a, b) => pointsFor(b) - pointsFor(a));
-    return picks[0]?.player ? `${picks[0].player} led the rivalry card.` : 'No player separated yet.';
-  }
+  function isPlayoffs() { return CR.gameDay.playoffMode === 'playoffs'; }
+  function isUserEditing() { return Boolean(CR.gameDayEditState?.isEditing); }
+  function hasScheduledGame() { const game = CR.gameDay?.game || {}; return Boolean(game.hasGame && game.scheduleText && game.scheduleText !== 'Schedule pending'); }
+  function canManagePicks() { return hasScheduledGame() && CR.gameDay.mode !== 'final'; }
+  function getRoster() { return CR.gameDay.roster || CR.gameDayRoster || fallbackRoster; }
+  function modeLabel(mode) { if (mode === 'pregame') return 'Pregame'; if (mode === 'live') return 'Live'; return 'Final'; }
+  function getPregameStructured() { return state().structuredPregame?.(CR.gameDay) || {}; }
+  function getFinalData() { return { scores: clone(CR.gameDay.live?.scores), users: clone(CR.gameDay.live?.users) }; }
+  function winnerText(scores = {}) { return state().winnerText?.(scores, currentSource()) || 'Rivalry Tie'; }
+  function nextDraftSide() { if (!hasScheduledGame()) return null; return state().nextDraftSide?.(CR.gameDay) || null; }
+  function claimedOwner(name) { return state().claimedOwner?.(CR.gameDay, name) || ''; }
+  function allLivePicks(users = {}) { return Object.values(users || {}).flat(); }
+  function totalGoals(users = {}) { return allLivePicks(users).reduce((total, pick) => total + Number(pick.goals || 0), 0); }
+  function totalAssists(users = {}) { return allLivePicks(users).reduce((total, pick) => total + Number(pick.assists || 0), 0); }
+  function firstGoalHit(users = {}) { return allLivePicks(users).find((pick) => pick.firstGoal); }
+  function firstGoalSummary(users = {}, mode = CR.gameDay.mode) { const bonus = firstGoalHit(users); if (bonus) return `${bonus.player} hit the first goal bonus.`; return mode === 'final' ? 'No first goal bonus recorded.' : 'First goal bonus still live.'; }
+  function leadingStatType(users = {}) { const goals = totalGoals(users); const assists = totalAssists(users); if (goals > assists) return 'Goals carried the night.'; if (assists > goals) return 'Assists drove the scoring.'; return 'Goals and assists stayed balanced.'; }
+  function totalEventsText(users = {}) { return `${totalGoals(users)} goals • ${totalAssists(users)} assists`; }
+  function mvpText(users = {}) { const picks = allLivePicks(users).slice().sort((a, b) => pointsFor(b) - pointsFor(a)); return picks[0]?.player ? `${picks[0].player} led the rivalry card.` : 'No player separated yet.'; }
 
   function payloadBelongsToCurrentGame(payload) {
     const row = payload.new || payload.old || {};
@@ -198,9 +140,7 @@ window.CR = window.CR || {};
       }
       if (payload.table === 'picks') {
         const player = row.player_name || row.player || row.id;
-        if (player) {
-          ['goals', 'assists', 'points'].forEach((stat) => keys.push(`gameday:pick:${CR.gameDayRenderUtils?.normalizeKeyPart?.(player) || player}:${stat}`));
-        }
+        if (player) ['goals', 'assists', 'points'].forEach((stat) => keys.push(`gameday:pick:${CR.gameDayRenderUtils?.normalizeKeyPart?.(player) || player}:${stat}`));
         keys.push('gameday:feed');
       }
     });
@@ -215,12 +155,7 @@ window.CR = window.CR || {};
       game: { ...CR.gameDay.game, ...(data.game || {}) },
       carryover: { ...CR.gameDay.carryover, ...(data.carryover || {}) },
       draft: { ...CR.gameDay.draft, ...(data.draft || {}) },
-      live: {
-        ...CR.gameDay.live,
-        ...(data.live || {}),
-        scores: { ...(CR.gameDay.live?.scores || {}), ...(data.live?.scores || {}) },
-        users: data.live?.users || CR.gameDay.live?.users || {}
-      },
+      live: { ...CR.gameDay.live, ...(data.live || {}), scores: { ...(CR.gameDay.live?.scores || {}), ...(data.live?.scores || {}) }, users: data.live?.users || CR.gameDay.live?.users || {} },
       pregame: data.pregame || CR.gameDay.pregame || {},
       roster: data.roster || CR.gameDay.roster || []
     };
@@ -231,10 +166,7 @@ window.CR = window.CR || {};
 
   async function refreshGameDayData(options = {}) {
     if (options.skipIfEditing && isUserEditing()) return CR.gameDay;
-    if (!CR.gameDayDataService?.fetchGameDayData) {
-      CR.renderGameDayState?.();
-      return CR.gameDay;
-    }
+    if (!CR.gameDayDataService?.fetchGameDayData) { CR.renderGameDayState?.(); return CR.gameDay; }
     try {
       const data = await CR.gameDayDataService.fetchGameDayData();
       applyGameDayData(data);
@@ -283,89 +215,23 @@ window.CR = window.CR || {};
     } catch (error) {
       console.error('Draft undo failed', error);
       CR.showToast?.({ message: error?.message || 'Could not undo last pick', tier: 'warning' });
-    } finally {
-      CR.ui?.setActionBusy?.(button, false);
-    }
+    } finally { CR.ui?.setActionBusy?.(button, false); }
   }
 
   function registerRealtime() {
     if (CR.__gameDayRealtimeRegistered || !CR.realtime?.register) return;
     CR.__gameDayRealtimeRegistered = true;
-    CR.realtime.register('gameday', {
-      tables: ['games', 'picks'],
-      debounceMs: 250,
-      onChange: async (payloads = []) => {
-        if (!payloads.some(payloadBelongsToCurrentGame)) return;
-        if (isUserEditing()) return;
-        markRealtimeChanged(payloads);
-        await refreshGameDayData({ flash: true, skipIfEditing: true });
-      }
-    });
+    CR.realtime.register('gameday', { tables: ['games', 'picks'], debounceMs: 250, onChange: async (payloads = []) => { if (!payloads.some(payloadBelongsToCurrentGame)) return; if (isUserEditing()) return; markRealtimeChanged(payloads); await refreshGameDayData({ flash: true, skipIfEditing: true }); } });
     CR.realtime.start?.();
   }
 
-  function renderPlayerCard(args = {}) {
-    return render.renderPlayerCard({ ...args, pointsFor });
-  }
-
-  function setModalOpen(isOpen) {
-    const modal = $('#manageSheet');
-    if (!modal) return;
-    modal.classList.toggle('is-open', isOpen);
-    if (isOpen) CR.ui?.lockBodyScroll?.('manage-sheet-open');
-    else CR.ui?.unlockBodyScroll?.('manage-sheet-open');
-  }
-
-  function updateGlobalIndicators() {
-    $('#globalLiveIndicator')?.classList.toggle('is-hidden', CR.gameDay.mode !== 'live');
-    $('#globalMockIndicator')?.classList.toggle('is-hidden', !CR.gameDayMockService?.isEnabled?.());
-  }
-
-  function renderHero() {
-    return render.renderHeroSection({
-      mode: CR.gameDay.mode,
-      game: CR.gameDay.game,
-      pregameUsers: getPregameStructured(),
-      live: CR.gameDay.live,
-      final: getFinalData(),
-      isPlayoffs: isPlayoffs(),
-      winnerText,
-      nextDraftSide: nextDraftSide(),
-      draft: CR.gameDay.draft
-    });
-  }
-
-  function renderPregame() {
-    return render.renderPregameSection({
-      users: getPregameStructured(),
-      roster: getRoster(),
-      claimedOwner,
-      isPlayoffs: isPlayoffs()
-    });
-  }
-
-  function renderLive() {
-    return render.renderLiveSection({
-      state: CR.gameDay.live,
-      renderPlayerCard,
-      carryover: CR.gameDay.carryover,
-      isPlayoffs: isPlayoffs()
-    });
-  }
-
-  function renderFinal() {
-    const final = getFinalData();
-    return render.renderFinalSection({
-      state: final,
-      bonusText: firstGoalSummary(final.users, 'final'),
-      mvpText: mvpText(final.users),
-      edgeText: leadingStatType(final.users),
-      totalEventsText: totalEventsText(final.users),
-      renderPlayerCard: (args) => renderPlayerCard({ ...args, isFinal: true }),
-      carryover: CR.gameDay.carryover,
-      isPlayoffs: isPlayoffs()
-    });
-  }
+  function renderPlayerCard(args = {}) { return render.renderPlayerCard({ ...args, pointsFor }); }
+  function setModalOpen(isOpen) { const modal = $('#manageSheet'); if (!modal) return; modal.classList.toggle('is-open', isOpen); if (isOpen) CR.ui?.lockBodyScroll?.('manage-sheet-open'); else CR.ui?.unlockBodyScroll?.('manage-sheet-open'); }
+  function updateGlobalIndicators() { $('#globalLiveIndicator')?.classList.toggle('is-hidden', CR.gameDay.mode !== 'live'); $('#globalMockIndicator')?.classList.toggle('is-hidden', !CR.gameDayMockService?.isEnabled?.()); }
+  function renderHero() { return render.renderHeroSection({ mode: CR.gameDay.mode, game: CR.gameDay.game, pregameUsers: getPregameStructured(), live: CR.gameDay.live, final: getFinalData(), isPlayoffs: isPlayoffs(), winnerText, nextDraftSide: nextDraftSide(), draft: CR.gameDay.draft }); }
+  function renderPregame() { return render.renderPregameSection({ users: getPregameStructured(), roster: getRoster(), claimedOwner, isPlayoffs: isPlayoffs() }); }
+  function renderLive() { return render.renderLiveSection({ state: CR.gameDay.live, renderPlayerCard, carryover: CR.gameDay.carryover, isPlayoffs: isPlayoffs() }); }
+  function renderFinal() { const final = getFinalData(); return render.renderFinalSection({ state: final, bonusText: firstGoalSummary(final.users, 'final'), mvpText: mvpText(final.users), edgeText: leadingStatType(final.users), totalEventsText: totalEventsText(final.users), renderPlayerCard: (args) => renderPlayerCard({ ...args, isFinal: true }), carryover: CR.gameDay.carryover, isPlayoffs: isPlayoffs() }); }
 
   function manageSheetStatusCopy(picksEnabled) {
     if (!hasScheduledGame()) return { title: 'Schedule pending', detail: 'Picks can be managed after the next game is scheduled.', saveLabel: 'Schedule Pending' };
@@ -381,10 +247,7 @@ window.CR = window.CR || {};
     const picksEnabled = canManagePicks();
     const selectedPlayers = state().selectedPregamePlayers?.(CR.gameDay) || [];
     const status = manageSheetStatusCopy(picksEnabled);
-    if (saveButton) {
-      saveButton.disabled = !picksEnabled;
-      saveButton.textContent = status.saveLabel;
-    }
+    if (saveButton) { saveButton.disabled = !picksEnabled; saveButton.textContent = status.saveLabel; }
     const statusCopy = `<div class="gd-sheet-pick ${!picksEnabled ? 'is-disabled' : ''}"><strong>${status.title}</strong><small>${status.detail}</small></div>`;
     const undoAction = `<button class="cr-button secondary gd-inline-action" id="undoDraftPick" type="button" ${picksEnabled ? '' : 'disabled'}>Undo Last Draft Pick</button>`;
     const pickControls = (state().sideKeys?.(currentSource()) || []).flatMap((sideKey, sideIndex) => [0, 1].map((index) => {
@@ -414,16 +277,7 @@ window.CR = window.CR || {};
     });
   }
 
-  function bindInteractions() {
-    events.bind?.({
-      claimedOwner,
-      draftOrder: state().draftOrder?.(currentSource()) || [],
-      nextDraftSide,
-      renderManageSheet,
-      setModalOpen,
-      rerender: CR.renderGameDayState
-    });
-  }
+  function bindInteractions() { events.bind?.({ claimedOwner, draftOrder: state().draftOrder?.(currentSource()) || [], nextDraftSide, renderManageSheet, setModalOpen, rerender: CR.renderGameDayState }); }
 
   CR.renderGameDayState = (mode = CR.gameDay.mode) => {
     CR.gameDay.mode = mode;
@@ -434,8 +288,7 @@ window.CR = window.CR || {};
     view.classList.toggle('mode-playoffs', isPlayoffs());
     view.classList.toggle('is-realtime-changed', CR.ui?.isChanged?.('gameday:sync'));
     container.innerHTML = [renderHero(), mode === 'pregame' ? renderPregame() : '', mode === 'live' ? renderLive() : '', mode === 'final' ? renderFinal() : ''].join('');
-    const stateTitle = $('#stateTitle');
-    const stateBadge = $('#stateBadge');
+    const stateTitle = $('#stateTitle'); const stateBadge = $('#stateBadge');
     if (stateTitle) stateTitle.textContent = modeLabel(mode);
     if (stateBadge) stateBadge.textContent = isPlayoffs() ? 'Playoffs' : (mode === 'pregame' ? 'Regular' : modeLabel(mode));
     $('#phaseSwitcher')?.querySelectorAll('button').forEach((button) => button.classList.toggle('active', button.dataset.phase === mode));
@@ -446,22 +299,9 @@ window.CR = window.CR || {};
   };
 
   CR.initGameDay = () => {
-    $('#phaseSwitcher')?.addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-phase]');
-      if (button) CR.renderGameDayState(button.dataset.phase);
-    });
-    $('#modeSwitcher')?.addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-playoff-mode]');
-      if (!button) return;
-      CR.gameDay.playoffMode = button.dataset.playoffMode;
-      CR.renderGameDayState();
-    });
-    $('#carryoverSwitcher')?.addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-carryover]');
-      if (!button) return;
-      CR.gameDay.carryover = { active: button.dataset.carryover === 'on' };
-      CR.renderGameDayState();
-    });
+    $('#phaseSwitcher')?.addEventListener('click', (event) => { const button = event.target.closest('button[data-phase]'); if (button) CR.renderGameDayState(button.dataset.phase); });
+    $('#modeSwitcher')?.addEventListener('click', (event) => { const button = event.target.closest('button[data-playoff-mode]'); if (!button) return; CR.gameDay.playoffMode = button.dataset.playoffMode; CR.renderGameDayState(); });
+    $('#carryoverSwitcher')?.addEventListener('click', (event) => { const button = event.target.closest('button[data-carryover]'); if (!button) return; CR.gameDay.carryover = { active: button.dataset.carryover === 'on' }; CR.renderGameDayState(); });
     $('#refreshButton')?.addEventListener('click', () => CR.refreshGameDayData?.({ toast: true, flash: true }));
     $('#closeSheet')?.addEventListener('click', () => setModalOpen(false));
     $('#saveSheet')?.addEventListener('click', saveGameDayPicks);
