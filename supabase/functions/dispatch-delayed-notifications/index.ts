@@ -17,18 +17,24 @@ const BATCH_LIMIT = 50;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function cleanString(value: unknown) {
+  return String(value || "").trim();
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").toLowerCase().trim();
 }
 
 function isRecentlyActive(lastSeenAt: unknown) {
@@ -60,6 +66,55 @@ async function logVisibleEvent(
   throw error;
 }
 
+async function loadSubscriptions(
+  targetUserId: string | null,
+  targetUserEmail: string | null,
+) {
+  // Legacy/global v1 path: no target user means broadcast to all subscriptions.
+  if (!targetUserId) {
+    const { data, error } = await serviceDb.from("push_subscriptions").select("*");
+
+    if (error) {
+      console.error("push_subscriptions global lookup failed:", error);
+      return { subs: [], error };
+    }
+
+    return { subs: data || [], error: null };
+  }
+
+  // Preferred v2 path: user_id first.
+  const { data: idSubs, error: idError } = await serviceDb
+    .from("push_subscriptions")
+    .select("*")
+    .eq("user_id", targetUserId);
+
+  if (idError) {
+    console.error("push_subscriptions user_id lookup failed:", idError);
+    return { subs: [], error: idError };
+  }
+
+  if ((idSubs || []).length > 0) {
+    return { subs: idSubs || [], error: null };
+  }
+
+  // V1 compatibility fallback: email if user_id has no subscription match.
+  if (targetUserEmail) {
+    const { data: emailSubs, error: emailError } = await serviceDb
+      .from("push_subscriptions")
+      .select("*")
+      .ilike("user_email", targetUserEmail);
+
+    if (emailError) {
+      console.error("push_subscriptions email fallback lookup failed:", emailError);
+      return { subs: [], error: emailError };
+    }
+
+    return { subs: emailSubs || [], error: null };
+  }
+
+  return { subs: [], error: null };
+}
+
 async function sendPush(
   title: string,
   body: string,
@@ -68,15 +123,23 @@ async function sendPush(
   triggeredBy: string,
   suppressSelf: boolean,
   payload: Record<string, unknown> = {},
+  targetUserId: string | null = null,
+  targetUserEmail: string | null = null,
 ) {
-  const { data: subs, error } = await serviceDb.from("push_subscriptions").select("*");
+  const { subs, error } = await loadSubscriptions(targetUserId, targetUserEmail);
 
   if (error) {
-    console.error("push_subscriptions lookup failed:", error);
-    return { attempted: 0, sent: 0, skipped_self: 0, skipped_active: 0, removed: 0 };
+    return {
+      attempted: 0,
+      sent: 0,
+      skipped_self: 0,
+      skipped_active: 0,
+      removed: 0,
+      matched_subscriptions: 0,
+    };
   }
 
-  const triggerEmail = String(triggeredBy || "").toLowerCase().trim();
+  const triggerEmail = cleanEmail(triggeredBy);
 
   let attempted = 0;
   let sent = 0;
@@ -85,13 +148,14 @@ async function sendPush(
   let removed = 0;
 
   for (const sub of subs || []) {
-    const subEmail = String(sub.user_email || "").toLowerCase().trim();
+    const subEmail = cleanEmail(sub.user_email);
 
     if (suppressSelf && triggerEmail && subEmail && subEmail === triggerEmail) {
       skippedSelf += 1;
       continue;
     }
 
+    // Important: active-device suppression stays at actual send time.
     if (isRecentlyActive(sub.last_seen_at)) {
       skippedActive += 1;
       continue;
@@ -117,6 +181,8 @@ async function sendPush(
           game_id: gameId,
           triggered_by: triggeredBy,
           triggered_by_name: String(payload.triggered_by_name || "App"),
+          target_user_id: targetUserId,
+          target_user_email: targetUserEmail,
         }),
       );
 
@@ -131,15 +197,28 @@ async function sendPush(
     }
   }
 
-  return { attempted, sent, skipped_self: skippedSelf, skipped_active: skippedActive, removed };
+  return {
+    attempted,
+    sent,
+    skipped_self: skippedSelf,
+    skipped_active: skippedActive,
+    removed,
+    matched_subscriptions: (subs || []).length,
+  };
+}
+
+function extractTargetEmail(payload: Record<string, unknown>) {
+  return (
+    cleanEmail(payload.target_user_email) ||
+    cleanEmail(payload.recipient_email) ||
+    cleanEmail(payload.user_email) ||
+    null
+  );
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
@@ -156,7 +235,9 @@ Deno.serve(async (req) => {
 
     const { data: rows, error } = await serviceDb
       .from("delayed_notifications")
-      .select("id, game_id, event_key, title, message, payload, triggered_by, suppress_self, visible_after, sent_at, created_at")
+      .select(
+        "id, game_id, event_key, title, message, payload, triggered_by, suppress_self, visible_after, sent_at, created_at, target_user_id",
+      )
       .is("sent_at", null)
       .lte("visible_after", nowIso)
       .order("visible_after", { ascending: true })
@@ -168,7 +249,17 @@ Deno.serve(async (req) => {
     }
 
     if (!rows || rows.length === 0) {
-      return json({ ok: true, processed: 0, skipped: 0, deduped: 0, failed: 0, push_attempted: 0, push_sent: 0 });
+      return json({
+        ok: true,
+        processed: 0,
+        skipped: 0,
+        deduped: 0,
+        failed: 0,
+        push_attempted: 0,
+        push_sent: 0,
+        push_skipped_active: 0,
+        matched_subscriptions: 0,
+      });
     }
 
     let processed = 0;
@@ -177,6 +268,8 @@ Deno.serve(async (req) => {
     let deduped = 0;
     let pushAttempted = 0;
     let pushSent = 0;
+    let pushSkippedActive = 0;
+    let matchedSubscriptions = 0;
 
     for (const row of rows) {
       const claimTime = new Date().toISOString();
@@ -201,34 +294,47 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const title = String(row.title || "").trim();
-        const message = String(row.message || "").trim();
-        const eventKey = String(row.event_key || "").trim();
+        const title = cleanString(row.title);
+        const message = cleanString(row.message);
+        const eventKey = cleanString(row.event_key);
         const gameId = Number(row.game_id || 0);
-        const triggeredBy = String(row.triggered_by || "").trim();
+        const triggeredBy = cleanString(row.triggered_by);
         const suppressSelf = row.suppress_self === true;
-        const storedPayload = (row.payload && typeof row.payload === "object")
-          ? row.payload as Record<string, unknown>
-          : {};
+        const targetUserId = row.target_user_id ? String(row.target_user_id) : null;
+
+        const storedPayload =
+          row.payload && typeof row.payload === "object"
+            ? (row.payload as Record<string, unknown>)
+            : {};
+
+        const targetUserEmail = extractTargetEmail(storedPayload);
 
         const visiblePayload = {
           ...storedPayload,
           title,
           message,
           tag: eventKey,
+          visible_event_key: eventKey,
           url: String(storedPayload.url || "/"),
           game_id: gameId,
           triggered_by: triggeredBy,
           triggered_by_name: String(storedPayload.triggered_by_name || "App"),
           suppress_self: suppressSelf,
+          target_user_id: targetUserId,
+          target_user_email: targetUserEmail,
         };
 
         const insertedVisibleEvent = await logVisibleEvent(gameId, eventKey, visiblePayload);
 
         if (!insertedVisibleEvent) {
           deduped += 1;
-          processed += 1;
-          continue;
+
+          // Legacy/global row already visible means no more push needed.
+          // Targeted rows may share a visible event, so still send the user-specific push.
+          if (!targetUserId) {
+            processed += 1;
+            continue;
+          }
         }
 
         const push = await sendPush(
@@ -239,11 +345,15 @@ Deno.serve(async (req) => {
           triggeredBy,
           suppressSelf,
           visiblePayload,
+          targetUserId,
+          targetUserEmail,
         );
 
         processed += 1;
         pushAttempted += Number(push.attempted || 0);
         pushSent += Number(push.sent || 0);
+        pushSkippedActive += Number(push.skipped_active || 0);
+        matchedSubscriptions += Number(push.matched_subscriptions || 0);
       } catch (err) {
         console.error(`failed to dispatch delayed notification ${row.id}:`, err);
 
@@ -264,6 +374,8 @@ Deno.serve(async (req) => {
       failed,
       push_attempted: pushAttempted,
       push_sent: pushSent,
+      push_skipped_active: pushSkippedActive,
+      matched_subscriptions: matchedSubscriptions,
     });
   } catch (err: any) {
     console.error("dispatch-delayed-notifications failed:", err);
