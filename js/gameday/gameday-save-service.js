@@ -143,6 +143,33 @@ window.CR = window.CR || {};
     });
   }
 
+  function pregameFromRows(rows = []) {
+    const buckets = {};
+    users().forEach((profile, index) => { buckets[profileKey(profile, index)] = []; });
+    rows.forEach((row) => {
+      const profileIndex = users().findIndex((profile) => String(profile.id || '') === String(row.owner_user_id || ''));
+      if (profileIndex < 0) return;
+      const key = profileKey(users()[profileIndex], profileIndex);
+      const slotIndex = Math.max(0, Number(row.pick_slot || 1) - 1);
+      const label = pickLabel(row.player_name || row.original_pick_text || '');
+      if (label) buckets[key][slotIndex] = label;
+    });
+    Object.keys(buckets).forEach((key) => { buckets[key] = buckets[key].filter(Boolean); });
+    return buckets;
+  }
+
+  function lastFilledDraftRow(rows = []) {
+    const service = CR.gameDayDraftService;
+    const slots = service?.draftSlots?.(users()) || [];
+    for (let index = slots.length - 1; index >= 0; index -= 1) {
+      const slot = slots[index];
+      const profile = users()[slot.sideIndex];
+      const row = rows.find((candidate) => String(candidate.owner_user_id || '') === String(profile?.id || '') && Number(candidate.pick_slot || 0) === Number(slot.pickSlot || slot.pickIndex + 1));
+      if (row && pickLabel(row.player_name || row.original_pick_text || '')) return row;
+    }
+    return null;
+  }
+
   async function savePregamePicks(gameId, pregame, draft = null) {
     if (!hasScheduledGame()) throw new Error('Picks cannot be saved until a game is scheduled.');
     if (!gameId) throw new Error('No active game is available for saving picks.');
@@ -195,28 +222,26 @@ window.CR = window.CR || {};
   async function undoLastDraftPick(gameId) {
     if (!hasScheduledGame()) throw new Error('Picks cannot be changed until a game is scheduled.');
     if (!gameId) throw new Error('No active game is available for undo.');
-    const draft = CR.gameDay?.draft || {};
-    const currentPickNumber = Number(draft.currentPickNumber || 1);
-    const undoPickNumber = currentPickNumber > 4 ? 4 : currentPickNumber - 1;
-    if (undoPickNumber < 1) throw new Error('There are no draft picks to undo.');
-    const ownerProfile = draftTurnProfile(undoPickNumber);
-    const slot = draftPickSlot(undoPickNumber);
-    const ownerIndex = users().findIndex((profile) => String(profile.id || '') === String(ownerProfile?.id || ''));
-    const ownerUserId = ownerProfile?.id || null;
-    if (!profileDisplayName(ownerProfile)) throw new Error('Could not determine pick to undo.');
     const db = await CR.getSupabase();
-    const existingRes = await db.from('picks').select('*').eq('game_id', gameId).eq('owner_user_id', ownerUserId).eq('pick_slot', slot).maybeSingle();
-    if (existingRes.error) throw existingRes.error;
-    if (!existingRes.data || !String(existingRes.data.player_name || '').trim()) throw new Error('There is no drafted player in the last pick slot.');
-    const clearPatch = rowForSlot(gameId, ownerProfile, slot, '', Math.max(0, ownerIndex));
-    const pickUpdateRes = await db.from('picks').update(clearPatch).eq('id', existingRes.data.id).select('*').single();
+    const rowsRes = await db.from('picks').select('*').eq('game_id', gameId).order('pick_slot');
+    if (rowsRes.error) throw rowsRes.error;
+    const rows = rowsRes.data || [];
+    const rowToClear = lastFilledDraftRow(rows);
+    if (!rowToClear) throw new Error('There are no draft picks to undo.');
+    const profileIndex = users().findIndex((profile) => String(profile.id || '') === String(rowToClear.owner_user_id || ''));
+    const ownerProfile = users()[profileIndex];
+    const clearPatch = rowForSlot(gameId, ownerProfile, Number(rowToClear.pick_slot || 1), '', Math.max(0, profileIndex));
+    const pickUpdateRes = await db.from('picks').update(clearPatch).eq('id', rowToClear.id).select('*').single();
     if (pickUpdateRes.error) throw pickUpdateRes.error;
-    const gamePatch = rollbackDraftStateToPick(undoPickNumber);
+    const remainingRows = rows.map((row) => row.id === rowToClear.id ? { ...row, ...clearPatch } : row);
+    const nextPregame = pregameFromRows(remainingRows);
+    const nextDraft = CR.gameDayDraftService?.computeDraftState?.(nextPregame, users(), CR.gameDay?.draft || {}) || CR.gameDay?.draft || {};
+    const gamePatch = gamePatchFromDraft(nextDraft);
     const gameUpdateRes = await db.from('games').update(gamePatch).eq('id', gameId).select('*').single();
     if (gameUpdateRes.error) throw gameUpdateRes.error;
-    CR.realtime?.markLocalWrite?.('picks', pickUpdateRes.data || { id: existingRes.data.id, ...clearPatch }, 3000);
+    CR.realtime?.markLocalWrite?.('picks', pickUpdateRes.data || { id: rowToClear.id, ...clearPatch }, 3000);
     CR.realtime?.markLocalWrite?.('games', gameUpdateRes.data || { id: gameId, ...gamePatch }, 3000);
-    return { clearedRow: pickUpdateRes.data, game: gameUpdateRes.data, undonePickNumber: undoPickNumber };
+    return { clearedRow: pickUpdateRes.data, game: gameUpdateRes.data || gamePatch };
   }
 
   CR.gameDaySaveService = { savePregamePicks, saveDraftPick, undoLastDraftPick, rowsFromPregameState, hasScheduledGame, draftTurnProfile, draftPickSlot, nextDraftStateAfterPick, rollbackDraftStateToPick, gamePatchFromDraft };
