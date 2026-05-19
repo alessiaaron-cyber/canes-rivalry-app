@@ -139,6 +139,13 @@ window.CR = window.CR || {};
       editingRosterPlayerId: null,
       watchExperience,
       notificationDevice: buildNotificationDevice(),
+      tempNotificationTest: {
+        status: '',
+        response: null,
+        routingCounts: '',
+        pushCounts: '',
+        visibleAfter: ''
+      },
       streamMode: {
         selected: `${watchExperience.toastDelaySeconds}s`,
         options: DELAY_OPTIONS.map((option) => ({
