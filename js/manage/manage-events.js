@@ -2,21 +2,71 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  let watchSaveTimer = null;
-  let watchSaveSequence = 0;
 
   function state() { return CR.manageStore?.getState?.() || CR.manageState; }
-  function getNestedValue(target, path) { return String(path || '').split('.').reduce((acc, key) => (acc ? acc[key] : undefined), target); }
-  function setNestedValue(target, path, value) { const keys = String(path || '').split('.').filter(Boolean); if (!keys.length) return; let cursor = target; for (let i = 0; i < keys.length - 1; i += 1) { cursor = cursor[keys[i]]; if (!cursor) return; } cursor[keys[keys.length - 1]] = value; }
-  function labelForStreamOption(value) { const option = state()?.streamMode?.options?.find((item) => item.value === value); return option?.label || 'Updated'; }
-  function closeAllSheets() { const current = state(); if (!current) return; current.activeEditField = null; current.profileEditOpen = false; current.startSeasonOpen = false; current.scoringEditOpen = false; current.rosterSheetOpen = false; current.scheduleSheetOpen = false; current.confirmRemove = null; }
-  function userDisplayName(user) { return user?.displayName || user?.display_name || user?.username || 'Player'; }
-  function userById(id, current = state()) { return (current?.users || []).find((user) => String(user.id || '') === String(id || '')) || null; }
-  function pickerLabelFromDraft(draft, current = state()) { const selectedUser = userById(draft?.firstPickerUserId, current); return selectedUser ? userDisplayName(selectedUser) : (draft?.firstPicker || current?.season?.firstPicker || 'TBD'); }
   function currentProfileDraft() { const profile = CR.currentProfile || {}; return { displayName: profile.display_name || profile.username || '', colorHex: profile.color_hex || '#111827' }; }
-  function colorOptionFor(hex, current = state()) { const normalized = String(hex || '').trim().toLowerCase(); return current?.profileColorOptions?.find((option) => option.hex.toLowerCase() === normalized) || null; }
-  function isColorAvailable(hex, current = state()) { const option = colorOptionFor(hex, current); if (!option) return false; const profile = CR.currentProfile || {}; const currentId = String(profile.id || ''); const normalized = String(hex || '').trim().toLowerCase(); return !(current.users || []).some((user) => { if (String(user.id || '') === currentId) return false; const userHex = String(user.colorHex || user.color_hex || '').trim().toLowerCase(); const userOption = colorOptionFor(userHex, current); return userHex === normalized || (userOption?.family && userOption.family === option.family); }); }
-  async function refreshManageAndGameDay() { if (typeof CR.hydrateManageData === 'function') await CR.hydrateManageData(); try { if (typeof CR.refreshGameDayData === 'function') await CR.refreshGameDayData({ skipIfEditing: true, flash: false }); else CR.renderGameDayState?.(); } catch (error) { console.warn('Game Day refresh after Manage change failed', error); } }
+  function closeAllSheets() { const current = state(); if (!current) return; current.activeEditField = null; current.profileEditOpen = false; current.startSeasonOpen = false; current.scoringEditOpen = false; current.rosterSheetOpen = false; current.scheduleSheetOpen = false; current.confirmRemove = null; }
+  function rerender(options = {}) { const current = state(); CR.manageState = current; CR.manageStore?.replaceState?.(current, { render: false }); CR.renderManage?.({ scrollTop: options.scrollTop }); }
+
+  async function refreshManageAndGameDay() {
+    if (typeof CR.hydrateManageData === 'function') await CR.hydrateManageData();
+    try {
+      if (typeof CR.refreshGameDayData === 'function') await CR.refreshGameDayData({ skipIfEditing: true, flash: false });
+      else CR.renderGameDayState?.();
+    } catch (error) {
+      console.warn('Game Day refresh after Manage change failed', error);
+    }
+  }
+
+  async function handleQuickProfileEdit() {
+    const current = state();
+    const profile = CR.currentProfile || {};
+    const draft = currentProfileDraft();
+
+    closeAllSheets();
+    if (current) {
+      current.profileDraft = null;
+      current.profileEditOpen = false;
+      rerender();
+    }
+
+    const displayName = window.prompt('Display name', draft.displayName || '');
+    if (displayName === null) return;
+
+    const cleanName = String(displayName || '').trim();
+    if (!cleanName) {
+      CR.showToast?.({ message: 'Display name is required', tier: 'warning' });
+      return;
+    }
+
+    if (!profile.id) {
+      CR.showToast?.({ message: 'No profile is loaded', tier: 'warning' });
+      return;
+    }
+
+    try {
+      const db = await CR.getSupabase();
+      const result = await db
+        .from('user_profiles')
+        .update({ display_name: cleanName, updated_at: new Date().toISOString() })
+        .eq('id', profile.id)
+        .select('*')
+        .single();
+
+      if (result.error) throw result.error;
+
+      CR.currentProfile = result.data;
+      try { CR.currentProfiles = await CR.auth?.loadActiveProfiles?.() || [result.data]; } catch (_) {}
+      CR.identity?.applyUserColorVariables?.();
+      CR.renderAccountIdentity?.();
+      rerender();
+      await refreshManageAndGameDay();
+      CR.showToast?.({ message: 'Profile updated' });
+    } catch (error) {
+      console.error('Profile update failed', error);
+      CR.showToast?.({ message: error?.message || 'Could not update profile', tier: 'warning' });
+    }
+  }
 
   async function handleManageSignOut() {
     try {
@@ -74,7 +124,6 @@ window.CR = window.CR || {};
           };
 
       const result = await db.functions.invoke('notify-rivalry-event', { body });
-
       if (result.error) throw result.error;
 
       const data = result.data || {};
@@ -84,15 +133,11 @@ window.CR = window.CR || {};
     } catch (error) {
       console.error('Temporary notification test failed', error);
       test.status = 'error';
-      test.response = {
-        error: error?.message || String(error || 'Unknown error')
-      };
+      test.response = { error: error?.message || String(error || 'Unknown error') };
       rerender();
       CR.showToast?.({ message: error?.message || 'Notification test failed', tier: 'warning' });
     }
   }
-
-  function rerender(options = {}) { const current = state(); CR.manageState = current; CR.manageStore?.replaceState?.(current, { render: false }); CR.renderManage?.({ scrollTop: options.scrollTop }); }
 
   function bindManageEvents() {
     const root = document.querySelector('#manageContent');
@@ -103,11 +148,7 @@ window.CR = window.CR || {};
     root.addEventListener('click', async (event) => {
       const profileButton = event.target.closest('[data-manage-open-profile-editor]');
       if (profileButton) {
-        const current = state();
-        closeAllSheets();
-        current.profileDraft = currentProfileDraft();
-        current.profileEditOpen = true;
-        rerender();
+        await handleQuickProfileEdit();
         return;
       }
 
