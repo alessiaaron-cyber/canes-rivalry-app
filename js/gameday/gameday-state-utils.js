@@ -27,7 +27,18 @@ window.CR = window.CR || {};
   }
 
   function pickLabel(pick) {
-    if (typeof pick === 'string') return pick;
+    if (typeof pick === 'string') {
+      const trimmed = pick.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return pickLabel(parsed);
+        } catch (error) {
+          return trimmed;
+        }
+      }
+      return trimmed;
+    }
     if (!pick || typeof pick !== 'object') return '';
     return pick.player || pick.name || pick.playerName || pick.player_name || '';
   }
