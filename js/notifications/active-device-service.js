@@ -24,6 +24,19 @@ window.CR = window.CR || {};
     });
   }
 
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; i += 1) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+
+    return outputArray;
+  }
+
   async function getReadyServiceWorker() {
     if (!('serviceWorker' in navigator)) return null;
     return Promise.race([
@@ -117,7 +130,7 @@ window.CR = window.CR || {};
     };
   }
 
-  async function updateRows(queryBuilder, payload) {
+  async function updateRows(queryBuilder) {
     const result = await queryBuilder.select('id, last_seen_at');
     if (result.error) throw result.error;
     return Array.isArray(result.data) ? result.data : [];
@@ -138,22 +151,19 @@ window.CR = window.CR || {};
 
       if (endpoint) {
         updatedRows = await updateRows(
-          db.from('push_subscriptions').update(payload).eq('endpoint', endpoint),
-          payload
+          db.from('push_subscriptions').update(payload).eq('endpoint', endpoint)
         );
       }
 
       if (!updatedRows.length && userId) {
         updatedRows = await updateRows(
-          db.from('push_subscriptions').update(payload).eq('user_id', userId),
-          payload
+          db.from('push_subscriptions').update(payload).eq('user_id', userId)
         );
       }
 
       if (!updatedRows.length && email) {
         updatedRows = await updateRows(
-          db.from('push_subscriptions').update(payload).ilike('user_email', email),
-          payload
+          db.from('push_subscriptions').update(payload).ilike('user_email', email)
         );
       }
 
@@ -179,6 +189,122 @@ window.CR = window.CR || {};
       };
       return lastStatus;
     }
+  }
+
+  async function saveSubscription(subscription) {
+    const email = await getEmail();
+    const userId = await getUserId();
+    const json = subscription?.toJSON?.() || {};
+    const endpoint = subscription?.endpoint || json.endpoint || '';
+    const p256dh = json.keys?.p256dh || '';
+    const auth = json.keys?.auth || '';
+
+    if (!endpoint || !p256dh || !auth) {
+      throw new Error('Push subscription is incomplete.');
+    }
+
+    if (!email && !userId) {
+      throw new Error('Sign in before enabling notifications.');
+    }
+
+    const db = await CR.getSupabase();
+    const payload = {
+      endpoint,
+      p256dh,
+      auth,
+      user_email: email || null,
+      user_id: userId || null,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const result = await db
+      .from('push_subscriptions')
+      .upsert(payload, { onConflict: 'endpoint' })
+      .select('id, user_email, user_id, last_seen_at')
+      .single();
+
+    if (result.error) throw result.error;
+
+    lastStatus = {
+      ok: true,
+      lastSeenAt: payload.last_seen_at,
+      updatedRows: 1,
+      error: ''
+    };
+
+    return result.data;
+  }
+
+  async function enableNotifications() {
+    if (!canCheckPush()) {
+      throw new Error('Push notifications are not supported on this device/browser.');
+    }
+
+    if (!('Notification' in window)) {
+      throw new Error('Notifications are not supported on this device/browser.');
+    }
+
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+
+    if (permission !== 'granted') {
+      throw new Error('Notification permission was not granted.');
+    }
+
+    const registration = await getReadyServiceWorker();
+    if (!registration?.pushManager) {
+      throw new Error('Service worker push manager is unavailable.');
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      const vapidPublicKey = CR.config?.vapidPublicKey || CR.config?.VAPID_PUBLIC_KEY || '';
+      if (!vapidPublicKey) {
+        throw new Error('Missing VAPID public key in app config.');
+      }
+
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      });
+    }
+
+    const saved = await saveSubscription(subscription);
+    await markActive({ force: true });
+    return saved;
+  }
+
+  async function sendTestNotification() {
+    const db = await CR.getSupabase();
+    const games = Array.isArray(CR.manageState?.schedule) ? CR.manageState.schedule : [];
+    const activeGame = games.find((game) => ['live', 'in progress'].includes(String(game.status || '').toLowerCase()));
+    const fallbackGame = games[0] || null;
+    const gameId = Number(activeGame?.dbId || activeGame?.id || fallbackGame?.dbId || fallbackGame?.id || 0);
+
+    if (!gameId) {
+      throw new Error('No game available for notification test.');
+    }
+
+    const result = await db.functions.invoke('notify-rivalry-event', {
+      body: {
+        game_id: gameId,
+        title: 'Canes Rivalry Test',
+        message: 'Manage current device test notification.',
+        event_key: `manage-device-test-${Date.now()}`,
+        suppress_self: false,
+        delay_visible: false,
+        bypass_delay: true,
+        bypass_active_device_check: true
+      }
+    });
+
+    if (result.error) throw result.error;
+    if (result.data && result.data.ok === false) throw new Error(result.data.error || 'Test notification failed.');
+
+    return result.data;
   }
 
   function markActiveFromActivity() {
@@ -218,6 +344,8 @@ window.CR = window.CR || {};
     start,
     stop,
     markActive,
+    enableNotifications,
+    sendTestNotification,
     getDeviceStatus,
     getSwDebug,
     canCheckPush,
