@@ -63,6 +63,23 @@ window.CR = window.CR || {};
     return last && first ? `${last}, ${first}` : value;
   }
 
+  function validHex(value) {
+    return /^#[0-9A-Fa-f]{6}$/.test(String(value || '').trim());
+  }
+
+  function headerStyle(side) {
+    const color = String(side?.colorHex || '').trim();
+    if (!validHex(color)) return '';
+    const dark = CR.identity?.shade?.(color, -30) || color;
+    return `style="background:linear-gradient(135deg, ${color}, ${dark});color:#fff"`;
+  }
+
+  function tagStyle(owner) {
+    const user = CR.identity?.findUser?.(owner, { users: CR.gameDay?.users }) || null;
+    const color = String(user?.colorHex || user?.color_hex || '').trim();
+    return validHex(color) ? `style="color:${color}"` : '';
+  }
+
   function renderPickSlot({ pick, isPlayoffs, isFocus, picksEnabled }) {
     if (!pick) {
       return `<div class="gd-pick-row is-empty ${!picksEnabled ? 'is-disabled' : ''}"><div class="gd-pick-icon">…</div><div class="gd-pick-main"><strong>Open slot</strong><small>${picksEnabled ? (isPlayoffs ? 'Waiting for the next playoff pick' : 'Waiting for next pick') : draftDisabledLabel()}</small></div></div>`;
@@ -72,7 +89,7 @@ window.CR = window.CR || {};
 
   function renderOwnerPanel(index, users, isPlayoffs, lastDrafted, scheduled) {
     const side = utils().getSideContext(index, { users });
-    return `<article class="gd-panel ${isPlayoffs && scheduled ? 'gd-panel-playoff' : ''}"><div class="gd-panel-head ${side.ownerClass} ${isPlayoffs && scheduled ? 'gd-panel-head-playoff' : ''}"><span>${side.name}</span><span>${side.picks.length}/2</span></div>${[0, 1].map((pickIndex) => renderPickSlot({ pick: side.picks[pickIndex], isPlayoffs, isFocus: scheduled && side.picks[pickIndex] && side.picks[pickIndex].player === lastDrafted, picksEnabled: scheduled })).join('')}</article>`;
+    return `<article class="gd-panel ${isPlayoffs && scheduled ? 'gd-panel-playoff' : ''}"><div class="gd-panel-head ${side.ownerClass} ${isPlayoffs && scheduled ? 'gd-panel-head-playoff' : ''}" ${headerStyle(side)}><span>${side.name}</span><span>${side.picks.length}/2</span></div>${[0, 1].map((pickIndex) => renderPickSlot({ pick: side.picks[pickIndex], isPlayoffs, isFocus: scheduled && side.picks[pickIndex] && side.picks[pickIndex].player === lastDrafted, picksEnabled: scheduled })).join('')}</article>`;
   }
 
   function renderRosterRow(entry, claimedOwner, isPlayoffs, picksEnabled) {
@@ -80,7 +97,7 @@ window.CR = window.CR || {};
     const ownerClass = owner ? (CR.identity?.ownerClass?.(owner) || '') : '';
     const displayName = lastNameFirstName(entry.name);
     const label = picksEnabled ? 'Draft' : draftDisabledLabel();
-    return `<div class="gd-roster-row ${owner ? 'claimed' : ''} ${!picksEnabled ? 'is-disabled' : ''}"><div class="gd-pick-main"><strong>${displayName}</strong><small>${entry.detail}</small></div>${owner ? `<span class="gd-tag ${ownerClass}">${owner}</span>` : `<button class="gd-draft-btn ${isPlayoffs && picksEnabled ? 'gd-draft-btn-playoff' : ''}" data-player="${entry.name}" type="button" ${picksEnabled ? '' : 'disabled'}>${label}</button>`}</div>`;
+    return `<div class="gd-roster-row ${owner ? 'claimed' : ''} ${!picksEnabled ? 'is-disabled' : ''}"><div class="gd-pick-main"><strong>${displayName}</strong><small>${entry.detail}</small></div>${owner ? `<span class="gd-tag ${ownerClass}" ${tagStyle(owner)}>${owner}</span>` : `<button class="gd-draft-btn ${isPlayoffs && picksEnabled ? 'gd-draft-btn-playoff' : ''}" data-player="${entry.name}" type="button" ${picksEnabled ? '' : 'disabled'}>${label}</button>`}</div>`;
   }
 
   function renderPregameSection({ users, roster, claimedOwner, isPlayoffs }) {
