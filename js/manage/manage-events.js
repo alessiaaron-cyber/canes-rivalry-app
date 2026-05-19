@@ -76,7 +76,10 @@ window.CR = window.CR || {};
     watchSaveTimer = setTimeout(async () => {
       try {
         const latest = state();
-        await CR.userSettingsService?.saveWatchExperience?.(latest.watchExperience);
+        if (typeof CR.userSettingsService?.saveWatchExperience !== 'function') {
+          throw new Error('Notification settings service unavailable.');
+        }
+        await CR.userSettingsService.saveWatchExperience(latest.watchExperience);
         if (sequence !== watchSaveSequence) return;
         latest.watchExperience.saveState = 'saved';
         rerender();
@@ -153,12 +156,12 @@ window.CR = window.CR || {};
 
       const openGameSheet = event.target.closest('[data-manage-open-game-sheet]'); if (openGameSheet) { closeAllSheets(); resetScheduleDraft(); current.scheduleSheetOpen = true; rerender(); return; }
       const closeGameSheet = event.target.closest('[data-manage-close-game-sheet]'); if (closeGameSheet) { resetScheduleDraft(); current.scheduleSheetOpen = false; rerender(); return; }
-      const editGame = event.target.closest('[data-manage-edit-game]'); if (editGame) { const game = current.schedule.find((item) => String(item.id) === String(editGame.dataset.manageEditGame)); if (game && !game.locked) { closeAllSheets(); current.editingScheduleGameId = game.id; current.scheduleDraft = { date: game.date, opponent: game.opponent, type: game.type, firstPicker: game.firstPicker, firstPickerUserId: game.firstPickerUserId || '' }; current.scheduleSheetOpen = true; rerender(); } return; }
+      const editGame = event.target.closest('[data-manage-edit-game]'); if (editGame) { const game = current.schedule.find((item) => String(item.id) === String(editGame.dataset.manageEditGame)); if (game) { closeAllSheets(); current.editingScheduleGameId = game.id; current.scheduleDraft = { date: game.date, opponent: game.opponent, type: game.type, firstPicker: game.firstPicker, firstPickerUserId: game.firstPickerUserId || '' }; current.scheduleSheetOpen = true; rerender(); } return; }
       const saveGameButton = event.target.closest('[data-manage-save-game]'); if (saveGameButton) { await saveGame(saveGameButton); return; }
       const confirmRemoveGame = event.target.closest('[data-manage-confirm-remove-game]'); if (confirmRemoveGame) { const game = current.schedule.find((item) => String(item.id) === String(confirmRemoveGame.dataset.manageConfirmRemoveGame)); if (game && !game.locked) { closeAllSheets(); current.confirmRemove = { type: 'game', id: game.id, label: `${game.date} · ${game.opponent}` }; rerender(); } return; }
       const importScheduleButton = event.target.closest('[data-manage-import-schedule]'); if (importScheduleButton) { await importSchedule(importScheduleButton); return; }
 
-      const startSeason = event.target.closest('[data-manage-start-season]'); if (startSeason) { closeAllSheets(); current.newSeasonDraft = { seasonLabel: '', firstPicker: current.season.firstPicker, firstPickerUserId: current.season.firstPickerUserId || '' }; current.startSeasonOpen = true; rerender(); return; }
+      const startSeason = event.target.closest('[data-manage-start-season]'); if (startSeason) { closeAllSheets(); current.newSeasonDraft = { seasonLabel: current.newSeasonDraft?.seasonLabel || current.newSeasonOptions?.[0] || '', firstPicker: current.season.firstPicker, firstPickerUserId: current.season.firstPickerUserId || '' }; current.startSeasonOpen = true; rerender(); return; }
       const closeStartSeason = event.target.closest('[data-manage-close-start-season]'); if (closeStartSeason) { current.startSeasonOpen = false; rerender(); return; }
       const newSeasonPicker = event.target.closest('[data-manage-new-season-picker]'); if (newSeasonPicker) { current.newSeasonDraft.firstPickerUserId = newSeasonPicker.dataset.manageNewSeasonPicker; current.newSeasonDraft.firstPicker = newSeasonPicker.dataset.pickerLabel || newSeasonPicker.textContent || current.newSeasonDraft.firstPicker; rerender(); return; }
       const confirmStartSeason = event.target.closest('[data-manage-confirm-start-season]'); if (confirmStartSeason) { await startNewSeason(confirmStartSeason); return; }
