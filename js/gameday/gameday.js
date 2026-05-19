@@ -15,6 +15,34 @@ window.CR = window.CR || {};
     return { users: CR.gameDay?.users };
   }
 
+  function pickLabel(value) {
+    return state().pickLabel?.(value) || (typeof value === 'string' ? value : '');
+  }
+
+  function pickLabelsForKey(key) {
+    return state().pickLabels?.(CR.gameDay.pregame?.[key] || []) || [];
+  }
+
+  function profileForSideIndex(index = 0) {
+    return state().user?.(index, currentSource()) || CR.gameDay?.users?.[index] || null;
+  }
+
+  function recomputeDraftFromPregame() {
+    const keys = state().sideKeys?.(currentSource()) || [];
+    const counts = keys.map((key) => pickLabelsForKey(key).length);
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    const nextPickNumber = Math.min(total + 1, 5);
+    const nextSideIndex = nextPickNumber > 4 ? -1 : ((nextPickNumber - 1) % 2);
+    const nextProfile = nextSideIndex >= 0 ? profileForSideIndex(nextSideIndex) : null;
+
+    CR.gameDay.draft = {
+      ...(CR.gameDay.draft || {}),
+      status: nextPickNumber > 4 ? 'complete' : 'open',
+      currentPickNumber: nextPickNumber,
+      currentPicker: nextProfile || { id: '', displayName: '', profileKey: '' }
+    };
+  }
+
   function emptyState() {
     const source = { users: CR.identity?.getUsers?.() || [] };
     return {
@@ -228,7 +256,8 @@ window.CR = window.CR || {};
       if (!hasScheduledGame()) throw new Error('Picks cannot be saved until a game is scheduled.');
       if (CR.gameDay.mode === 'final') throw new Error('Final games are locked. Use History to correct finalized stats.');
       CR.ui?.setActionBusy?.(button, true, { label: 'Saving…' });
-      await CR.gameDaySaveService?.savePregamePicks?.(CR.gameDay.currentGameId, CR.gameDay.pregame);
+      recomputeDraftFromPregame();
+      await CR.gameDaySaveService?.savePregamePicks?.(CR.gameDay.currentGameId, CR.gameDay.pregame, CR.gameDay.draft);
       CR.gameDayEdit?.clearEditing?.();
       setModalOpen(false);
       await refreshGameDayData({ flash: true });
@@ -359,7 +388,7 @@ window.CR = window.CR || {};
     const statusCopy = `<div class="gd-sheet-pick ${!picksEnabled ? 'is-disabled' : ''}"><strong>${status.title}</strong><small>${status.detail}</small></div>`;
     const undoAction = `<button class="cr-button secondary gd-inline-action" id="undoDraftPick" type="button" ${picksEnabled ? '' : 'disabled'}>Undo Last Draft Pick</button>`;
     const pickControls = (state().sideKeys?.(currentSource()) || []).flatMap((sideKey, sideIndex) => [0, 1].map((index) => {
-      const selected = CR.gameDay.pregame?.[sideKey]?.[index] || '';
+      const selected = pickLabel(CR.gameDay.pregame?.[sideKey]?.[index] || '');
       const options = [''].concat(getRoster().map((player) => player.name)).map((name) => {
         const disabled = !picksEnabled || (name && selectedPlayers.includes(name) && name !== selected);
         return `<option value="${name}" ${name === selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${name || 'Open slot'}</option>`;
@@ -373,12 +402,14 @@ window.CR = window.CR || {};
         if (!canManagePicks()) return;
         const sideKey = event.target.dataset.sideKey;
         const index = Number(event.target.dataset.index);
-        const updated = (CR.gameDay.pregame?.[sideKey] || []).slice();
+        const updated = pickLabelsForKey(sideKey).slice();
         updated[index] = event.target.value;
         CR.gameDay.pregame[sideKey] = updated.filter(Boolean);
+        recomputeDraftFromPregame();
         if (CR.gameDay.carryover?.active) CR.gameDay.carryover.active = false;
         CR.gameDayEdit?.markEditing?.();
         renderManageSheet();
+        CR.renderGameDayState?.(CR.gameDay.mode);
       });
     });
   }
