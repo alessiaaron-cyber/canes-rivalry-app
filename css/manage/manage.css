@@ -112,7 +112,7 @@
 .manage-profile-form { display: grid; gap: 14px; margin-top: 16px; }
 .manage-readonly-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .manage-readonly-field { border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 18px); background: #fbfcfd; padding: 12px 13px; min-width: 0; }
-.manage-readonly-field.is-wide { width: 100%; }
+.manage-readonly-field.is-wide { grid-column: 1 / -1; width: 100%; }
 .manage-readonly-field span { display: block; font-size: 11px; font-weight: var(--font-strong, 800); letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
 .manage-readonly-field strong { display: block; margin-top: 6px; font-size: 14px; font-weight: var(--font-heavy, 900); letter-spacing: -0.02em; color: var(--ink-strong); overflow-wrap: anywhere; }
 .manage-color-section { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg, 22px); background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%); padding: 13px; }
