@@ -93,8 +93,7 @@ window.CR = window.CR || {};
 
   function isLiveGame(game) {
     const state = String(game?.nhl_game_state || '').toUpperCase();
-    const status = String(game?.status || '').toLowerCase();
-    return !isFinalGame(game) && (['LIVE', 'CRIT'].includes(state) || status === 'in progress');
+    return !isFinalGame(game) && ['LIVE', 'CRIT'].includes(state);
   }
 
   function selectGameForGameDay(games = []) {
@@ -192,9 +191,10 @@ window.CR = window.CR || {};
       .from('seasons')
       .select('id')
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (result.error) throw result.error;
+    if (!result.data?.id) throw new Error('No active season found.');
     return result.data;
   }
 
@@ -202,18 +202,13 @@ window.CR = window.CR || {};
     const db = await CR.getSupabase();
     const activeSeason = await fetchActiveSeason(db);
 
-    let query = db
+    const gamesRes = await db
       .from('games')
       .select('*')
+      .eq('season_id', activeSeason.id)
       .neq('status', 'Hidden')
       .order('game_date', { ascending: true, nullsFirst: false })
       .order('game_number', { ascending: true });
-
-    if (activeSeason?.id) {
-      query = query.eq('season_id', activeSeason.id);
-    }
-
-    const gamesRes = await query;
 
     if (gamesRes.error) throw gamesRes.error;
 
