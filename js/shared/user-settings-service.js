@@ -169,6 +169,19 @@ window.CR = window.CR || {};
     return cache;
   }
 
+  async function saveWatchExperience(watchExperience = {}) {
+    return save({
+      stream_settings: {
+        push_delay_seconds: normalizeDelay(watchExperience.pushDelaySeconds, DEFAULT_SETTINGS.stream_settings.push_delay_seconds),
+        toast_delay_seconds: normalizeDelay(watchExperience.toastDelaySeconds, DEFAULT_SETTINGS.stream_settings.toast_delay_seconds)
+      },
+      notification_settings: {
+        push_enabled: watchExperience.pushEnabled !== false,
+        toast_enabled: watchExperience.toastEnabled !== false
+      }
+    });
+  }
+
   function clear() {
     cache = null;
     CR.userSettings = defaults(null);
@@ -181,6 +194,7 @@ window.CR = window.CR || {};
     get,
     load,
     save,
+    saveWatchExperience,
     clear,
     normalizeDelay,
     normalizeSettings
