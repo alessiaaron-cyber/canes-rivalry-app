@@ -57,6 +57,12 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
   function renderTempNotificationTest(state) {
     const { escapeHtml, renderCardHeader, renderHealthItem } = deps();
     const test = state.tempNotificationTest || {};
+    const notification = test.response?.notification || {};
+    const routing = notification.routing || {};
+    const push = notification.push || {};
+    const routingCounts = test.routingCounts || (routing.recipients !== undefined ? `${routing.immediate_recipients || 0} immediate / ${routing.delayed_recipients || 0} delayed / ${routing.recipients || 0} total` : '');
+    const pushCounts = test.pushCounts || (push.sent !== undefined ? `${push.sent || 0} sent / ${push.attempted || 0} attempted` : '');
+    const visibleAfter = test.visibleAfter || notification.visible_after || '';
     const response = test.response ? JSON.stringify(test.response, null, 2) : 'Run a test to see the notify-rivalry-event response here.';
     const badge = test.status === 'ok'
       ? { className: 'success', label: 'ok' }
@@ -75,9 +81,9 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
         </div>
         <div class="manage-health-grid">
           ${renderHealthItem('Result', test.status || 'Not run', test.status === 'ok' ? 'good' : test.status === 'error' ? 'bad' : 'neutral')}
-          ${renderHealthItem('Routing', test.routingCounts || '—', test.routingCounts ? 'good' : 'neutral')}
-          ${renderHealthItem('Push', test.pushCounts || '—', test.pushCounts ? 'good' : 'neutral')}
-          ${renderHealthItem('Visible after', test.visibleAfter || '—', test.visibleAfter ? 'neutral' : 'neutral')}
+          ${renderHealthItem('Routing', routingCounts || '—', routingCounts ? 'good' : 'neutral')}
+          ${renderHealthItem('Push', pushCounts || '—', pushCounts ? 'good' : 'neutral')}
+          ${renderHealthItem('Visible after', visibleAfter || '—', visibleAfter ? 'neutral' : 'neutral')}
         </div>
         <pre class="manage-json-output" data-manage-temp-notification-response>${escapeHtml(response)}</pre>
       </section>
