@@ -16,6 +16,11 @@ window.CR = window.CR || {};
     return last && first ? `${last}, ${first}` : value;
   }
 
+  function slotOf(value, fallback = 0) {
+    const n = Number(value);
+    return n === 1 || n === 2 ? n : fallback;
+  }
+
   function mapRoster(players = []) {
     return players
       .map((player) => {
@@ -35,17 +40,23 @@ window.CR = window.CR || {};
   }
 
   function mapProfiles(profiles = []) {
-    return profiles.map((profile, index) => ({
-      id: String(profile.id),
-      username: profile.username || '',
-      displayName: profile.display_name || profile.username || `Player ${index + 1}`,
-      role: profile.role || 'player',
-      email: profile.email || '',
-      colorHex: profile.color_hex || '',
-      colorLabel: profile.color_label || '',
-      rivalrySlot: profile.rivalry_slot || index + 1,
-      profileKey: String(profile.id)
-    }));
+    return profiles
+      .map((profile, index) => {
+        const rivalrySlot = slotOf(profile.rivalry_slot, index + 1);
+        return {
+          id: String(profile.id),
+          username: profile.username || '',
+          displayName: profile.display_name || profile.username || `Player ${rivalrySlot}`,
+          role: profile.role || 'player',
+          email: profile.email || '',
+          colorHex: profile.color_hex || '',
+          colorLabel: profile.color_label || '',
+          rivalrySlot,
+          rivalry_slot: rivalrySlot,
+          profileKey: String(profile.id)
+        };
+      })
+      .sort((a, b) => a.rivalrySlot - b.rivalrySlot);
   }
 
   function emptyBuckets(users = [], factory = () => null) {
@@ -259,7 +270,8 @@ window.CR = window.CR || {};
     const res = await db
       .from('user_profiles')
       .select('id, email, username, display_name, role, is_active, color_hex, color_label, rivalry_slot')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('rivalry_slot', { ascending: true, nullsFirst: false });
     if (res.error) throw res.error;
     return mapProfiles(res.data || []);
   }
