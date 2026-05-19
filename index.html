@@ -15,21 +15,21 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <link rel="icon" type="image/png" href="./assets/app-icon.png?v=v2gameday4" />
-  <link rel="apple-touch-icon" href="./assets/app-icon.png?v=v2gameday4" />
+  <link rel="icon" type="image/png" href="./assets/app-icon.png?v=v2gameday3" />
+  <link rel="apple-touch-icon" href="./assets/app-icon.png?v=v2gameday3" />
 
   <link rel="stylesheet" href="css/app-shell.css?v=shell19" />
   <link rel="stylesheet" href="css/app-foundation.css?v=foundation15" />
   <link rel="stylesheet" href="css/app-semantics.css?v=semantics3" />
   <link rel="stylesheet" href="css/app-icons.css?v=icons1" />
   <link rel="stylesheet" href="css/auth.css?v=auth5" />
-  <link rel="stylesheet" href="css/gameday/gameday.css?v=v2gameday26" />
+  <link rel="stylesheet" href="css/gameday/gameday.css?v=v2gameday25" />
   <link rel="stylesheet" href="css/gameday/gameday-overrides.css?v=v2gameday-override12" />
   <link rel="stylesheet" href="css/gameday/gameday-tokens.css?v=v2gameday-tokens5" />
   <link rel="stylesheet" href="css/gameday/gameday-refinements.css?v=v2gameday-refine5" />
   <link rel="stylesheet" href="css/gameday/gameday-motion.css?v=v2gameday-motion6" />
   <link rel="stylesheet" href="css/history/history.css?v=v2history45" />
-  <link rel="stylesheet" href="css/manage/manage.css?v=v2manage33" />
+  <link rel="stylesheet" href="css/manage/manage.css?v=v2manage31" />
 </head>
 <body>
   <div id="appRoot"></div>
@@ -73,6 +73,31 @@
 
       <section class="app-view" id="manageView" data-view="manage">
         <main class="content-stack">
+          <section class="panel-card account-panel">
+            <div class="panel-header compact-header">
+              <div>
+                <div class="eyebrow">Account</div>
+                <h2 id="manageAccountTitle">Signed in</h2>
+              </div>
+              <span class="panel-tag dark" id="manageAccountRole">Admin</span>
+            </div>
+
+            <div class="account-panel-body">
+              <div class="account-panel-avatar" id="manageAccountAvatar">C</div>
+
+              <div class="account-panel-copy">
+                <div class="account-panel-name" id="manageAccountName">Canes Rivalry</div>
+                <div class="account-panel-meta" id="manageAccountMeta">Authenticated session active</div>
+                <div class="account-panel-email" id="manageAccountEmail">—</div>
+              </div>
+            </div>
+
+            <div class="account-panel-actions">
+              <button class="mini-button cr-button secondary" id="manageEditProfileButton" type="button">Edit Profile</button>
+              <button class="mini-button cr-button signout" id="manageSignOutButton" type="button">Sign out</button>
+            </div>
+          </section>
+
           <div id="manageContent"></div>
         </main>
       </section>
@@ -124,9 +149,9 @@
   <script src="js/shared/profile-score-utils.js?v=v2profile-score4"></script>
   <script src="js/shared/user-settings-service.js?v=v2settings1"></script>
   <script src="js/history/history-data-service.js?v=v2history-live33"></script>
-  <script src="js/identity.js?v=identity9"></script>
+  <script src="js/identity.js?v=identity8"></script>
   <script src="js/gameday/gameday-model.js?v=model8"></script>
-  <script src="js/gameday/gameday-state-utils.js?v=gdstate4"></script>
+  <script src="js/gameday/gameday-state-utils.js?v=gdstate2"></script>
   <script src="js/gameday/gameday-draft-service.js?v=v2draft2"></script>
   <script src="js/gameday/gameday-manage-edit-service.js?v=v2manage-edit1"></script>
   <script src="js/gameday/gameday-mock-service.js?v=gdmock4"></script>
@@ -152,7 +177,7 @@
   <script src="js/manage/manage-render-utils.js?v=v2manage-utils3"></script>
   <script src="js/manage/manage-render-sheets.js?v=v2manage-sheets5"></script>
   <script src="js/manage/render/manage-dashboard-render.js?v=v2manage-render1"></script>
-  <script src="js/manage/render/manage-notifications-render.js?v=v2manage-render2-testnotify"></script>
+  <script src="js/manage/render/manage-notifications-render.js?v=v2manage-render3-testnotify"></script>
   <script src="js/manage/render/manage-season-render.js?v=v2manage-render1"></script>
   <script src="js/manage/render/manage-roster-render.js?v=v2manage-render1"></script>
   <script src="js/manage/render/manage-schedule-render.js?v=v2manage-render1"></script>
@@ -163,6 +188,6 @@
   <script src="js/notifications/rivalry-events-consumer.js?v=v2notify1"></script>
   <script src="js/notifications/active-device-service.js?v=v2notify-active4"></script>
   <script src="js/app.js?v=app22"></script>
-  <script src="js/boot.js?v=authboot14"></script>
+  <script src="js/boot.js?v=authboot15-testnotify"></script>
 </body>
 </html>
