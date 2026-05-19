@@ -21,6 +21,14 @@ window.CR = window.CR || {};
     return n === 1 || n === 2 ? n : fallback;
   }
 
+  function compact(value) {
+    return String(value || '').trim();
+  }
+
+  function normalizeLookup(value) {
+    return compact(value).toLowerCase();
+  }
+
   function mapRoster(players = []) {
     return players
       .map((player) => {
@@ -47,13 +55,17 @@ window.CR = window.CR || {};
           id: String(profile.id),
           username: profile.username || '',
           displayName: profile.display_name || profile.username || `Player ${rivalrySlot}`,
+          display_name: profile.display_name || profile.username || `Player ${rivalrySlot}`,
           role: profile.role || 'player',
           email: profile.email || '',
           colorHex: profile.color_hex || '',
+          color_hex: profile.color_hex || '',
           colorLabel: profile.color_label || '',
+          color_label: profile.color_label || '',
           rivalrySlot,
           rivalry_slot: rivalrySlot,
-          profileKey: String(profile.id)
+          profileKey: String(profile.id),
+          profile_key: String(profile.id)
         };
       })
       .sort((a, b) => a.rivalrySlot - b.rivalrySlot);
@@ -174,18 +186,36 @@ window.CR = window.CR || {};
       .sort((a, b) => gameTimestamp(b) - gameTimestamp(a))[0] || null;
   }
 
+  function findProfileForPick(pick = {}, profiles = []) {
+    const ownerUserId = compact(pick.owner_user_id || pick.user_id);
+    if (ownerUserId) {
+      const byId = profiles.find((profile) => compact(profile.id) === ownerUserId);
+      if (byId) return byId;
+    }
+
+    const owner = normalizeLookup(pick.owner);
+    if (owner) {
+      return profiles.find((profile) => [profile.displayName, profile.display_name, profile.username, profile.profileKey, profile.profile_key, profile.id]
+        .some((value) => normalizeLookup(value) === owner)) || null;
+    }
+
+    return null;
+  }
+
   function normalizePick(pick, roster = [], profiles = []) {
     const player = roster.find((item) => String(item.id) === String(pick.player_id));
-    const profile = profiles.find((item) => String(item.id) === String(pick.user_id));
+    const profile = findProfileForPick(pick, profiles);
+    const playerName = pick.player_name || pick.original_pick_text || player?.name || '';
 
     return {
       id: String(pick.id),
       slot: pick.pick_slot || 0,
       round: pick.round_number || 1,
       playerId: String(pick.player_id || ''),
-      playerName: player?.name || 'Unknown player',
-      userId: String(pick.user_id || ''),
-      userName: profile?.displayName || 'Player'
+      playerName,
+      userId: String(profile?.id || pick.owner_user_id || pick.user_id || ''),
+      userName: profile?.displayName || pick.owner || 'Player',
+      profileKey: profile?.profileKey || profile?.profile_key || String(profile?.id || '')
     };
   }
 
@@ -195,14 +225,19 @@ window.CR = window.CR || {};
 
     const pregame = emptyBuckets(users, () => []);
     normalizedPicks.forEach((pick) => {
-      const profile = users.find((user) => user.id === pick.userId);
-      if (!profile) return;
+      const profile = users.find((user) => user.id === pick.userId || user.profileKey === pick.profileKey);
+      if (!profile || !pick.playerName) return;
       pregame[profile.profileKey].push({
         id: pick.playerId,
         name: pick.playerName,
+        player: pick.playerName,
         slot: pick.slot,
         round: pick.round
       });
+    });
+
+    Object.keys(pregame).forEach((key) => {
+      pregame[key].sort((a, b) => Number(a.slot || 0) - Number(b.slot || 0));
     });
 
     const liveScores = emptyBuckets(users, () => 0);
