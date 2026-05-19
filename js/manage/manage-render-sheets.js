@@ -109,8 +109,11 @@ window.CR = window.CR || {};
       : 'Edit point values for first goal scorer, goals, and assists.';
     const lockNote = locked ? '<p class="manage-color-note">Locked scoring can be changed only by starting a new scoring profile/season.</p>' : '';
     const disabledAttrs = locked ? 'disabled aria-disabled="true"' : '';
+    const actionButton = locked
+      ? '<button class="cr-button save" type="button" disabled aria-disabled="true">Locked</button>'
+      : '<button class="cr-button save" type="button" data-manage-save-scoring>Save Scoring Rules</button>';
     const fields = [{ key: 'firstGoal', label: 'First goal scorer' }, { key: 'goal', label: 'Goal' }, { key: 'assist', label: 'Assist' }];
-    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="manageScoringTitle"><div class="manage-edit-backdrop" data-manage-close-scoring></div><section class="manage-edit-card">${renderSheetHeader(profile, locked ? 'Scoring values locked' : 'Scoring values', hint, 'data-manage-close-scoring')}${lockNote}<div class="manage-score-edit-list">${fields.map((field) => `<div class="manage-score-edit-row"><div><span class="eyebrow">${escapeHtml(field.label)}</span><strong>${escapeHtml(scoring[field.key] ?? '—')} pts</strong></div><div class="manage-stepper"><button type="button" data-manage-score-step="${field.key}" data-step="-1" ${disabledAttrs}>−</button><button type="button" data-manage-score-step="${field.key}" data-step="1" ${disabledAttrs}>+</button></div></div>`).join('')}</div></section></div>`;
+    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="manageScoringTitle"><div class="manage-edit-backdrop" data-manage-close-scoring></div><section class="manage-edit-card">${renderSheetHeader(profile, locked ? 'Scoring values locked' : 'Scoring values', hint, 'data-manage-close-scoring')}${lockNote}<div class="manage-score-edit-list">${fields.map((field) => `<div class="manage-score-edit-row"><div><span class="eyebrow">${escapeHtml(field.label)}</span><strong>${escapeHtml(scoring[field.key] ?? '—')} pts</strong></div><div class="manage-stepper"><button type="button" data-manage-score-step="${field.key}" data-step="-1" ${disabledAttrs}>−</button><button type="button" data-manage-score-step="${field.key}" data-step="1" ${disabledAttrs}>+</button></div></div>`).join('')}</div><div class="cr-sheet-actions single">${actionButton}</div></section></div>`;
   }
 
   CR.manageRenderSheets = {
