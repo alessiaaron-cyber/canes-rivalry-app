@@ -33,10 +33,11 @@ window.CR = window.CR || {};
     `;
   }
 
-  function renderPlayerCard({ side, picks = [], themeClass, pointsFor, isPlayoffs, isFinal = false }) {
+  function renderPlayerCard({ side, sideIndex = 0, picks = [], themeClass, pointsFor, isPlayoffs, isFinal = false }) {
     const resolvedTheme = themeClass || 'owner-primary';
     const total = picks.reduce((sum, pick) => sum + pointsFor(pick), 0);
     const scoreKey = utils().scoreChangedKey?.(side);
+    const colorStyle = utils().colorStyle?.(sideIndex) || '';
 
     const pickRows = picks.length
       ? picks.map((pick) => `
@@ -53,7 +54,7 @@ window.CR = window.CR || {};
     return `
       <article class="gd-card gd-score-card ${isPlayoffs ? 'gd-card-playoff' : ''} ${utils().changedClass?.(scoreKey)}">
         <div class="gd-pick-card-head">
-          <strong class="${resolvedTheme}">${side}</strong>
+          <strong class="${resolvedTheme}" ${colorStyle}>${side}</strong>
           <span class="gd-pick-card-score">${total} pts</span>
         </div>
 
