@@ -17,27 +17,60 @@ window.CR = window.CR || {};
     return users.slice(0, 2).map((user, index) => user.profileKey || user.profile_key || user.id || `player-${index + 1}`);
   }
 
-  function draftSlots(users = []) {
-    const keys = sideKeys(users);
+  function userId(user = {}) {
+    return String(user.id || user.user_id || '').trim();
+  }
+
+  function draftPickerId(gameOrDraft = {}) {
+    return String(
+      gameOrDraft.first_picker_user_id ||
+      gameOrDraft.firstPickerUserId ||
+      gameOrDraft.firstPicker?.id ||
+      gameOrDraft.firstPicker ||
+      ''
+    ).trim();
+  }
+
+  function orderedUsers(users = [], gameOrDraft = {}) {
+    const pair = users.slice(0, 2);
+    const firstId = draftPickerId(gameOrDraft);
+    const first = firstId ? pair.find((user) => userId(user) === firstId) : null;
+    if (!first) return pair;
+    const second = pair.find((user) => userId(user) !== firstId) || null;
+    return [first, second].filter(Boolean);
+  }
+
+  function keyForUser(user, allUsers = []) {
+    const keys = sideKeys(allUsers);
+    const index = allUsers.findIndex((candidate) => userId(candidate) === userId(user));
+    return keys[index] || user?.profileKey || user?.profile_key || user?.id || '';
+  }
+
+  function draftSlots(users = [], gameOrDraft = {}) {
+    const ordered = orderedUsers(users, gameOrDraft);
+    const first = ordered[0];
+    const second = ordered[1];
+    const firstKey = first ? keyForUser(first, users) : '';
+    const secondKey = second ? keyForUser(second, users) : '';
     return [
-      { pickNumber: 1, sideIndex: 0, sideKey: keys[0], pickIndex: 0, pickSlot: 1 },
-      { pickNumber: 2, sideIndex: 1, sideKey: keys[1], pickIndex: 0, pickSlot: 1 },
-      { pickNumber: 3, sideIndex: 0, sideKey: keys[0], pickIndex: 1, pickSlot: 2 },
-      { pickNumber: 4, sideIndex: 1, sideKey: keys[1], pickIndex: 1, pickSlot: 2 }
-    ].filter((slot) => slot.sideKey);
+      { pickNumber: 1, sideIndex: users.findIndex((user) => userId(user) === userId(first)), sideKey: firstKey, pickIndex: 0, pickSlot: 1, user: first },
+      { pickNumber: 2, sideIndex: users.findIndex((user) => userId(user) === userId(second)), sideKey: secondKey, pickIndex: 0, pickSlot: 1, user: second },
+      { pickNumber: 3, sideIndex: users.findIndex((user) => userId(user) === userId(first)), sideKey: firstKey, pickIndex: 1, pickSlot: 2, user: first },
+      { pickNumber: 4, sideIndex: users.findIndex((user) => userId(user) === userId(second)), sideKey: secondKey, pickIndex: 1, pickSlot: 2, user: second }
+    ].filter((slot) => slot.sideKey && slot.sideIndex >= 0);
   }
 
   function slotValue(pregame = {}, slot) {
     return pickLabel(pregame?.[slot.sideKey]?.[slot.pickIndex] || '');
   }
 
-  function firstUnfilledSlot(pregame = {}, users = []) {
-    return draftSlots(users).find((slot) => !slotValue(pregame, slot)) || null;
+  function firstUnfilledSlot(pregame = {}, users = [], gameOrDraft = {}) {
+    return draftSlots(users, gameOrDraft).find((slot) => !slotValue(pregame, slot)) || null;
   }
 
   function computeDraftState(pregame = {}, users = [], previousDraft = {}) {
-    const nextSlot = firstUnfilledSlot(pregame, users);
-    const nextProfile = nextSlot ? users[nextSlot.sideIndex] : null;
+    const nextSlot = firstUnfilledSlot(pregame, users, previousDraft);
+    const nextProfile = nextSlot ? nextSlot.user || users[nextSlot.sideIndex] : null;
     return {
       ...(previousDraft || {}),
       status: nextSlot ? 'open' : 'complete',
@@ -56,5 +89,5 @@ window.CR = window.CR || {};
     };
   }
 
-  CR.gameDayDraftService = { pickLabel, sideKeys, draftSlots, firstUnfilledSlot, computeDraftState, toGamePatch };
+  CR.gameDayDraftService = { pickLabel, sideKeys, orderedUsers, draftSlots, firstUnfilledSlot, computeDraftState, toGamePatch };
 })();
