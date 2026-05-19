@@ -114,7 +114,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     const sheets = CR.manageRenderSheets || {};
 
     const renderWatchExperience = notifications.renderWatchExperience || fallback('notifications.renderWatchExperience');
-    const renderTempNotificationTest = notifications.renderTempNotificationTest || fallback('notifications.renderTempNotificationTest');
     const renderNotificationDeviceStatus = notifications.renderNotificationDeviceStatus || fallback('notifications.renderNotificationDeviceStatus');
     const renderManageTools = dashboard.renderManageTools || fallback('dashboard.renderManageTools');
     const renderSeasonSetup = season.renderSeasonSetup || fallback('season.renderSeasonSetup');
@@ -127,7 +126,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
       <div class="content-stack manage-stack">
         ${renderAccountPanel()}
         ${renderWatchExperience(state)}
-        ${renderTempNotificationTest(state)}
         ${renderSeasonSetup(state)}
         ${renderManageTools(state)}
         ${renderNotificationDeviceStatus(state)}
