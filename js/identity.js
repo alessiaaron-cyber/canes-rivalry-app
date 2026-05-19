@@ -121,8 +121,9 @@ window.CR = window.CR || {};
     const users = getUsers(source);
 
     users.slice(0, 2).forEach((user, index) => {
-      const slot = index + 1;
-      const color = normalizeHex(user.colorHex, defaultUsers[index]?.colorHex);
+      const slot = slotOf(user.rivalry_slot || user.rivalrySlot) || index + 1;
+      const fallback = defaultUsers[slot - 1] || defaultUsers[index] || defaultUsers[0];
+      const color = normalizeHex(user.colorHex || user.color_hex, fallback.colorHex);
       const dark = shade(color, -30);
       const rgb = rgbString(color);
       setVar(root, `--cr-user-${slot}-color`, color);
