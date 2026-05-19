@@ -2,7 +2,7 @@ window.CR = window.CR || {};
 
 (() => {
   const CR = window.CR;
-  const INTERVAL_MS = 25 * 1000;
+  const INTERVAL_MS = 30 * 1000;
   const SERVICE_WORKER_READY_TIMEOUT_MS = 1800;
   const ACTIVITY_THROTTLE_MS = 8000;
   let timer = null;
