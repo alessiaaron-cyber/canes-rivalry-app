@@ -77,17 +77,51 @@ window.CR = window.CR || {};
     };
   }
 
-  function selectGameForGameDay(games = []) {
-    const ranked = [...games].sort((a, b) => {
-      const aRank = String(a.status || '').toLowerCase() === 'final' ? 1 : 0;
-      const bRank = String(b.status || '').toLowerCase() === 'final' ? 1 : 0;
-      if (aRank !== bRank) return aRank - bRank;
-      const aDate = new Date(a.game_start_time || a.game_date || 0).getTime();
-      const bDate = new Date(b.game_start_time || b.game_date || 0).getTime();
-      return bDate - aDate;
-    });
+  function gameTimestamp(game) {
+    const value = game?.game_start_time || game?.game_date || null;
+    const time = value ? new Date(value).getTime() : 0;
+    return Number.isFinite(time) ? time : 0;
+  }
 
-    return ranked[0] || null;
+  function isFinalGame(game) {
+    return String(game?.status || '').toLowerCase() === 'final' || String(game?.nhl_game_state || '').toUpperCase() === 'FINAL';
+  }
+
+  function isHiddenGame(game) {
+    return String(game?.status || '').toLowerCase() === 'hidden';
+  }
+
+  function isLiveGame(game) {
+    const state = String(game?.nhl_game_state || '').toUpperCase();
+    const status = String(game?.status || '').toLowerCase();
+    return !isFinalGame(game) && (['LIVE', 'CRIT'].includes(state) || status === 'in progress');
+  }
+
+  function selectGameForGameDay(games = []) {
+    const visibleGames = games.filter((game) => !isHiddenGame(game));
+    const now = Date.now();
+
+    const liveGames = visibleGames
+      .filter(isLiveGame)
+      .sort((a, b) => gameTimestamp(b) - gameTimestamp(a));
+
+    if (liveGames[0]) return liveGames[0];
+
+    const upcomingGames = visibleGames
+      .filter((game) => !isFinalGame(game) && gameTimestamp(game) >= now)
+      .sort((a, b) => gameTimestamp(a) - gameTimestamp(b));
+
+    if (upcomingGames[0]) return upcomingGames[0];
+
+    const recentOpenGames = visibleGames
+      .filter((game) => !isFinalGame(game))
+      .sort((a, b) => gameTimestamp(b) - gameTimestamp(a));
+
+    if (recentOpenGames[0]) return recentOpenGames[0];
+
+    return visibleGames
+      .filter(isFinalGame)
+      .sort((a, b) => gameTimestamp(b) - gameTimestamp(a))[0] || null;
   }
 
   function normalizePick(pick, roster = [], profiles = []) {
@@ -153,13 +187,33 @@ window.CR = window.CR || {};
     };
   }
 
+  async function fetchActiveSeason(db) {
+    const result = await db
+      .from('seasons')
+      .select('id')
+      .eq('is_active', true)
+      .single();
+
+    if (result.error) throw result.error;
+    return result.data;
+  }
+
   async function fetchCurrentGame() {
     const db = await CR.getSupabase();
-    const gamesRes = await db
+    const activeSeason = await fetchActiveSeason(db);
+
+    let query = db
       .from('games')
       .select('*')
-      .order('game_date', { ascending: false })
-      .order('game_number', { ascending: false });
+      .neq('status', 'Hidden')
+      .order('game_date', { ascending: true, nullsFirst: false })
+      .order('game_number', { ascending: true });
+
+    if (activeSeason?.id) {
+      query = query.eq('season_id', activeSeason.id);
+    }
+
+    const gamesRes = await query;
 
     if (gamesRes.error) throw gamesRes.error;
 
