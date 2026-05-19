@@ -476,7 +476,7 @@ Deno.serve(async (req) => {
 
     const { data: season, error: seasonError } = await serviceDb
       .from("seasons")
-      .select("id, scoring_rules")
+      .select("id, scoring_rules, regular_scoring_locked_at, playoff_scoring_locked_at")
       .eq("id", game.season_id)
       .single();
 
@@ -613,6 +613,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    const scoringLockPatch = scoringProfile === "playoffs"
+  ? {
+      playoff_scoring_locked: true,
+      playoff_scoring_locked_at: season?.playoff_scoring_locked_at || new Date().toISOString(),
+    }
+  : {
+      regular_scoring_locked: true,
+      regular_scoring_locked_at: season?.regular_scoring_locked_at || new Date().toISOString(),
+    };
+
+    const { error: lockError } = await serviceDb
+      .from("seasons")
+      .update(scoringLockPatch)
+      .eq("id", game.season_id);
+
+    if (lockError) throw lockError;
+
     for (const [userId, totalPoints] of totalsByUserId.entries()) {
       const { error: scoreError } = await serviceDb
         .from("game_user_scores")
@@ -643,6 +660,7 @@ Deno.serve(async (req) => {
       game_id: gameId,
       scoringProfile,
       scoringRulesUsed: scoring,
+      scoringLockUpdated: scoringProfile,
       score: {
         [slot1.id]: slot1Points,
         [slot2.id]: slot2Points,
