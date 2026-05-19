@@ -364,12 +364,11 @@ Deno.serve(async (req) => {
 
     const bypassDelay =
       body?.bypass_delay === true ||
-      testNotification ||
       !delayVisible;
 
     const bypassActiveDeviceCheck =
       body?.bypass_active_device_check === true ||
-      testNotification;
+      (testNotification && bypassDelay);
 
     if (!gameId) return json({ ok: false, error: "Missing game_id" }, 400);
     if (!title) return json({ ok: false, error: "Missing title" }, 400);
