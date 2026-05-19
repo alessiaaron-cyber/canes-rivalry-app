@@ -101,8 +101,16 @@ window.CR = window.CR || {};
     if (!state.scoringEditOpen) return '';
     const profile = state.scoringEditProfile || state.season.scoringProfile || 'Regular';
     const scoring = state.season.scoringSystems?.[profile] || {};
+    const locked = String(profile || '').toLowerCase().includes('playoff')
+      ? state.season?.playoffScoringLocked === true
+      : state.season?.regularScoringLocked === true;
+    const hint = locked
+      ? 'This scoring profile is locked because finalized games already use it.'
+      : 'Edit point values for first goal scorer, goals, and assists.';
+    const lockNote = locked ? '<p class="manage-color-note">Locked scoring can be changed only by starting a new scoring profile/season.</p>' : '';
+    const disabledAttrs = locked ? 'disabled aria-disabled="true"' : '';
     const fields = [{ key: 'firstGoal', label: 'First goal scorer' }, { key: 'goal', label: 'Goal' }, { key: 'assist', label: 'Assist' }];
-    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="manageScoringTitle"><div class="manage-edit-backdrop" data-manage-close-scoring></div><section class="manage-edit-card">${renderSheetHeader(profile, 'Scoring values', 'Edit point values for first goal scorer, goals, and assists.', 'data-manage-close-scoring')}<div class="manage-score-edit-list">${fields.map((field) => `<div class="manage-score-edit-row"><div><span class="eyebrow">${escapeHtml(field.label)}</span><strong>${escapeHtml(scoring[field.key] ?? '—')} pts</strong></div><div class="manage-stepper"><button type="button" data-manage-score-step="${field.key}" data-step="-1">−</button><button type="button" data-manage-score-step="${field.key}" data-step="1">+</button></div></div>`).join('')}</div></section></div>`;
+    return `<div class="manage-edit-sheet" role="dialog" aria-modal="true" aria-labelledby="manageScoringTitle"><div class="manage-edit-backdrop" data-manage-close-scoring></div><section class="manage-edit-card">${renderSheetHeader(profile, locked ? 'Scoring values locked' : 'Scoring values', hint, 'data-manage-close-scoring')}${lockNote}<div class="manage-score-edit-list">${fields.map((field) => `<div class="manage-score-edit-row"><div><span class="eyebrow">${escapeHtml(field.label)}</span><strong>${escapeHtml(scoring[field.key] ?? '—')} pts</strong></div><div class="manage-stepper"><button type="button" data-manage-score-step="${field.key}" data-step="-1" ${disabledAttrs}>−</button><button type="button" data-manage-score-step="${field.key}" data-step="1" ${disabledAttrs}>+</button></div></div>`).join('')}</div></section></div>`;
   }
 
   CR.manageRenderSheets = {
