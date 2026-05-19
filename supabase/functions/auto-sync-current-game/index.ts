@@ -1,6 +1,7 @@
 // =========================
 // AUTO SYNC CURRENT GAME
 // GAME-DAY SAFE VERSION
+// Settings-aware notification routing
 // =========================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -17,12 +18,7 @@ const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT")!;
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-webpush.setVapidDetails(
-  VAPID_SUBJECT,
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY,
-);
-
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const ALLOWED_NHL_STATES = ["FUT", "PRE", "LIVE", "CRIT", "FINAL", "OFF"];
 const FORCE_SYNC_STATES = ["LIVE", "CRIT", "FINAL", "OFF"];
@@ -31,6 +27,17 @@ const PRE_GAME_WINDOW_MS = 30 * 60 * 1000;
 const POST_GAME_WINDOW_MS = 4.5 * 60 * 60 * 1000;
 const PICK_REMINDER_WINDOW_MS = 75 * 60 * 1000;
 const ACTIVE_DEVICE_SUPPRESS_MS = 60 * 1000;
+const DEFAULT_PUSH_DELAY_SECONDS = 90;
+
+type Recipient = {
+  user_id: string | null;
+  user_email: string;
+};
+
+type NotificationSettings = {
+  push_enabled: boolean;
+  push_delay_seconds: number;
+};
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -41,6 +48,10 @@ function json(body: unknown, status = 200) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").toLowerCase().trim();
 }
 
 function toTime(value: any) {
@@ -54,7 +65,6 @@ function parseDateOnlyAsNoonEastern(dateOnly: any) {
   const raw = String(dateOnly).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
 
-  // Noon UTC fallback keeps date-only games sortable without pretending we know puck drop.
   const t = new Date(`${raw}T12:00:00Z`).getTime();
   return Number.isFinite(t) ? t : null;
 }
@@ -98,7 +108,6 @@ function formatReminderBody(game: any) {
 
 // =========================
 // NAME MATCHING
-// Mirrors manual sync-style tolerant matching.
 // =========================
 
 function normalizeName(name: any) {
@@ -248,45 +257,10 @@ function bonusIncluded(playerName: string, goals: number, firstGoal: string) {
 }
 
 function winner(a: number, j: number, slot1?: any, slot2?: any) {
-
-  const slot1Name = String(
-
-    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
-
-  ).trim();
-
-  const slot2Name = String(
-
-    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
-
-  ).trim();
+  const slot1Name = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
+  const slot2Name = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
 
   return a > j ? slot1Name : j > a ? slot2Name : "Tie";
-}
-
-function buildRecap(game: any, a: number, j: number, slot1?: any, slot2?: any) {
-  const w = winner(a, j, slot1, slot2);
-
-  const slot1Name = String(
-    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
-  ).trim();
-
-  const slot2Name = String(
-    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
-  ).trim();
-
-  const matchup =
-    game?.opponent && game.opponent !== "Next Game"
-      ? `vs ${game.opponent}`
-      : "Final Result";
-
-  if (w === "Tie") {
-    return `Tie ${a}-${j}. ${matchup}. Nobody gets bragging rights, which frankly feels illegal.`;
-  }
-
-  const loser = w === slot1Name ? slot2Name : slot1Name;
-
-  return `${w} wins ${a}-${j}. ${matchup}. ${loser} may file a formal complaint with the Department of Rivalry Affairs.`;
 }
 
 // =========================
@@ -302,7 +276,6 @@ async function logOnce(gameId: number, eventKey: string, payload: Record<string,
   });
 
   if (!error) return true;
-
   if ((error as any).code === "23505") return false;
 
   console.error("rivalry_events insert failed:", error);
@@ -310,45 +283,156 @@ async function logOnce(gameId: number, eventKey: string, payload: Record<string,
 }
 
 // =========================
-// PUSH
+// SETTINGS-AWARE NOTIFICATIONS
 // =========================
 
-async function sendPush(
+function normalizeDelaySeconds(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_PUSH_DELAY_SECONDS;
+  return Math.max(0, Math.min(600, Math.round(n)));
+}
+
+function normalizeSettings(row: any): NotificationSettings {
+  const stream =
+    row?.stream_settings && typeof row.stream_settings === "object"
+      ? row.stream_settings
+      : {};
+
+  const notifications =
+    row?.notification_settings && typeof row.notification_settings === "object"
+      ? row.notification_settings
+      : {};
+
+  return {
+    push_enabled: notifications.push_enabled !== false,
+    push_delay_seconds: normalizeDelaySeconds(stream.push_delay_seconds),
+  };
+}
+
+function isRecentlyActive(lastSeenAt: unknown) {
+  if (!lastSeenAt) return false;
+
+  const lastSeenMs = new Date(String(lastSeenAt)).getTime();
+  if (!Number.isFinite(lastSeenMs)) return false;
+
+  const ageMs = Date.now() - lastSeenMs;
+  return ageMs >= 0 && ageMs <= ACTIVE_DEVICE_SUPPRESS_MS;
+}
+
+async function loadRecipients(): Promise<Recipient[]> {
+  const { data, error } = await db
+    .from("push_subscriptions")
+    .select("user_id, user_email");
+
+  if (error) {
+    console.error("push_subscriptions recipient lookup failed:", error);
+    throw error;
+  }
+
+  const seen = new Set<string>();
+  const recipients: Recipient[] = [];
+
+  for (const row of data || []) {
+    const userId = row.user_id ? String(row.user_id) : "";
+    const email = cleanEmail(row.user_email);
+
+    if (!userId && !email) continue;
+
+    const key = userId || email;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    recipients.push({
+      user_id: userId || null,
+      user_email: email,
+    });
+  }
+
+  return recipients;
+}
+
+async function loadSettingsByUserId(userIds: string[]) {
+  const map = new Map<string, NotificationSettings>();
+
+  if (!userIds.length) return map;
+
+  const { data, error } = await db
+    .from("user_settings")
+    .select("user_id, stream_settings, notification_settings")
+    .in("user_id", userIds);
+
+  if (error) {
+    console.error("user_settings lookup failed:", error);
+    throw error;
+  }
+
+  for (const row of data || []) {
+    map.set(String(row.user_id), normalizeSettings(row));
+  }
+
+  return map;
+}
+
+async function loadSubscriptions(targetUserId: string | null, targetEmail: string | null) {
+  if (targetUserId) {
+    const { data: idSubs, error: idError } = await db
+      .from("push_subscriptions")
+      .select("*")
+      .eq("user_id", targetUserId);
+
+    if (idError) {
+      console.error("push_subscriptions user_id lookup failed:", idError);
+      return { subs: [], error: idError };
+    }
+
+    if ((idSubs || []).length > 0) {
+      return { subs: idSubs || [], error: null };
+    }
+  }
+
+  if (targetEmail) {
+    const { data: emailSubs, error: emailError } = await db
+      .from("push_subscriptions")
+      .select("*")
+      .ilike("user_email", targetEmail);
+
+    if (emailError) {
+      console.error("push_subscriptions email lookup failed:", emailError);
+      return { subs: [], error: emailError };
+    }
+
+    return { subs: emailSubs || [], error: null };
+  }
+
+  return { subs: [], error: null };
+}
+
+async function sendPushToRecipient(
   title: string,
   body: string,
   tag: string,
-  options: {
-    gameId?: number;
-    bypassActiveDeviceSuppression?: boolean;
-    triggeredBy?: string | null;
-    triggeredByName?: string | null;
-  } = {},
+  gameId: number,
+  payload: Record<string, unknown>,
+  recipient: Recipient,
 ) {
-  const { data: subs, error } = await db
-    .from("push_subscriptions")
-    .select("*");
+  const { subs, error } = await loadSubscriptions(recipient.user_id, recipient.user_email);
 
   if (error) {
-    console.error("push_subscriptions lookup failed:", error);
-    return { attempted: 0, sent: 0, suppressed: 0, removed: 0 };
+    return { attempted: 0, sent: 0, suppressed: 0, removed: 0, matched_subscriptions: 0 };
   }
 
-  const now = Date.now();
   let attempted = 0;
   let sent = 0;
   let suppressed = 0;
   let removed = 0;
 
   for (const sub of subs || []) {
-    attempted += 1;
-
-    if (!options.bypassActiveDeviceSuppression && sub.last_seen_at) {
-      const last = new Date(sub.last_seen_at).getTime();
-      if (Number.isFinite(last) && now - last < ACTIVE_DEVICE_SUPPRESS_MS) {
-        suppressed += 1;
-        continue;
-      }
+    if (isRecentlyActive(sub.last_seen_at)) {
+      suppressed += 1;
+      continue;
     }
+
+    attempted += 1;
 
     try {
       await webpush.sendNotification(
@@ -360,13 +444,16 @@ async function sendPush(
           },
         },
         JSON.stringify({
+          ...payload,
           title,
           body,
           tag,
-          url: "/",
-          game_id: options.gameId ?? null,
-          triggered_by: options.triggeredBy ?? "auto-sync",
-          triggered_by_name: options.triggeredByName ?? "Auto Sync",
+          url: String(payload.url || "/"),
+          game_id: gameId,
+          triggered_by: String(payload.triggered_by || "auto-sync"),
+          triggered_by_name: String(payload.triggered_by_name || "Auto Sync"),
+          target_user_id: recipient.user_id,
+          target_user_email: recipient.user_email,
         }),
       );
 
@@ -381,51 +468,172 @@ async function sendPush(
     }
   }
 
-  return { attempted, sent, suppressed, removed };
+  return {
+    attempted,
+    sent,
+    suppressed,
+    removed,
+    matched_subscriptions: (subs || []).length,
+  };
 }
 
-async function emitPushOnce(
+async function enqueueDelayedForRecipient(
+  gameId: number,
+  eventKey: string,
+  title: string,
+  body: string,
+  payload: Record<string, unknown>,
+  recipient: Recipient,
+  delaySeconds: number,
+) {
+  const visibleAfter = new Date(Date.now() + delaySeconds * 1000).toISOString();
+
+  const { error } = await db.from("delayed_notifications").insert({
+    game_id: gameId,
+    event_key: eventKey,
+    title,
+    message: body,
+    payload: {
+      ...payload,
+      target_user_id: recipient.user_id,
+      target_user_email: recipient.user_email,
+      delay_seconds_applied: delaySeconds,
+    },
+    triggered_by: String(payload.triggered_by || "auto-sync"),
+    suppress_self: false,
+    visible_after: visibleAfter,
+    target_user_id: recipient.user_id,
+    target_user_email: recipient.user_email,
+  });
+
+  if (!error) return { inserted: true, visible_after: visibleAfter };
+  if ((error as any).code === "23505") return { inserted: false, visible_after: visibleAfter };
+
+  console.error("delayed notification insert failed:", error);
+  throw error;
+}
+
+async function emitNotificationOnce(
   gameId: number,
   eventKey: string,
   title: string,
   body: string,
   options: {
+    spoilerSensitive?: boolean;
     bypassActiveDeviceSuppression?: boolean;
+    triggeredBy?: string;
+    triggeredByName?: string;
   } = {},
 ) {
-  const payload = {
+  const spoilerSensitive = options.spoilerSensitive === true;
+
+  const basePayload = {
     title,
     message: body,
     tag: eventKey,
     url: "/",
     game_id: gameId,
-    triggered_by: "auto-sync",
-    triggered_by_name: "Auto Sync",
+    triggered_by: options.triggeredBy || "auto-sync",
+    triggered_by_name: options.triggeredByName || "Auto Sync",
+    delay_visible: spoilerSensitive,
+    spoiler_sensitive: spoilerSensitive,
   };
 
-  const inserted = await logOnce(gameId, eventKey, payload);
+  const recipients = await loadRecipients();
+  const userIds = recipients.map((r) => r.user_id).filter(Boolean) as string[];
+  const settingsByUserId = await loadSettingsByUserId(userIds);
 
-  if (!inserted) {
-    return {
-      deduped: true,
-      title,
-      body,
-      push: { attempted: 0, sent: 0, suppressed: 0, removed: 0 },
-    };
+  let delayedRecipients = 0;
+  let delayedDeduped = 0;
+  let skippedDisabled = 0;
+  let immediateRecipients = 0;
+  let pushAttempted = 0;
+  let pushSent = 0;
+  let pushSuppressed = 0;
+  let pushRemoved = 0;
+  let matchedSubscriptions = 0;
+  let firstVisibleAfter: string | null = null;
+
+  const immediateQueue: Recipient[] = [];
+
+  for (const recipient of recipients) {
+    const settings = recipient.user_id
+      ? settingsByUserId.get(recipient.user_id) || normalizeSettings(null)
+      : normalizeSettings(null);
+
+    if (!settings.push_enabled) {
+      skippedDisabled += 1;
+      continue;
+    }
+
+    if (spoilerSensitive && settings.push_delay_seconds > 0) {
+      const queued = await enqueueDelayedForRecipient(
+        gameId,
+        eventKey,
+        title,
+        body,
+        basePayload,
+        recipient,
+        settings.push_delay_seconds,
+      );
+
+      delayedRecipients += queued.inserted ? 1 : 0;
+      delayedDeduped += queued.inserted ? 0 : 1;
+      firstVisibleAfter = firstVisibleAfter || queued.visible_after;
+    } else {
+      immediateQueue.push(recipient);
+    }
   }
 
-  const push = await sendPush(title, body, eventKey, {
-    gameId,
-    bypassActiveDeviceSuppression: !!options.bypassActiveDeviceSuppression,
-    triggeredBy: "auto-sync",
-    triggeredByName: "Auto Sync",
-  });
+  let insertedVisibleEvent = false;
+  let dedupedVisibleEvent = false;
+
+  if (immediateQueue.length > 0) {
+    insertedVisibleEvent = await logOnce(gameId, eventKey, basePayload);
+    dedupedVisibleEvent = !insertedVisibleEvent;
+
+    if (insertedVisibleEvent) {
+      for (const recipient of immediateQueue) {
+        const push = await sendPushToRecipient(
+          title,
+          body,
+          eventKey,
+          gameId,
+          basePayload,
+          recipient,
+        );
+
+        immediateRecipients += 1;
+        pushAttempted += Number(push.attempted || 0);
+        pushSent += Number(push.sent || 0);
+        pushSuppressed += Number(push.suppressed || 0);
+        pushRemoved += Number(push.removed || 0);
+        matchedSubscriptions += Number(push.matched_subscriptions || 0);
+      }
+    }
+  }
 
   return {
-    deduped: false,
+    deduped: dedupedVisibleEvent && delayedDeduped > 0,
+    delayed: delayedRecipients > 0,
     title,
     body,
-    push,
+    event_key: eventKey,
+    visible_after: firstVisibleAfter,
+    routing: {
+      recipients: recipients.length,
+      immediate_recipients: immediateRecipients,
+      delayed_recipients: delayedRecipients,
+      delayed_deduped: delayedDeduped,
+      skipped_disabled: skippedDisabled,
+    },
+    push: {
+      attempted: pushAttempted,
+      sent: pushSent,
+      suppressed: pushSuppressed,
+      removed: pushRemoved,
+      matched_subscriptions: matchedSubscriptions,
+    },
   };
 }
 
@@ -434,131 +642,72 @@ async function emitPushOnce(
 // =========================
 
 function buildNotification({
-
   changes,
-
   oldA,
-
   oldJ,
-
   newA,
-
   newJ,
-
   firstGoalBonusHit,
-
   state,
-
   slot1,
-
   slot2,
-
 }: {
-
   changes: string[];
-
   oldA: number;
-
   oldJ: number;
-
   newA: number;
-
   newJ: number;
-
   firstGoalBonusHit: boolean;
-
   state: string;
-
   slot1: any;
-
   slot2: any;
-
 }) {
-
   const oldW = winner(oldA, oldJ, slot1, slot2);
-
   const newW = winner(newA, newJ, slot1, slot2);
 
-  const slot1Name = String(
-
-    slot1?.display_name || slot1?.legacy_owner_key || "Player 1",
-
-  ).trim();
-
-  const slot2Name = String(
-
-    slot2?.display_name || slot2?.legacy_owner_key || "Player 2",
-
-  ).trim();
+  const slot1Name = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
+  const slot2Name = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
 
   const score = `${slot1Name} ${newA} – ${slot2Name} ${newJ}`;
 
   if (state === "FINAL" || state === "OFF") {
-
     if (newW === "Tie") {
-
       return {
-
         title: "Final",
-
         body: `Tie game. ${score}. Chaos.`,
-
       };
-
     }
 
     return {
-
       title: "Final",
-
       body: `${newW} takes it. ${score}.`,
-
     };
-
   }
 
   if (oldW !== newW && newW !== "Tie") {
-
     return {
-
       title: "LEAD CHANGE 👀",
-
       body: `${newW} takes it. ${score}.`,
-
     };
-
   }
 
   if (firstGoalBonusHit) {
-
     return {
-
       title: "FIRST GOAL BONUS 💰",
-
       body: `Bonus hits. ${score}.`,
-
     };
-
   }
 
   if (changes.length > 1) {
-
     return {
-
       title: "Rivalry Update 🔥",
-
       body: `${changes.join(" • ")}. ${score}.`,
-
     };
-
   }
 
   return {
-
     title: "Rivalry Update 🔥",
-
     body: `${changes[0] || "Score updated"}. ${score}.`,
-
   };
 }
 
@@ -653,11 +802,16 @@ Deno.serve(async (req) => {
     if (isInsidePickReminderWindow(game) && pickedCount < 4) {
       const reminderKey = `reminder-${game.id}`;
 
-      reminderNotification = await emitPushOnce(
+      reminderNotification = await emitNotificationOnce(
         game.id,
         reminderKey,
         "Picks Reminder",
         formatReminderBody(game),
+        {
+          spoilerSensitive: false,
+          triggeredBy: "auto-sync",
+          triggeredByName: "Auto Sync",
+        },
       );
     }
 
@@ -736,13 +890,8 @@ Deno.serve(async (req) => {
 
     if (profilesError) throw profilesError;
 
-    const slot1 = (profiles || []).find(
-      (p: any) => Number(p.rivalry_slot) === 1,
-    );
-
-    const slot2 = (profiles || []).find(
-      (p: any) => Number(p.rivalry_slot) === 2,
-    );
+    const slot1 = (profiles || []).find((p: any) => Number(p.rivalry_slot) === 1);
+    const slot2 = (profiles || []).find((p: any) => Number(p.rivalry_slot) === 2);
 
     if (!slot1 || !slot2) {
       throw new Error("Missing rivalry slot profiles");
@@ -840,12 +989,6 @@ Deno.serve(async (req) => {
 
     if (gameUpdateError) throw gameUpdateError;
 
-    const effectiveGame = {
-      ...game,
-      ...gamePatch,
-      nhl_game_state: state,
-    };
-
     let notification = null;
     let finalized = null;
 
@@ -865,14 +1008,18 @@ Deno.serve(async (req) => {
         slot2,
       });
 
-
       const updateKey = `update-${game.id}-${changedKeys.sort().join("|")}-${newA}-${newJ}`;
 
-      notification = await emitPushOnce(
+      notification = await emitNotificationOnce(
         game.id,
         updateKey,
         message.title,
         message.body,
+        {
+          spoilerSensitive: true,
+          triggeredBy: "auto-sync",
+          triggeredByName: "Auto Sync",
+        },
       );
     }
 
