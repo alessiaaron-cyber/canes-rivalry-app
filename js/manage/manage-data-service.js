@@ -188,7 +188,7 @@ window.CR = window.CR || {};
 
   async function updateGame(id, payload) {
     const db = await CR.getSupabase();
-    const result = await db.from('games').update({ game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker: payload.firstPicker || null, first_picker_user_id: payload.firstPickerUserId || null, current_pick_user_id: payload.firstPickerUserId || null }).eq('id', id).neq('status', 'Final').neq('draft_status', 'complete').select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
+    const result = await db.from('games').update({ game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker: payload.firstPicker || null, first_picker_user_id: payload.firstPickerUserId || null, current_pick_user_id: payload.firstPickerUserId || null }).eq('id', id).select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
 
     if (result.error) throw result.error;
     return normalizeGame(result.data, CR.currentProfiles || []);
