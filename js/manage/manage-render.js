@@ -118,6 +118,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     const renderNotificationDeviceStatus = notifications.renderNotificationDeviceStatus || fallback('notifications.renderNotificationDeviceStatus');
     const renderManageTools = dashboard.renderManageTools || fallback('dashboard.renderManageTools');
     const renderSeasonSetup = season.renderSeasonSetup || fallback('season.renderSeasonSetup');
+    const renderProfileSheet = sheets.renderProfileSheet || fallback('sheets.renderProfileSheet');
     const renderEditSheet = sheets.renderEditSheet || fallback('sheets.renderEditSheet');
     const renderStartSeasonSheet = sheets.renderStartSeasonSheet || fallback('sheets.renderStartSeasonSheet');
     const renderScoringSheet = sheets.renderScoringSheet || fallback('sheets.renderScoringSheet');
@@ -132,6 +133,7 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
         ${renderNotificationDeviceStatus(state)}
         ${renderDeveloperTools(state)}
       </div>
+      ${renderProfileSheet(state)}
       ${renderEditSheet(state)}
       ${renderStartSeasonSheet(state)}
       ${renderScoringSheet(state)}
