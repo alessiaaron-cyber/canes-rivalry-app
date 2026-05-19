@@ -26,6 +26,16 @@ window.CR = window.CR || {};
     return [profileKey(0, source), profileKey(1, source)];
   }
 
+  function pickLabel(pick) {
+    if (typeof pick === 'string') return pick;
+    if (!pick || typeof pick !== 'object') return '';
+    return pick.player || pick.name || pick.playerName || pick.player_name || '';
+  }
+
+  function pickLabels(picks = []) {
+    return picks.map(pickLabel).filter(Boolean);
+  }
+
   function emptyPickBuckets(source) {
     return sideKeys(source).reduce((acc, key) => {
       acc[key] = [];
@@ -48,27 +58,27 @@ window.CR = window.CR || {};
   function structuredPregame(gameDay = {}) {
     const source = { users: gameDay.users };
     return sideKeys(source).reduce((acc, key) => {
-      acc[key] = (gameDay.pregame?.[key] || []).map((player) => ({ player }));
+      acc[key] = pickLabels(gameDay.pregame?.[key] || []).map((player) => ({ player }));
       return acc;
     }, {});
   }
 
   function selectedPregamePlayers(gameDay = {}) {
     const source = { users: gameDay.users };
-    return sideKeys(source).flatMap((key) => gameDay.pregame?.[key] || []);
+    return sideKeys(source).flatMap((key) => pickLabels(gameDay.pregame?.[key] || []));
   }
 
   function nextDraftSide(gameDay = {}) {
     const source = { users: gameDay.users };
     const keys = sideKeys(source);
-    const total = keys.reduce((sum, key) => sum + (gameDay.pregame?.[key] || []).length, 0);
+    const total = keys.reduce((sum, key) => sum + pickLabels(gameDay.pregame?.[key] || []).length, 0);
     return draftOrder(source)[total] || null;
   }
 
   function claimedOwner(gameDay = {}, playerName = '') {
     const source = { users: gameDay.users };
     const keys = sideKeys(source);
-    const key = keys.find((candidate) => (gameDay.pregame?.[candidate] || []).includes(playerName));
+    const key = keys.find((candidate) => pickLabels(gameDay.pregame?.[candidate] || []).includes(playerName));
     if (!key) return '';
     return displayName(keys.indexOf(key), source);
   }
@@ -85,5 +95,5 @@ window.CR = window.CR || {};
     return 'Rivalry Tie';
   }
 
-  CR.gameDayStateUtils = { users, user, profileKey, displayName, sideKeys, emptyPickBuckets, emptyScoreBuckets, draftOrder, structuredPregame, selectedPregamePlayers, nextDraftSide, claimedOwner, scoreForIndex, winnerText };
+  CR.gameDayStateUtils = { users, user, profileKey, displayName, sideKeys, pickLabel, pickLabels, emptyPickBuckets, emptyScoreBuckets, draftOrder, structuredPregame, selectedPregamePlayers, nextDraftSide, claimedOwner, scoreForIndex, winnerText };
 })();
