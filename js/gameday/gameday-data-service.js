@@ -55,25 +55,59 @@ window.CR = window.CR || {};
     }, {});
   }
 
+  function formatScheduleText(game) {
+    const value = game?.game_start_time || game?.game_date || null;
+    const date = value ? new Date(value) : null;
+
+    if (!date || Number.isNaN(date.getTime())) {
+      return 'Game scheduled';
+    }
+
+    return date.toLocaleString([], {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  function matchupHeadline(game) {
+    const homeAway = String(game?.home_away || '').toLowerCase();
+    const opponent = game?.opponent || 'Opponent TBD';
+
+    if (homeAway === 'away') {
+      return `Canes at ${opponent}`;
+    }
+
+    return `Canes vs ${opponent}`;
+  }
+
   function gameMeta(game) {
     if (!game) {
       return {
         id: '',
+        hasGame: false,
+        scheduleText: 'Schedule pending',
         opponent: 'Opponent TBD',
         homeAway: 'Home',
         startTime: null,
         gameType: 'Regular Season',
-        gameState: 'PRE'
+        gameState: 'PRE',
+        headline: 'Next game not scheduled yet'
       };
     }
 
     return {
       id: String(game.id),
+      hasGame: true,
+      scheduleText: formatScheduleText(game),
       opponent: game.opponent || 'Opponent TBD',
       homeAway: game.home_away || 'Home',
       startTime: game.game_start_time || null,
       gameType: game.game_type || 'Regular Season',
-      gameState: game.nhl_game_state || game.status || 'PRE'
+      gameState: game.nhl_game_state || game.status || 'PRE',
+      headline: matchupHeadline(game)
     };
   }
 
