@@ -66,22 +66,12 @@ window.CR = window.CR || {};
     ];
   }
 
-  function buildEditOptions(users) {
+  function buildEditOptions() {
     return {
-      activeSeasonLabel: {
-        title: 'Active season',
-        hint: 'Choose which season Manage should treat as current.',
-        options: ['2025-26', '2026-27', '2027-28']
-      },
       scoringProfile: {
         title: 'Scoring profile',
         hint: 'Choose the scoring system used for new rivalry matchups.',
         options: ['Classic', 'Playoff Boost']
-      },
-      firstPicker: {
-        title: 'First picker',
-        hint: 'Choose who picks first next game. Picks alternate after that.',
-        options: users.map((user) => user.displayName)
       }
     };
   }
@@ -205,7 +195,7 @@ window.CR = window.CR || {};
       },
       users,
       profileColorOptions: PROFILE_COLOR_OPTIONS,
-      editOptions: buildEditOptions(users)
+      editOptions: buildEditOptions()
     };
   }
 
