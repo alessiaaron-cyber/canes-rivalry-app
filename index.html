@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="css/app-foundation.css?v=foundation15" />
   <link rel="stylesheet" href="css/app-semantics.css?v=semantics3" />
   <link rel="stylesheet" href="css/app-icons.css?v=icons1" />
-  <link rel="stylesheet" href="css/auth.css?v=auth5" />
+  <link rel="stylesheet" href="css/auth.css?v=auth6-startupsplash" />
   <link rel="stylesheet" href="css/gameday/gameday.css?v=v2gameday27" />
   <link rel="stylesheet" href="css/gameday/gameday-overrides.css?v=v2gameday-override12" />
   <link rel="stylesheet" href="css/gameday/gameday-tokens.css?v=v2gameday-tokens5" />
@@ -33,11 +33,14 @@
 </head>
 <body>
   <div id="appRoot">
-    <div class="boot-stage auth-stage boot-enter is-visible" id="staticBootStage">
-      <div class="auth-card">
-        <div class="eyebrow">Canes Rivalry</div>
-        <h1>Loading Game Day…</h1>
-        <p class="auth-support-copy">Waking up the rivalry.</p>
+    <div class="startup-splash boot-stage boot-enter is-visible" id="staticBootStage">
+      <div class="startup-splash-inner">
+        <div class="startup-splash-logo-wrap">
+          <img class="startup-splash-logo" src="./assets/app-icon.png?v=v2gameday3" alt="Canes Rivalry" />
+        </div>
+        <h1 class="startup-splash-title">Canes Rivalry</h1>
+        <p class="startup-splash-copy">Loading Game Day</p>
+        <div class="startup-splash-loader" aria-hidden="true"></div>
       </div>
     </div>
   </div>
