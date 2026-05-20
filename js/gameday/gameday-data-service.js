@@ -18,7 +18,24 @@ window.CR = window.CR || {};
   }
 
   function emptyBuckets(users = [], factory = () => null) { return users.reduce((acc, user) => { acc[user.profileKey] = factory(user); return acc; }, {}); }
-  function formatScheduleText(game) { const value = game?.game_start_time || game?.game_date || null; const date = value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return 'Game scheduled'; return date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function startOfLocalDay(date = new Date()) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
+  function relativeDayLabel(date) {
+    if (!date || Number.isNaN(date.getTime())) return '';
+    const dayMs = 24 * 60 * 60 * 1000;
+    const diffDays = Math.round((startOfLocalDay(date) - startOfLocalDay(new Date())) / dayMs);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    return '';
+  }
+  function formatScheduleText(game) {
+    const value = game?.game_start_time || game?.game_date || null;
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return 'Game scheduled';
+    const relative = relativeDayLabel(date);
+    const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (relative) return `${relative} ${time}`;
+    return date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
   function matchupHeadline(game) { const homeAway = String(game?.home_away || '').toLowerCase(); const opponent = game?.opponent || 'Opponent TBD'; return homeAway === 'away' ? `Canes at ${opponent}` : `Canes vs ${opponent}`; }
 
   function gameMeta(game) {
@@ -66,5 +83,5 @@ window.CR = window.CR || {};
     return normalizeGameDayState({ game, picks: picksRes.data || [], roster, profiles, gameUserScores });
   }
 
-  CR.gameDayDataService = { fetchGameDayData, normalizeGameDayState, rosterDisplayName, selectGameForGameDay, modeFromGame };
+  CR.gameDayDataService = { fetchGameDayData, normalizeGameDayState, rosterDisplayName, selectGameForGameDay, modeFromGame, formatScheduleText };
 })();
