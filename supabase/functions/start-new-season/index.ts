@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
         season_key: seasonKey,
         display_name: displayName,
         is_active: true,
+        first_picker_user_id: firstPicker?.id || null,
         scoring_rules: body.scoring_rules && typeof body.scoring_rules === "object" ? body.scoring_rules : DEFAULT_SCORING_RULES,
         regular_scoring_locked: false,
         playoff_scoring_locked: false,
