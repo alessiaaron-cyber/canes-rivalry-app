@@ -189,11 +189,27 @@ window.CR = window.CR || {};
     document.querySelector('#retryBootButton')?.addEventListener('click', boot);
   }
 
+  async function primeGameDayData() {
+    if (!CR.gameDayDataService?.fetchGameDayData || !CR.applyGameDayData) return;
+
+    try {
+      const data = await CR.gameDayDataService.fetchGameDayData();
+      if (data) {
+        CR.applyGameDayData(data);
+        CR.__initialGameDayPrimed = true;
+      }
+    } catch (error) {
+      console.warn('Initial Game Day prime failed', error);
+    }
+  }
+
   async function mountShell(useTransition = true) {
     const template = document.querySelector('#appShellTemplate');
     const el = root();
 
     if (!template || !el) return;
+
+    await primeGameDayData();
 
     if (useTransition && root()?.firstElementChild) {
       await transitionOutCurrentStage();
