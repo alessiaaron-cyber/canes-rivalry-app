@@ -19,6 +19,7 @@ const corsHeaders = {
 type ActiveSeason = {
   id: number;
   season_key: string;
+  first_picker_user_id: string | null;
 };
 
 type RivalryProfile = {
@@ -83,7 +84,7 @@ async function requireAllowedUser(user: any) {
 async function getActiveSeason(): Promise<ActiveSeason> {
   const { data, error } = await serviceDb
     .from("seasons")
-    .select("id, season_key")
+    .select("id, season_key, first_picker_user_id")
     .eq("is_active", true)
     .single();
 
@@ -128,15 +129,65 @@ async function loadProfiles() {
   return (data || []) as RivalryProfile[];
 }
 
-function firstPickerForIndex(profiles: RivalryProfile[], index: number) {
-  const slot1 = profiles.find((p) => Number(p.rivalry_slot) === 1) || profiles[0] || null;
-  const slot2 = profiles.find((p) => Number(p.rivalry_slot) === 2) || profiles[1] || null;
-  const selected = index % 2 === 0 ? slot1 : slot2;
+function profileById(profiles: RivalryProfile[], id: string | null | undefined) {
+  return profiles.find((profile) => String(profile.id || "") === String(id || "")) || null;
+}
+
+function otherProfile(profiles: RivalryProfile[], profile: RivalryProfile | null | undefined) {
+  const selectedId = String(profile?.id || "");
+  return profiles.find((candidate) => String(candidate.id || "") !== selectedId) || profile || profiles[0] || null;
+}
+
+function pickerPayload(profile: RivalryProfile | null | undefined) {
   return {
-    first_picker_user_id: selected?.id || null,
-    first_picker: profileDisplayName(selected) || null,
-    current_pick_user_id: selected?.id || null,
+    first_picker_user_id: profile?.id || null,
+    first_picker: profileDisplayName(profile) || null,
+    current_pick_user_id: profile?.id || null,
   };
+}
+
+function latestScheduleGame(games: any[]) {
+  return games
+    .slice()
+    .filter((game) => String(game.status || "").toLowerCase() !== "hidden")
+    .sort((a, b) => Number(b.game_number || 0) - Number(a.game_number || 0))[0] || null;
+}
+
+async function loadCarryForwardGameIds(gameIds: number[]) {
+  if (!gameIds.length) return new Set<number>();
+
+  const { data, error } = await serviceDb
+    .from("picks")
+    .select("game_id")
+    .in("game_id", gameIds)
+    .eq("is_carry_forward", true);
+
+  if (error) throw error;
+
+  return new Set((data || []).map((row: any) => Number(row.game_id)).filter(Boolean));
+}
+
+function nextFirstPicker({
+  activeSeason,
+  profiles,
+  existingGames,
+  carryForwardGameIds,
+}: {
+  activeSeason: ActiveSeason;
+  profiles: RivalryProfile[];
+  existingGames: any[];
+  carryForwardGameIds: Set<number>;
+}) {
+  const seasonStarter = profileById(profiles, activeSeason.first_picker_user_id) || profiles[0] || null;
+  const previousGame = latestScheduleGame(existingGames);
+
+  if (!previousGame) return pickerPayload(seasonStarter);
+
+  const previousPicker = profileById(profiles, previousGame.first_picker_user_id) || seasonStarter;
+  const usedCarryForward = carryForwardGameIds.has(Number(previousGame.id));
+  const selected = usedCarryForward ? previousPicker : otherProfile(profiles, previousPicker);
+
+  return pickerPayload(selected);
 }
 
 async function nextGameNumber(seasonId: number) {
@@ -154,7 +205,7 @@ async function nextGameNumber(seasonId: number) {
 async function loadExistingGames(seasonId: number) {
   const { data, error } = await serviceDb
     .from("games")
-    .select("id, season_id, game_number, game_date, opponent, home_away, game_type, status, draft_status, nhl_game_id")
+    .select("id, season_id, game_number, game_date, opponent, home_away, game_type, status, draft_status, nhl_game_id, first_picker, first_picker_user_id")
     .eq("season_id", seasonId);
 
   if (error) throw error;
@@ -233,6 +284,7 @@ Deno.serve(async (req) => {
     const profiles = await loadProfiles();
     const importedGames = await fetchNhlGames(season, from, to);
     const existingGames = await loadExistingGames(activeSeason.id);
+    const carryForwardGameIds = await loadCarryForwardGameIds(existingGames.map((game: any) => Number(game.id)).filter(Boolean));
 
     let nextNumber = await nextGameNumber(activeSeason.id);
     let inserted = 0;
@@ -276,7 +328,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const picker = firstPickerForIndex(profiles, nextNumber - 1);
+      const picker = nextFirstPicker({ activeSeason, profiles, existingGames, carryForwardGameIds });
       const insertRow = {
         season_id: activeSeason.id,
         game_number: nextNumber,
