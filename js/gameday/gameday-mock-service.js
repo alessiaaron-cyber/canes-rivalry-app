@@ -53,6 +53,13 @@ window.CR = window.CR || {};
     return normalized;
   }
 
+  function tomorrowAt(hour = 19, minute = 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  }
+
   function buildState(mode = currentMode()) {
     const pregame = { [key(0)]: [], [key(1)]: [] };
     const liveUsers = {
@@ -65,7 +72,16 @@ window.CR = window.CR || {};
         { player: 'Andrei Svechnikov', goals: 0, assists: 2, firstGoal: false, points: 2, ownerUserId: mockUsers[1].id, profileKey: key(1) }
       ]
     };
-    return { source: 'mock', currentGameId: 'mock-game-day', mode, playoffMode: isPlayoffs() ? 'playoffs' : 'regular', carryover: { active: isCarryover() }, game: { hasGame: true, scheduleText: 'Tonight 7:00 PM', opponent: 'NYR', headline: 'Canes vs NYR' }, draft: { status: 'open', currentPickNumber: 1, currentPicker: { id: mockUsers[0].id, displayName: mockUsers[0].displayName, profileKey: key(0) }, firstPicker: mockUsers[0].id }, users: mockUsers, pregame, live: { scores: { [key(0)]: 6, [key(1)]: 4 }, period: mode === 'pregame' ? 'Tonight 7:00 PM' : '2nd • 08:32', users: liveUsers, feed: [ { icon: '👑', title: 'Sebastian Aho first Canes goal', detail: 'Player 1 gets the first goal bonus', points: 2, tier: 'heavy' }, { icon: '🚨', title: 'Seth Jarvis goal', detail: 'Player 2 scores through a picked player', points: 2, tier: 'medium' }, { icon: '🎯', title: 'Andrei Svechnikov assists', detail: 'Player 2 adds assist points', points: 2, tier: 'light' } ] }, roster };
+
+    const mockGameStart = mode === 'pregame'
+      ? tomorrowAt(19, 0).toISOString()
+      : new Date().toISOString();
+
+    const scheduleText = CR.gameDayDataService?.formatScheduleText
+      ? CR.gameDayDataService.formatScheduleText({ game_start_time: mockGameStart })
+      : 'Tomorrow 7:00 PM';
+
+    return { source: 'mock', currentGameId: 'mock-game-day', mode, playoffMode: isPlayoffs() ? 'playoffs' : 'regular', carryover: { active: isCarryover() }, game: { hasGame: true, game_start_time: mockGameStart, scheduleText, opponent: 'NYR', headline: 'Canes vs NYR' }, draft: { status: 'open', currentPickNumber: 1, currentPicker: { id: mockUsers[0].id, displayName: mockUsers[0].displayName, profileKey: key(0) }, firstPicker: mockUsers[0].id }, users: mockUsers, pregame, live: { scores: { [key(0)]: 6, [key(1)]: 4 }, period: mode === 'pregame' ? scheduleText : '2nd • 08:32', users: liveUsers, feed: [ { icon: '👑', title: 'Sebastian Aho first Canes goal', detail: 'Player 1 gets the first goal bonus', points: 2, tier: 'heavy' }, { icon: '🚨', title: 'Seth Jarvis goal', detail: 'Player 2 scores through a picked player', points: 2, tier: 'medium' }, { icon: '🎯', title: 'Andrei Svechnikov assists', detail: 'Player 2 adds assist points', points: 2, tier: 'light' } ] }, roster };
   }
 
   function ensureState() {
