@@ -34,7 +34,7 @@ window.CR = window.CR || {};
     const liveMode = mode === 'live';
     const finalMode = mode === 'final';
     const scheduleText = game?.scheduleText || 'Schedule pending';
-    const matchupText = game?.headline || game?.opponent || '';
+    const compactInfo = game?.compactInfo || scheduleText;
     const hasScheduledGame = Boolean(game?.hasGame && scheduleText !== 'Schedule pending');
 
     const scoreSource = pregame ? {} : (finalMode ? final.scores : live.scores);
@@ -49,7 +49,7 @@ window.CR = window.CR || {};
       scores: scoreSource
     });
 
-    const period = pregame ? scheduleText : (liveMode ? live.period : '');
+    const period = pregame ? compactInfo : (liveMode ? live.period : '');
 
     const delta = left.score - right.score;
     const momentum = Math.min(Math.abs(delta) * 12, 48);
@@ -86,10 +86,6 @@ window.CR = window.CR || {};
             ${playoffPill}
           </div>
         </div>
-
-        ${matchupText ? `
-          <div class="gd-matchup-title">${matchupText}</div>
-        ` : ''}
 
         ${period ? `
           <div class="gd-hero-time-row">
