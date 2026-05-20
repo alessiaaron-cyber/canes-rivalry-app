@@ -18,8 +18,40 @@ window.CR = window.CR || {};
   function hasDisplayedGame() { return Boolean(CR.gameDay?.currentGameId); }
   function canManagePicks() { return hasDisplayedGame(); }
   function canUndoDraftPick() { return canManagePicks() && CR.gameDay?.mode === 'pregame'; }
-  function hasAnyPicks(buckets = {}) { return sideKeys().some((key) => pickLabels(buckets?.[key] || []).length > 0); }
+  function hasAnyPicks(buckets = {}) { return sideKeys().some((key, index) => pickLabels(resolveSidePicks(buckets, key, index)).length > 0); }
   function finalData() { return { scores: clone(CR.gameDay?.live?.scores || {}), users: clone(CR.gameDay?.live?.users || {}) }; }
+
+  function userAliases(index) {
+    const user = CR.gameDay?.users?.[index] || {};
+    return [
+      user.profileKey,
+      user.profile_key,
+      user.id,
+      user.user_id,
+      user.scoreKey,
+      user.score_key,
+      user.username,
+      user.displayName,
+      user.display_name,
+      user.userName
+    ].map((value) => String(value || '').trim()).filter(Boolean);
+  }
+
+  function resolveSidePicks(buckets = {}, sideKey, sideIndex) {
+    const aliases = [sideKey].concat(userAliases(sideIndex));
+    for (const alias of aliases) {
+      const picks = buckets?.[alias];
+      if (Array.isArray(picks) && picks.length) return picks;
+    }
+    return buckets?.[sideKey] || [];
+  }
+
+  function normalizeBucketsForSides(buckets = {}) {
+    return sideKeys().reduce((acc, key, index) => {
+      acc[key] = resolveSidePicks(buckets, key, index);
+      return acc;
+    }, {});
+  }
 
   function picksFromDisplayedSideContext() {
     const buckets = {};
@@ -34,9 +66,9 @@ window.CR = window.CR || {};
 
   function currentPregameForSheet() {
     const buffered = edit().getBuffer?.();
-    if (buffered) return buffered;
-    const pregame = CR.gameDay?.pregame || {};
-    return hasAnyPicks(pregame) ? pregame : picksFromDisplayedSideContext();
+    if (buffered) return normalizeBucketsForSides(buffered);
+    const pregame = normalizeBucketsForSides(CR.gameDay?.pregame || {});
+    return hasAnyPicks(pregame) ? pregame : normalizeBucketsForSides(picksFromDisplayedSideContext());
   }
 
   function sheetHeading() {
@@ -73,7 +105,7 @@ window.CR = window.CR || {};
     const undoEnabled = canUndoDraftPick();
     const bufferPregame = currentPregameForSheet();
     const keys = sideKeys();
-    const selectedPlayers = keys.flatMap((key) => pickLabels(bufferPregame?.[key] || []));
+    const selectedPlayers = keys.flatMap((key, index) => pickLabels(resolveSidePicks(bufferPregame, key, index)));
     const heading = sheetHeading();
 
     if (title) title.textContent = heading.title;
@@ -85,7 +117,8 @@ window.CR = window.CR || {};
 
     const undoHtml = undoEnabled ? '<button class="cr-button secondary gd-inline-action" id="undoDraftPick" type="button">Undo Last Draft Pick</button>' : '';
     const controlsHtml = keys.flatMap((sideKey, sideIndex) => [0, 1].map((index) => {
-      const selected = pickLabel(bufferPregame?.[sideKey]?.[index] || '');
+      const sidePicks = resolveSidePicks(bufferPregame, sideKey, sideIndex);
+      const selected = pickLabel(sidePicks?.[index] || '');
       const options = [''].concat(roster().map((player) => player.name)).map((name) => {
         const disabled = !picksEnabled || (name && selectedPlayers.includes(name) && name !== selected);
         return `<option value="${name}" ${name === selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${name || 'Open slot'}</option>`;
