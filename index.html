@@ -92,6 +92,19 @@
       <button data-tab="manage" type="button">Manage</button>
     </nav>
 
+    <div class="gd-sheet" id="manageSheet" aria-hidden="true">
+      <div class="gd-sheet-card" role="dialog" aria-modal="true" aria-labelledby="manageSheetTitle">
+        <div class="gd-sheet-handle" aria-hidden="true"></div>
+        <div class="gd-sheet-title" id="manageSheetTitle">Manage Game Day Picks</div>
+        <p class="gd-sheet-copy">Update the picks for the game currently shown on Game Day.</p>
+        <div class="gd-sheet-actions" id="manageSheetActions"></div>
+        <div class="gd-sheet-footer">
+          <button class="gd-sheet-close" id="closeSheet" type="button">Close</button>
+          <button class="gd-sheet-save" id="saveSheet" type="button">Save Picks</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toast-stack">
       <div id="toast" class="toast">Preview event</div>
     </div>
