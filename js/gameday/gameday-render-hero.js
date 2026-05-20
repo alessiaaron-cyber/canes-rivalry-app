@@ -19,6 +19,11 @@ window.CR = window.CR || {};
     return `${prefix} • Pick ${pickNumber} of 4`;
   }
 
+  function liveContext(game) {
+    const opponent = game?.opponent || '';
+    return opponent ? `${opponent} • Live` : 'Live';
+  }
+
   function renderHeroSection({
     mode,
     game,
@@ -49,7 +54,7 @@ window.CR = window.CR || {};
       scores: scoreSource
     });
 
-    const period = pregame ? compactInfo : (liveMode ? live.period : '');
+    const period = pregame ? compactInfo : (liveMode ? liveContext(game) : compactInfo);
 
     const delta = left.score - right.score;
     const momentum = Math.min(Math.abs(delta) * 12, 48);
