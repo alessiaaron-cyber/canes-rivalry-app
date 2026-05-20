@@ -208,9 +208,7 @@ window.CR = window.CR || {};
     CR.startApp?.();
   }
 
-  async function resolveSessionState() {
-    const session = await CR.auth.getSession();
-
+  async function resolveSessionState(session) {
     if (!session?.user) {
       return {
         state: STATES.SIGNED_OUT
@@ -254,19 +252,22 @@ window.CR = window.CR || {};
     CR.__bootInFlight = true;
 
     try {
+      if (!root()?.firstElementChild) {
+        render(CR.authUi.renderBoot(), 'boot-stage auth-stage');
+      }
+
       const existingSession = await CR.auth.getSession();
       const hasExistingSession = !!existingSession?.user;
 
       if (!hasExistingSession) {
         CR.userSettingsService?.clear?.();
-        if (!root()?.firstElementChild) {
-          render(CR.authUi.renderBoot(), 'boot-stage auth-stage');
-        } else {
+
+        if (!document.querySelector('#staticBootStage')) {
           await swapStage(CR.authUi.renderBoot(), 'boot-stage auth-stage');
         }
       }
 
-      const resolved = await resolveSessionState();
+      const resolved = await resolveSessionState(existingSession);
 
       switch (resolved.state) {
         case STATES.SIGNED_OUT:
