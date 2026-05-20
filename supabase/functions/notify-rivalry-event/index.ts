@@ -392,7 +392,22 @@ Deno.serve(async (req) => {
       test_notification: testNotification,
     };
 
-    const recipients = await loadRecipients();
+    const explicitTargetUserId = body?.target_user_id
+      ? String(body.target_user_id)
+      : null;
+
+    const explicitTargetEmail = body?.target_user_email
+      ? cleanEmail(body.target_user_email)
+      : null;
+
+    const recipients =
+      explicitTargetUserId || explicitTargetEmail
+        ? [{
+            user_id: explicitTargetUserId,
+            user_email: explicitTargetEmail || "",
+          }]
+        : await loadRecipients();
+
     const userIds = recipients.map((r) => r.user_id).filter(Boolean) as string[];
     const settingsByUserId = await loadSettingsByUserId(userIds);
 
