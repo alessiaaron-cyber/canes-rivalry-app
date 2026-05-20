@@ -28,6 +28,35 @@
   padding: 14px;
 }
 
+.gd-next-up-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  margin: 2px 0 14px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #11151f, #2b3442);
+  color: #ffffff;
+  font-size: .72rem;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.gd-next-up-strip-playoff {
+  box-shadow: inset 0 0 0 1px rgba(200,154,43,.35);
+}
+
+.gd-next-up-kicker {
+  color: #ffb3c1;
+}
+
+.gd-next-up-strip-playoff .gd-next-up-kicker {
+  color: #f3cf7a;
+}
+
 .gd-panel-head,
 .gd-label,
 .gd-filter,
