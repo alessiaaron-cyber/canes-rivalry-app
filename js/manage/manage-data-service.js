@@ -19,8 +19,9 @@ window.CR = window.CR || {};
     };
   }
 
-  function normalizeGame(row, profiles = []) {
+  function normalizeGame(row, profiles = [], pickMeta = {}) {
     const picker = profiles.find((profile) => String(profile.id) === String(row.first_picker_user_id));
+    const meta = pickMeta[String(row.id)] || { totalPicks: 0, carryForwardPicks: 0, manualPicks: 0, usedCarryForward: false };
     return {
       id: String(row.id),
       dbId: row.id,
@@ -38,8 +39,27 @@ window.CR = window.CR || {};
       gameStartTime: row.game_start_time || null,
       nhlGameState: row.nhl_game_state || '',
       lastSyncedAt: row.last_synced_at || null,
+      totalPicks: meta.totalPicks,
+      carryForwardPicks: meta.carryForwardPicks,
+      manualPicks: meta.manualPicks,
+      usedCarryForward: meta.usedCarryForward,
       locked: String(row.status || '').toLowerCase() === 'final' || String(row.draft_status || '').toLowerCase() === 'complete'
     };
+  }
+
+  function buildPickMeta(rows = []) {
+    return rows.reduce((acc, row) => {
+      const gameId = String(row.game_id || '');
+      if (!gameId) return acc;
+      acc[gameId] = acc[gameId] || { totalPicks: 0, carryForwardPicks: 0, manualPicks: 0, usedCarryForward: false };
+      if (String(row.player_name || '').trim()) {
+        acc[gameId].totalPicks += 1;
+        if (row.is_carry_forward === true) acc[gameId].carryForwardPicks += 1;
+        else acc[gameId].manualPicks += 1;
+      }
+      acc[gameId].usedCarryForward = acc[gameId].carryForwardPicks > 0;
+      return acc;
+    }, {});
   }
 
   function normalizeSeason(row, profiles = []) {
@@ -115,6 +135,7 @@ window.CR = window.CR || {};
 
     const activeSeason = (seasonsResult.data || []).find((season) => season.is_active) || (seasonsResult.data || [])[0] || null;
     let games = [];
+    let pickMeta = {};
 
     if (activeSeason?.id) {
       const gamesResult = await db
@@ -127,10 +148,21 @@ window.CR = window.CR || {};
 
       if (gamesResult.error) throw gamesResult.error;
       games = gamesResult.data || [];
+
+      const gameIds = games.map((game) => game.id).filter(Boolean);
+      if (gameIds.length) {
+        const picksResult = await db
+          .from('picks')
+          .select('game_id, player_name, is_carry_forward')
+          .in('game_id', gameIds);
+
+        if (picksResult.error) throw picksResult.error;
+        pickMeta = buildPickMeta(picksResult.data || []);
+      }
     }
 
     const profiles = CR.currentProfiles || [];
-    const normalizedGames = games.map((game) => normalizeGame(game, profiles));
+    const normalizedGames = games.map((game) => normalizeGame(game, profiles, pickMeta));
 
     return {
       players: (playersResult.data || []).map(normalizePlayer),
