@@ -89,8 +89,8 @@ window.CR = window.CR || {};
   }
 
   function currentPregameForSheet() {
-    const buffered = edit().getBuffer?.();
-    if (buffered) return normalizeBucketsForSides(buffered);
+    const buffered = normalizeBucketsForSides(edit().getBuffer?.() || {});
+    if (hasAnyPicks(buffered)) return buffered;
     const pregame = normalizeBucketsForSides(CR.gameDay?.pregame || {});
     return hasAnyPicks(pregame) ? pregame : normalizeBucketsForSides(picksFromDisplayedSideContext());
   }
