@@ -203,6 +203,22 @@ window.CR = window.CR || {};
     }
   }
 
+  function loadUserSettingsAfterPaint(user) {
+    CR.userSettings = CR.userSettingsService?.defaults?.(user?.id) || CR.userSettings;
+
+    window.requestAnimationFrame(() => {
+      CR.userSettingsService?.load?.(user)
+        .then(() => {
+          CR.identity?.applyUserColorVariables?.();
+          CR.renderAccountIdentity?.();
+          CR.renderManage?.();
+        })
+        .catch((error) => {
+          console.warn('Deferred user settings load failed', error);
+        });
+    });
+  }
+
   async function mountShell(useTransition = true) {
     const template = document.querySelector('#appShellTemplate');
     const el = root();
@@ -313,9 +329,8 @@ window.CR = window.CR || {};
           CR.currentProfile = resolved.profile;
           CR.currentProfiles = resolved.profiles || [];
 
-          await CR.userSettingsService?.load?.(resolved.user);
-
           if (sameUserAlreadyMounted) {
+            loadUserSettingsAfterPaint(resolved.user);
             CR.identity?.applyUserColorVariables?.();
             CR.renderAccountIdentity?.();
             CR.renderManage?.();
@@ -323,6 +338,7 @@ window.CR = window.CR || {};
           }
 
           await mountShell(!hasExistingSession);
+          loadUserSettingsAfterPaint(resolved.user);
           return;
         }
 
