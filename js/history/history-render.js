@@ -3,6 +3,7 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   const escapeHtml = CR.ui?.escapeHtml || ((value) => String(value ?? ''));
+  const HISTORY_DEBUG_LABELS = true;
 
   function pickLine(pick) {
     const points = Number(pick.points || 0);
@@ -110,6 +111,33 @@ window.CR = window.CR || {};
     return scores.first + scores.second > 0;
   }
 
+  function debugSummary(data) {
+    if (!HISTORY_DEBUG_LABELS) return '';
+    const allGames = data?.games || [];
+    const scopedGames = data?.gameLog || data?.selectedGames || [];
+    const scoredGames = scopedGames.filter((game) => hasScoredResult(data, game));
+    const winnerLeaks = allGames.filter((game) => ['first', 'second'].includes(String(game.winner || '').toLowerCase())).length;
+    const missingPicks = scopedGames.filter((game) => !picksFor(data, game, 0).length && !picksFor(data, game, 1).length).length;
+    const source = data?.source || CR.historySource || 'model';
+    const users = [userName(data, 0), userName(data, 1)].join(' / ');
+    const warnings = [];
+    if (winnerLeaks) warnings.push(`${winnerLeaks} side-winner value${winnerLeaks === 1 ? '' : 's'}`);
+    if (missingPicks && scopedGames.length) warnings.push(`${missingPicks} game${missingPicks === 1 ? '' : 's'} no picks`);
+    const warningText = warnings.length ? ` • Check: ${warnings.join(', ')}` : ' • OK';
+    return `<div class="history-debug-label" style="margin-top:10px;padding:8px 10px;border:1px dashed rgba(148,163,184,.7);border-radius:12px;font-size:12px;line-height:1.35;color:#64748b;background:rgba(248,250,252,.85);">Debug: ${escapeHtml(source)} • Users: ${escapeHtml(users)} • Games: ${escapeHtml(String(allGames.length))} total / ${escapeHtml(String(scopedGames.length))} shown / ${escapeHtml(String(scoredGames.length))} scored${escapeHtml(warningText)}</div>`;
+  }
+
+  function cardDebugLabel(data, card) {
+    if (!HISTORY_DEBUG_LABELS) return '';
+    const scopedGames = data?.gameLog || data?.selectedGames || [];
+    const scoredCount = scopedGames.filter((game) => hasScoredResult(data, game)).length;
+    const label = String(card?.label || '').toLowerCase();
+    let source = `${scoredCount} scored game${scoredCount === 1 ? '' : 's'}`;
+    if (label.includes('games logged')) source = `${scoredCount} scored / ${scopedGames.length} shown`;
+    if (label.includes('first-goal')) source = 'first_goal_scorer + pick firstGoal';
+    return `<div class="history-debug-card-label" style="margin-top:8px;font-size:11px;line-height:1.3;color:#94a3b8;">Debug source: ${escapeHtml(source)}</div>`;
+  }
+
   function seasonFeaturedResult(data, summary, games) {
     const scoredGames = (games || []).filter((game) => hasScoredResult(data, game)).map((game) => {
       const scores = gameScores(data, game);
@@ -159,7 +187,7 @@ window.CR = window.CR || {};
     const cards = (data.highlights?.cards || []).slice(0, 4);
     const performers = ownerPerformersOnly(data, seasonData.playerSpotlights || []);
     const performerCards = performers.map((player) => `<article class="rivalry-highlight-item history-highlight-performer"><div class="eyebrow ${userThemeClass(data, player.owner)}">${escapeHtml(player.position || 'Player')} • ${escapeHtml(winnerDisplayName(data, player.owner))} standout</div><div class="rivalry-highlight-value">${escapeHtml(player.name)}</div><p>${escapeHtml(player.totalPoints)} pts • ${escapeHtml(player.clutch)}</p></article>`).join('');
-    return `<section class="panel-card rivalry-highlights-card"><div class="history-section-head"><div><div class="eyebrow">Highlights</div><h3>Rivalry notes</h3></div></div><div class="rivalry-highlight-grid compact-grid">${cards.map((card) => `<article class="rivalry-highlight-item panel-card"><div class="eyebrow ${card.owner ? userThemeClass(data, card.owner) : ''}">${escapeHtml(card.label)}</div><div class="rivalry-highlight-value">${escapeHtml(card.value)}</div><p>${escapeHtml(highlightCopy(data, card))}</p></article>`).join('')}${performerCards}</div></section>`;
+    return `<section class="panel-card rivalry-highlights-card"><div class="history-section-head"><div><div class="eyebrow">Highlights</div><h3>Rivalry notes</h3></div></div>${debugSummary(data)}<div class="rivalry-highlight-grid compact-grid">${cards.map((card) => `<article class="rivalry-highlight-item panel-card"><div class="eyebrow ${card.owner ? userThemeClass(data, card.owner) : ''}">${escapeHtml(card.label)}</div><div class="rivalry-highlight-value">${escapeHtml(card.value)}</div><p>${escapeHtml(highlightCopy(data, card))}</p>${cardDebugLabel(data, card)}</article>`).join('')}${performerCards}</div></section>`;
   }
 
   function renderRecentGames(data) {
