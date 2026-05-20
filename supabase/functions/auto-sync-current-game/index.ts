@@ -794,6 +794,147 @@ async function getCurrentCandidateGame(seasonId: number) {
 }
 
 // =========================
+// CARRY FORWARD PICKS
+// =========================
+
+function filledPickCount(rows: any[] = []) {
+  return rows.filter((p: any) => String(p.player_name || "").trim()).length;
+}
+
+async function loadPreviousGameWithFourPicks(seasonId: number, game: any) {
+  const currentNumber = Number(game?.game_number || 0);
+
+  let query = db
+    .from("games")
+    .select("id, game_number, game_date")
+    .eq("season_id", seasonId)
+    .neq("status", "Hidden")
+    .order("game_number", { ascending: false })
+    .limit(12);
+
+  if (currentNumber > 0) {
+    query = query.lt("game_number", currentNumber);
+  } else if (game?.game_date) {
+    query = query.lt("game_date", game.game_date);
+  } else {
+    query = query.neq("id", game.id);
+  }
+
+  const { data: previousGames, error } = await query;
+  if (error) throw error;
+
+  for (const previousGame of previousGames || []) {
+    const { data: previousPicks, error: picksError } = await db
+      .from("picks")
+      .select("*")
+      .eq("game_id", previousGame.id)
+      .order("owner_user_id", { ascending: true, nullsFirst: false })
+      .order("pick_slot", { ascending: true });
+
+    if (picksError) throw picksError;
+
+    const filled = (previousPicks || [])
+      .filter((pick: any) => String(pick.player_name || "").trim())
+      .slice(0, 4);
+
+    if (filled.length >= 4) {
+      return { game: previousGame, picks: filled };
+    }
+  }
+
+  return { game: null, picks: [] };
+}
+
+function carryForwardRows(gameId: number, sourcePicks: any[]) {
+  return sourcePicks.slice(0, 4).map((pick: any) => ({
+    game_id: gameId,
+    owner: pick.owner,
+    owner_user_id: pick.owner_user_id || null,
+    pick_slot: Number(pick.pick_slot || 1),
+    player_name: String(pick.player_name || "").trim(),
+    original_pick_text: pick.original_pick_text || pick.player_name || null,
+    goals: 0,
+    assists: 0,
+    points: 0,
+    is_carry_forward: true,
+    picked_by_user_id: null,
+    updated_by_user_id: null,
+    updated_at: nowIso(),
+  }));
+}
+
+async function maybeApplyCarryForwardPicks({
+  seasonId,
+  game,
+  firstGoalResolved,
+  picks,
+}: {
+  seasonId: number;
+  game: any;
+  firstGoalResolved: string;
+  picks: any[];
+}) {
+  const currentFilledCount = filledPickCount(picks);
+
+  if (!firstGoalResolved || currentFilledCount >= 4) {
+    return {
+      applied: false,
+      reason: !firstGoalResolved ? "no-first-goal" : "current-game-has-four-picks",
+      from_game_id: null,
+      replaced_pick_count: 0,
+      picks,
+    };
+  }
+
+  const previous = await loadPreviousGameWithFourPicks(seasonId, game);
+
+  if (!previous.game || previous.picks.length < 4) {
+    return {
+      applied: false,
+      reason: "no-previous-game-with-four-picks",
+      from_game_id: null,
+      replaced_pick_count: currentFilledCount,
+      picks,
+    };
+  }
+
+  const { error: deleteError } = await db
+    .from("picks")
+    .delete()
+    .eq("game_id", game.id);
+
+  if (deleteError) throw deleteError;
+
+  const rows = carryForwardRows(game.id, previous.picks);
+
+  const { data: inserted, error: insertError } = await db
+    .from("picks")
+    .insert(rows)
+    .select("*");
+
+  if (insertError) throw insertError;
+
+  const { error: gameDraftError } = await db
+    .from("games")
+    .update({
+      draft_status: "complete",
+      current_pick_number: 5,
+      current_pick_user_id: null,
+    })
+    .eq("id", game.id);
+
+  if (gameDraftError) throw gameDraftError;
+
+  return {
+    applied: true,
+    reason: "first-goal-before-complete-picks",
+    from_game_id: previous.game.id,
+    replaced_pick_count: currentFilledCount,
+    picks: inserted || rows,
+  };
+}
+
+// =========================
 // FINALIZATION
 // =========================
 
@@ -846,7 +987,7 @@ Deno.serve(async (req) => {
     const scoringRules = normalizeScoringRules(season.scoring_rules);
     const { profile: scoringProfile, scoring } = scoringProfileForGame(game, scoringRules);
 
-    const { data: picks, error: picksError } = await db
+    const { data: initialPicks, error: picksError } = await db
       .from("picks")
       .select("*")
       .eq("game_id", game.id)
@@ -854,7 +995,9 @@ Deno.serve(async (req) => {
 
     if (picksError) throw picksError;
 
-    const pickedCount = (picks || []).filter((p: any) => String(p.player_name || "").trim()).length;
+    let picks = initialPicks || [];
+
+    const pickedCount = filledPickCount(picks);
 
     let reminderNotification = null;
 
@@ -964,6 +1107,31 @@ Deno.serve(async (req) => {
 
     const { stats, firstGoal } = parseScoring(pbp, box);
     const firstGoalResolved = resolveRosterName(firstGoal, roster);
+
+    let carryForward = {
+      applied: false,
+      reason: "not-checked",
+      from_game_id: null,
+      replaced_pick_count: 0,
+    };
+
+    const carryForwardResult = await maybeApplyCarryForwardPicks({
+      seasonId: Number(season.id),
+      game,
+      firstGoalResolved,
+      picks,
+    });
+
+    carryForward = {
+      applied: carryForwardResult.applied,
+      reason: carryForwardResult.reason,
+      from_game_id: carryForwardResult.from_game_id,
+      replaced_pick_count: carryForwardResult.replaced_pick_count,
+    };
+
+    if (carryForwardResult.applied) {
+      picks = carryForwardResult.picks;
+    }
 
     let oldA = 0;
     let oldJ = 0;
@@ -1099,6 +1267,7 @@ Deno.serve(async (req) => {
       scoringRulesUsed: scoring,
       firstGoalRaw: firstGoal,
       firstGoalSaved: firstGoalResolved,
+      carryForward,
       changed,
       changes,
       firstGoalBonusHit,
