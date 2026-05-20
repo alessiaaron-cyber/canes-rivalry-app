@@ -93,10 +93,10 @@
 .manage-segment-button.is-active { background: #fff; color: var(--ink-strong); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12); }
 .manage-dev-toggles { margin-top: 18px; }
 
-.manage-edit-options-spaced { margin-top: 10px; }
+.manage-edit-options-spaced { margin-top: 18px; }
 .manage-edit-sheet { position: fixed; inset: 0; z-index: 6000; display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px max(112px, calc(16px + env(safe-area-inset-bottom))); touch-action: none; overscroll-behavior: contain; }
 .manage-edit-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.26); backdrop-filter: blur(8px); touch-action: none; }
-.manage-edit-card { position: relative; z-index: 1; width: min(100%, 520px); max-height: min(78vh, 680px); overflow: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius-xxl, 30px); border: 1px solid var(--border-subtle); background: #fff; box-shadow: var(--shadow-sheet, 0 22px 50px rgba(15, 23, 42, 0.22)); padding: 14px 16px 16px; touch-action: pan-y; overscroll-behavior: contain; }
+.manage-edit-card { position: relative; z-index: 1; width: min(100%, 520px); max-height: min(78vh, 680px); overflow: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius-xxl, 30px); border: 1px solid var(--border-subtle); background: #fff; box-shadow: var(--shadow-sheet, 0 22px 50px rgba(15, 23, 42, 0.22)); padding: 14px 16px 20px; touch-action: pan-y; overscroll-behavior: contain; }
 .manage-edit-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-top: 8px; }
 .manage-edit-header h2 { margin: 4px 0 0; font-size: 28px; line-height: 1; letter-spacing: -0.05em; color: var(--ink-strong); }
 .manage-edit-header p { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
@@ -107,10 +107,12 @@
 .manage-edit-option strong { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: var(--radius-pill, 999px); background: rgba(15,23,42,.06); color: var(--text-secondary); border: 1px solid rgba(15,23,42,.08); font-size: 11px; font-weight: var(--font-heavy, 900); letter-spacing: .02em; }
 .manage-edit-option.is-active { border-color: rgba(15,23,42,.10); background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); box-shadow: 0 8px 22px rgba(15,23,42,.05); }
 .manage-edit-option.is-active strong { background: rgba(200,16,46,.08); color: #a3122a; border-color: rgba(200,16,46,.12); }
+.manage-edit-card .cr-form-field { display: block; margin-top: 18px; }
+.manage-edit-card .cr-button[data-manage-confirm-start-season] { margin-top: 18px; }
 
 .profile-edit-card { padding-bottom: 18px; }
 .manage-profile-form { display: grid; gap: 14px; margin-top: 16px; }
-.manage-readonly-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.manage-readonly-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
 .manage-readonly-field { border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 18px); background: #fbfcfd; padding: 12px 13px; min-width: 0; }
 .manage-readonly-field.is-wide { grid-column: 1 / -1; width: 100%; }
 .manage-readonly-field span { display: block; font-size: 11px; font-weight: var(--font-strong, 800); letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
