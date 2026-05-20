@@ -377,6 +377,14 @@ Deno.serve(async (req) => {
 
     const triggeredBy = allowed.email as string;
 
+    const explicitTargetUserId = body?.target_user_id
+      ? String(body.target_user_id)
+      : null;
+
+    const explicitTargetEmail = body?.target_user_email
+      ? cleanEmail(body.target_user_email)
+      : null;
+
     const basePayload = {
       title,
       message,
@@ -390,15 +398,9 @@ Deno.serve(async (req) => {
       bypass_delay: bypassDelay,
       bypass_active_device_check: bypassActiveDeviceCheck,
       test_notification: testNotification,
+      target_user_id: explicitTargetUserId,
+      target_user_email: explicitTargetEmail,
     };
-
-    const explicitTargetUserId = body?.target_user_id
-      ? String(body.target_user_id)
-      : null;
-
-    const explicitTargetEmail = body?.target_user_email
-      ? cleanEmail(body.target_user_email)
-      : null;
 
     const recipients =
       explicitTargetUserId || explicitTargetEmail
