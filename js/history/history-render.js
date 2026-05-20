@@ -3,7 +3,7 @@ window.CR = window.CR || {};
 (() => {
   const CR = window.CR;
   const escapeHtml = CR.ui?.escapeHtml || ((value) => String(value ?? ''));
-  const HISTORY_DEBUG_LABELS = true;
+  const HISTORY_DEBUG_LABELS = false;
 
   function pickLine(pick) {
     const points = Number(pick.points || 0);
