@@ -123,7 +123,8 @@ create policy "Block delete user settings"
 -- =====================================================
 
 alter table public.push_subscriptions
-  add column if not exists user_id uuid null;
+  add column if not exists user_id uuid null,
+  add column if not exists updated_at timestamptz not null default now();
 
 update public.push_subscriptions ps
 set user_id = up.id
@@ -140,10 +141,31 @@ create index if not exists idx_push_subscriptions_user_id
 -- =====================================================
 
 alter table public.delayed_notifications
-  add column if not exists target_user_id uuid null;
+  add column if not exists target_user_id uuid null,
+  add column if not exists target_user_email text null;
+
+-- Replace the legacy global event_key uniqueness with recipient-aware
+-- uniqueness. Legacy/global delayed rows are still unique by event_key,
+-- but targeted rows may queue once per recipient.
+drop index if exists public.delayed_notifications_event_key_unique;
+
+create unique index if not exists delayed_notifications_event_key_global_unique
+  on public.delayed_notifications(event_key)
+  where target_user_id is null and target_user_email is null;
+
+create unique index if not exists delayed_notifications_event_key_target_user_unique
+  on public.delayed_notifications(event_key, target_user_id)
+  where target_user_id is not null;
+
+create unique index if not exists delayed_notifications_event_key_target_email_unique
+  on public.delayed_notifications(event_key, lower(target_user_email))
+  where target_user_id is null and target_user_email is not null;
 
 create index if not exists idx_delayed_notifications_target_user
   on public.delayed_notifications(target_user_id);
 
+create index if not exists idx_delayed_notifications_target_email
+  on public.delayed_notifications(lower(target_user_email));
+
 -- Existing cleanup cron continues to cover delayed_notifications rows.
--- Existing V1 rows may have target_user_id null and should keep broadcast behavior.
+-- Existing V1 rows may have target_user_id/target_user_email null and should keep broadcast behavior.
