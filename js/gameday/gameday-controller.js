@@ -49,7 +49,7 @@ window.CR = window.CR || {};
   function firstGoalSummary(users = {}, mode = CR.gameDay?.mode) { const bonus = firstGoalHit(users); if (bonus) return `${bonus.player} hit the first goal bonus.`; return mode === 'final' ? 'No first goal bonus recorded.' : 'First goal bonus still live.'; }
   function leadingStatType(users = {}) { const goals = totalGoals(users); const assists = totalAssists(users); if (goals > assists) return 'Goals carried the night.'; if (assists > goals) return 'Assists drove the scoring.'; return 'Goals and assists stayed balanced.'; }
   function totalEventsText(users = {}) { return `${totalGoals(users)} goals • ${totalAssists(users)} assists`; }
-  function mvpText(users = {}) { const picks = allLivePicks(users).slice().sort((a, b) => pointsFor(b) - pointsFor(a)); return picks[0]?.player ? `${picks[0].player} led the rivalry card.` : 'No player separated yet.'; }
+  function mvpText(users = {}) { const picks = allLivePicks(users).slice().sort((a, b) => pointsFor(b) - pointsFor(a)); const topPick = picks[0]; return topPick?.player && pointsFor(topPick) > 0 ? `${topPick.player} led the rivalry card.` : 'No MVP earned.'; }
   function winnerText(scores = {}) { return state().winnerText?.(scores, source()) || 'Rivalry Tie'; }
   function nextDraftSide() { return draft().firstUnfilledSlot?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [])?.sideKey || null; }
   function claimedOwner(name) { return state().claimedOwner?.(CR.gameDay, name) || ''; }
