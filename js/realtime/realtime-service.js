@@ -13,7 +13,11 @@ window.CR.realtime = window.CR.realtime || {};
   function echoKey(table, row = {}) {
     if (!table || !row) return '';
     if (table === 'games') return `games:${row.id}`;
-    if (table === 'picks') return `picks:${row.game_id}:${row.owner}:${Number(row.pick_slot)}`;
+    if (table === 'picks') {
+      return row.id
+        ? `picks:${row.id}`
+        : `picks:${row.game_id}:${row.owner}:${Number(row.pick_slot)}`;
+    }
     if (table === 'rivalry_events') return `rivalry_events:${row.id}`;
     return `${table}:${row.id || ''}`;
   }
