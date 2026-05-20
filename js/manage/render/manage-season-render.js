@@ -9,7 +9,6 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     return {
       escapeHtml: utils.escapeHtml || CR.ui?.escapeHtml || ((value) => String(value ?? '')),
       iconButton: utils.iconButton,
-      renderEditableMetaCard: utils.renderEditableMetaCard,
       renderCardHeader: utils.renderCardHeader
     };
   }
@@ -59,14 +58,17 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
   }
 
   function renderSeasonSetup(state) {
-    const { renderEditableMetaCard, renderCardHeader } = deps();
+    const { escapeHtml, renderCardHeader } = deps();
+    const activeSeasonLabel = state.season.activeSeasonLabel || 'Active season';
 
     return `
       <section class="panel-card manage-card">
         ${renderCardHeader('Season setup', 'Season defaults', 'Game type controls whether regular or playoff scoring applies. Scoring rules below are stored on the active season.', { className: 'neutral', label: 'Season' })}
-        <div class="manage-meta-grid">
-          ${renderEditableMetaCard({ field: 'activeSeasonLabel', label: 'Active season', value: state.season.activeSeasonLabel })}
-          ${renderEditableMetaCard({ field: 'firstPicker', label: 'First picker', value: state.season.firstPicker })}
+        <div class="manage-readonly-grid">
+          <div class="manage-readonly-field is-wide">
+            <span>Active season</span>
+            <strong>${escapeHtml(activeSeasonLabel)}</strong>
+          </div>
         </div>
         ${renderScoringSummary(state)}
         <div class="manage-action-row">
