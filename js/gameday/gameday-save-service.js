@@ -25,6 +25,32 @@ window.CR = window.CR || {};
   function rollbackDraftStateToPick(pickNumber = 1) { const rollbackPickNumber = Math.max(1, Math.min(Number(pickNumber || 1), 4)); const picker = draftTurnProfile(rollbackPickNumber); return { draft_status: 'open', current_pick_number: rollbackPickNumber, current_pick_user_id: picker?.id || null }; }
   function gamePatchFromDraft(draft = {}) { const currentPickerId = draft.currentPicker?.id || draft.current_pick_user_id || null; const currentPickNumber = Number(draft.currentPickNumber || draft.current_pick_number || 1); const status = draft.status || draft.draft_status || (currentPickNumber > 4 ? 'complete' : 'open'); return { draft_status: status, current_pick_number: currentPickNumber, current_pick_user_id: status === 'complete' ? null : currentPickerId }; }
   function draftContext() { return { ...(CR.gameDay?.game || {}), ...(CR.gameDay?.draft || {}) }; }
+  function shortPlayerName(name) { const parts = String(name || '').trim().split(/\s+/).filter(Boolean); return parts.length >= 2 ? parts[parts.length - 1] : String(name || '').trim(); }
+
+  async function sendPickNotification(gameId, ownerProfile, pickSlot, playerName, savedRow = {}) {
+    const cleanPlayerName = pickLabel(playerName);
+    if (!gameId || !cleanPlayerName) return;
+
+    try {
+      const db = await CR.getSupabase();
+      const ownerName = profileDisplayName(ownerProfile) || savedRow.owner || 'Someone';
+      const rowId = savedRow.id ? `row-${savedRow.id}` : `${ownerName}-${pickSlot}-${cleanPlayerName}`;
+
+      await db.functions.invoke('notify-rivalry-event', {
+        body: {
+          game_id: gameId,
+          title: 'Canes Rivalry Pick',
+          message: `${ownerName} picked ${shortPlayerName(cleanPlayerName)}.`,
+          event_key: `ui-pick-${gameId}-${rowId}`,
+          suppress_self: true,
+          delay_visible: false,
+          bypass_delay: true
+        }
+      });
+    } catch (error) {
+      console.warn('Pick notification failed', error);
+    }
+  }
 
   function rowForSlot(gameId, ownerProfile, pickSlot, playerName = '', index = 0) { const cleanPlayerName = pickLabel(playerName); return { game_id: gameId, owner: ownerValue(ownerProfile, index), owner_user_id: ownerProfile?.id || null, pick_slot: pickSlot, player_name: cleanPlayerName, original_pick_text: cleanPlayerName || null, goals: 0, assists: 0, points: 0, is_carry_forward: false, picked_by_user_id: cleanPlayerName ? (currentUserId() || null) : null, updated_by_user_id: currentUserId() || null, updated_at: new Date().toISOString() }; }
   function rowsFromPregameState(gameId, pregame = {}) { return users().flatMap((profile, profileIndex) => { const key = profileKey(profile, profileIndex); return [0, 1].map((pickIndex) => rowForSlot(gameId, profile, pickIndex + 1, pregame[key]?.[pickIndex] || '', profileIndex)); }); }
@@ -62,6 +88,7 @@ window.CR = window.CR || {};
     if (gameUpdateRes.error) throw gameUpdateRes.error;
     CR.realtime?.markLocalWrite?.('picks', upsertRes.data || row, 3000);
     CR.realtime?.markLocalWrite?.('games', gameUpdateRes.data || { id: gameId, ...gamePatch }, 3000);
+    await sendPickNotification(gameId, ownerProfile, nextSlot.pickSlot, cleanPlayerName, upsertRes.data || row);
     return { savedRow: upsertRes.data || row, game: gameUpdateRes.data || gamePatch };
   }
 
