@@ -112,6 +112,19 @@ window.CR = window.CR || {};
     return users().find((user) => Number(user.rivalrySlot || user.rivalry_slot) === Number(slot)) || users()[Number(slot) - 1] || FALLBACK_USERS[Number(slot) - 1] || null;
   }
 
+  function displayNameForUserId(userId) {
+    const user = users().find((item) => normalizeKey(item.id) === normalizeKey(userId));
+    return user?.displayName || user?.display_name || user?.username || '';
+  }
+
+  function winnerUserIdFromScores(row, firstScore, secondScore) {
+    const savedWinner = normalizeKey(row?.winner_user_id);
+    if (savedWinner) return savedWinner;
+    if (firstScore > secondScore) return normalizeKey(userBySlot(1)?.id);
+    if (secondScore > firstScore) return normalizeKey(userBySlot(2)?.id);
+    return '';
+  }
+
   function rowsByKey(rows = [], keyName) {
     return rows.reduce((acc, row) => {
       const key = normalizeKey(row?.[keyName]);
@@ -209,12 +222,6 @@ window.CR = window.CR || {};
     return { bySide, byUserId };
   }
 
-  function winnerSideFromUserId(userId) {
-    const winner = users().find((user) => normalizeKey(user.id) === normalizeKey(userId));
-    if (!winner) return '';
-    return sideKeyForSlot(winner.rivalrySlot || winner.rivalry_slot);
-  }
-
   function mapGames(rows, picks, playerLookup, scoresByGame) {
     return sortGames(rows || [])
       .filter((row) => row && row.status !== 'Hidden' && isFinalGame(row))
@@ -222,7 +229,9 @@ window.CR = window.CR || {};
         const normalizedScores = normalizedScoreByUserId(scoresByGame[normalizeKey(row.id)] || []);
         const firstScore = scoreForUser(userBySlot(1), normalizedScores);
         const secondScore = scoreForUser(userBySlot(2), normalizedScores);
-        const winnerSide = row.winner_user_id ? winnerSideFromUserId(row.winner_user_id) : (firstScore > secondScore ? SIDE_ONE : secondScore > firstScore ? SIDE_TWO : 'Tie');
+        const winnerUserId = winnerUserIdFromScores(row, firstScore, secondScore);
+        const isTie = !winnerUserId;
+        const winnerName = displayNameForUserId(winnerUserId);
         const firstGoal = row.first_goal_scorer ? [`First goal: ${row.first_goal_scorer}`] : [];
         const gameType = row.game_type || 'Regular Season';
         const mappedPicks = mapPicksForGame(row, picks, playerLookup);
@@ -247,12 +256,12 @@ window.CR = window.CR || {};
           firstScore,
           secondScore,
           scoresByUserId: scoresByUserIdFromValues(firstScore, secondScore),
-          winner: winnerSide || 'Tie',
-          winnerUserId: row.winner_user_id || '',
-          winner_user_id: row.winner_user_id || '',
+          winner: isTie ? 'Tie' : winnerUserId,
+          winnerUserId,
+          winner_user_id: winnerUserId,
           summary: `${gameTitle(row)} finished ${firstScore}-${secondScore}.`,
-          tags: [gameType, winnerSide === 'Tie' ? 'Tie' : `${winnerSide} win`].filter(Boolean),
-          moments: firstGoal.length ? firstGoal : [`${winnerSide === 'Tie' ? 'Tie game' : `${winnerSide} took the result`}`],
+          tags: [gameType, isTie ? 'Tie' : `${winnerName || 'Winner'} win`].filter(Boolean),
+          moments: firstGoal.length ? firstGoal : [isTie ? 'Tie game' : `${winnerName || 'Winner'} took the result`],
           picks: mappedPicks.bySide,
           picksByUserId: mappedPicks.byUserId
         };
