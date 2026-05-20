@@ -19,28 +19,15 @@ window.CR = window.CR || {};
 
   function emptyBuckets(users = [], factory = () => null) { return users.reduce((acc, user) => { acc[user.profileKey] = factory(user); return acc; }, {}); }
   function startOfLocalDay(date = new Date()) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
-  function relativeDayLabel(date) {
-    if (!date || Number.isNaN(date.getTime())) return '';
-    const dayMs = 24 * 60 * 60 * 1000;
-    const diffDays = Math.round((startOfLocalDay(date) - startOfLocalDay(new Date())) / dayMs);
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    return '';
-  }
-  function formatScheduleText(game) {
-    const value = game?.game_start_time || game?.game_date || null;
-    const date = value ? new Date(value) : null;
-    if (!date || Number.isNaN(date.getTime())) return 'Game scheduled';
-    const relative = relativeDayLabel(date);
-    const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (relative) return `${relative} ${time}`;
-    return date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  }
+  function relativeDayLabel(date) { if (!date || Number.isNaN(date.getTime())) return ''; const dayMs = 24 * 60 * 60 * 1000; const diffDays = Math.round((startOfLocalDay(date) - startOfLocalDay(new Date())) / dayMs); if (diffDays === 0) return 'Today'; if (diffDays === 1) return 'Tomorrow'; return ''; }
+  function gameDateParts(game) { const value = game?.game_start_time || game?.game_date || null; const date = value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return { day: '', time: '' }; const relative = relativeDayLabel(date); const day = relative || date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }); const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); return { day, time }; }
+  function formatScheduleText(game) { const parts = gameDateParts(game); if (!parts.day && !parts.time) return 'Game scheduled'; return [parts.day, parts.time].filter(Boolean).join(' '); }
   function matchupHeadline(game) { const homeAway = String(game?.home_away || '').toLowerCase(); const opponent = game?.opponent || 'Opponent TBD'; return homeAway === 'away' ? `Canes at ${opponent}` : `Canes vs ${opponent}`; }
+  function compactGameInfo(game) { const opponent = game?.opponent || 'Opponent TBD'; const parts = gameDateParts(game); const dateText = [parts.day, parts.time].filter(Boolean).join(' '); return [opponent, dateText].filter(Boolean).join(' • ') || 'Game scheduled'; }
 
   function gameMeta(game) {
-    if (!game) return { id: '', hasGame: false, scheduleText: 'Schedule pending', opponent: 'Opponent TBD', homeAway: 'Home', startTime: null, gameType: 'Regular Season', gameState: 'PRE', headline: 'Next game not scheduled yet', first_picker: '', first_picker_user_id: null, current_pick_user_id: null, current_pick_number: 0, draft_status: 'pending' };
-    return { id: String(game.id), hasGame: true, scheduleText: formatScheduleText(game), opponent: game.opponent || 'Opponent TBD', homeAway: game.home_away || 'Home', startTime: game.game_start_time || null, gameType: game.game_type || 'Regular Season', gameState: game.nhl_game_state || game.status || 'PRE', headline: matchupHeadline(game), first_picker: game.first_picker || '', first_picker_user_id: game.first_picker_user_id || null, current_pick_user_id: game.current_pick_user_id || null, current_pick_number: Number(game.current_pick_number || 0), draft_status: game.draft_status || 'open' };
+    if (!game) return { id: '', hasGame: false, scheduleText: 'Schedule pending', compactInfo: 'Schedule pending', opponent: 'Opponent TBD', homeAway: 'Home', startTime: null, gameType: 'Regular Season', gameState: 'PRE', headline: 'Next game not scheduled yet', first_picker: '', first_picker_user_id: null, current_pick_user_id: null, current_pick_number: 0, draft_status: 'pending' };
+    return { id: String(game.id), hasGame: true, scheduleText: formatScheduleText(game), compactInfo: compactGameInfo(game), opponent: game.opponent || 'Opponent TBD', homeAway: game.home_away || 'Home', startTime: game.game_start_time || null, gameType: game.game_type || 'Regular Season', gameState: game.nhl_game_state || game.status || 'PRE', headline: matchupHeadline(game), first_picker: game.first_picker || '', first_picker_user_id: game.first_picker_user_id || null, current_pick_user_id: game.current_pick_user_id || null, current_pick_number: Number(game.current_pick_number || 0), draft_status: game.draft_status || 'open' };
   }
 
   function gameTimestamp(game) { const value = game?.game_start_time || game?.game_date || null; const time = value ? new Date(value).getTime() : 0; return Number.isFinite(time) ? time : 0; }
