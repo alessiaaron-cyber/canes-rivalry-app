@@ -116,26 +116,24 @@ window.CR = window.CR || {};
     const allGames = data?.games || [];
     const scopedGames = data?.gameLog || data?.selectedGames || [];
     const scoredGames = scopedGames.filter((game) => hasScoredResult(data, game));
+    const gamesWithPicks = scopedGames.filter((game) => picksFor(data, game, 0).length || picksFor(data, game, 1).length).length;
     const winnerLeaks = allGames.filter((game) => ['first', 'second'].includes(String(game.winner || '').toLowerCase())).length;
-    const missingPicks = scopedGames.filter((game) => !picksFor(data, game, 0).length && !picksFor(data, game, 1).length).length;
     const source = data?.source || CR.historySource || 'model';
     const users = [userName(data, 0), userName(data, 1)].join(' / ');
-    const warnings = [];
-    if (winnerLeaks) warnings.push(`${winnerLeaks} side-winner value${winnerLeaks === 1 ? '' : 's'}`);
-    if (missingPicks && scopedGames.length) warnings.push(`${missingPicks} game${missingPicks === 1 ? '' : 's'} no picks`);
-    const warningText = warnings.length ? ` • Check: ${warnings.join(', ')}` : ' • OK';
-    return `<div class="history-debug-label" style="margin-top:10px;padding:8px 10px;border:1px dashed rgba(148,163,184,.7);border-radius:12px;font-size:12px;line-height:1.35;color:#64748b;background:rgba(248,250,252,.85);">Debug: ${escapeHtml(source)} • Users: ${escapeHtml(users)} • Games: ${escapeHtml(String(allGames.length))} total / ${escapeHtml(String(scopedGames.length))} shown / ${escapeHtml(String(scoredGames.length))} scored${escapeHtml(warningText)}</div>`;
+    const status = winnerLeaks ? ` • Needs winner cleanup: ${winnerLeaks}` : ' • OK';
+    return `<div class="history-debug-label" style="margin-top:10px;padding:8px 10px;border:1px dashed rgba(148,163,184,.7);border-radius:12px;font-size:12px;line-height:1.35;color:#64748b;background:rgba(248,250,252,.85);">Verify: ${escapeHtml(source)} • Users: ${escapeHtml(users)} • Games: ${escapeHtml(String(allGames.length))} final / ${escapeHtml(String(scoredGames.length))} scored • Picks: ${escapeHtml(String(gamesWithPicks))} games${escapeHtml(status)}</div>`;
   }
 
   function cardDebugLabel(data, card) {
     if (!HISTORY_DEBUG_LABELS) return '';
     const scopedGames = data?.gameLog || data?.selectedGames || [];
     const scoredCount = scopedGames.filter((game) => hasScoredResult(data, game)).length;
+    const pickGameCount = scopedGames.filter((game) => picksFor(data, game, 0).length || picksFor(data, game, 1).length).length;
     const label = String(card?.label || '').toLowerCase();
-    let source = `${scoredCount} scored game${scoredCount === 1 ? '' : 's'}`;
-    if (label.includes('games logged')) source = `${scoredCount} scored / ${scopedGames.length} shown`;
-    if (label.includes('first-goal')) source = 'first_goal_scorer + pick firstGoal';
-    return `<div class="history-debug-card-label" style="margin-top:8px;font-size:11px;line-height:1.3;color:#94a3b8;">Debug source: ${escapeHtml(source)}</div>`;
+    let source = `${scoredCount} scored games`;
+    if (label.includes('games logged')) source = `${scoredCount} scored games`;
+    if (label.includes('first-goal')) source = `${pickGameCount} pick-data games`;
+    return `<div class="history-debug-card-label" style="margin-top:8px;font-size:11px;line-height:1.3;color:#94a3b8;">Verify source: ${escapeHtml(source)}</div>`;
   }
 
   function seasonFeaturedResult(data, summary, games) {
