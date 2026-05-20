@@ -1,0 +1,22 @@
+{
+  "name": "Canes Rivalry",
+  "short_name": "Canes Rivalry",
+  "description": "Canes Rivalry app",
+  "start_url": "/canes-rivalry-app/",
+  "scope": "/canes-rivalry-app/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "icons": [
+    {
+      "src": "assets/app-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
