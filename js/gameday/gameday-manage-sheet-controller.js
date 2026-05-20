@@ -64,6 +64,30 @@ window.CR = window.CR || {};
     return buckets;
   }
 
+  function sideSummary(label, buckets = {}) {
+    const keys = sideKeys();
+    return `${label}: ${keys.map((key, index) => `${state().displayName?.(index, source()) || `Player ${index + 1}`}=[${pickLabels(resolveSidePicks(buckets, key, index)).join(', ') || 'empty'}]`).join(' | ')}`;
+  }
+
+  function sourceDebugHtml(bufferPregame = {}) {
+    const pregame = CR.gameDay?.pregame || {};
+    const liveUsers = CR.gameDay?.live?.users || {};
+    const sideContext = picksFromDisplayedSideContext();
+    const userBits = (CR.gameDay?.users || []).map((user, index) => `${index}:${user.displayName || user.display_name || user.username || user.id}(${user.profileKey || user.profile_key || user.id})`).join(', ') || 'none';
+    const lines = [
+      `mode: ${CR.gameDay?.mode || 'unknown'} game: ${CR.gameDay?.currentGameId || 'none'}`,
+      `sideKeys: ${sideKeys().join(', ') || 'none'}`,
+      `users: ${userBits}`,
+      `pregame keys: ${Object.keys(pregame).join(', ') || 'none'}`,
+      sideSummary('pregame resolved', pregame),
+      `live users keys: ${Object.keys(liveUsers).join(', ') || 'none'}`,
+      sideSummary('live resolved', liveUsers),
+      sideSummary('side context', sideContext),
+      sideSummary('buffer', bufferPregame)
+    ];
+    return `<details class="gd-sheet-pick" open><summary><strong>Manage debug</strong></summary><small>${lines.map((line) => String(line).replace(/</g, '&lt;')).join('<br>')}</small></details>`;
+  }
+
   function currentPregameForSheet() {
     const buffered = edit().getBuffer?.();
     if (buffered) return normalizeBucketsForSides(buffered);
@@ -116,6 +140,7 @@ window.CR = window.CR || {};
     }
 
     const undoHtml = undoEnabled ? '<button class="cr-button secondary gd-inline-action" id="undoDraftPick" type="button">Undo Last Draft Pick</button>' : '';
+    const debugHtml = sourceDebugHtml(bufferPregame);
     const controlsHtml = keys.flatMap((sideKey, sideIndex) => [0, 1].map((index) => {
       const sidePicks = resolveSidePicks(bufferPregame, sideKey, sideIndex);
       const selected = pickLabel(sidePicks?.[index] || '');
@@ -126,7 +151,7 @@ window.CR = window.CR || {};
       return `<div class="gd-sheet-pick ${!picksEnabled ? 'is-disabled' : ''}"><strong>${state().displayName?.(sideIndex, source()) || `Player ${sideIndex + 1}`} Pick ${index + 1}</strong><small>${picksEnabled ? 'Override displayed player' : 'Locked'}</small><select class="gd-sheet-select" data-side-key="${sideKey}" data-index="${index}" ${picksEnabled ? '' : 'disabled'}>${options}</select></div>`;
     }).join('')).join('');
 
-    actions.innerHTML = undoHtml + controlsHtml;
+    actions.innerHTML = undoHtml + debugHtml + controlsHtml;
     $('#undoDraftPick')?.addEventListener('click', undoLastDraftPick);
     actions.querySelectorAll('.gd-sheet-select').forEach((select) => {
       select.addEventListener('change', (event) => {
