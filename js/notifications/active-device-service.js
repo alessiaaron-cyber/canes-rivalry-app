@@ -279,6 +279,8 @@ window.CR = window.CR || {};
 
   async function sendTestNotification() {
     const db = await CR.getSupabase();
+    const userId = await getUserId();
+    const email = await getEmail();
     const games = Array.isArray(CR.manageState?.schedule) ? CR.manageState.schedule : [];
     const activeGame = games.find((game) => ['live', 'in progress'].includes(String(game.status || '').toLowerCase()));
     const fallbackGame = games[0] || null;
@@ -286,6 +288,10 @@ window.CR = window.CR || {};
 
     if (!gameId) {
       throw new Error('No game available for notification test.');
+    }
+
+    if (!userId && !email) {
+      throw new Error('Sign in before sending a test notification.');
     }
 
     const result = await db.functions.invoke('notify-rivalry-event', {
@@ -297,7 +303,9 @@ window.CR = window.CR || {};
         suppress_self: false,
         delay_visible: false,
         bypass_delay: true,
-        bypass_active_device_check: true
+        bypass_active_device_check: true,
+        target_user_id: userId || null,
+        target_user_email: email || null
       }
     });
 
