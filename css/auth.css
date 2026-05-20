@@ -29,6 +29,100 @@
   opacity: 0;
 }
 
+.startup-splash {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: calc(28px + env(safe-area-inset-top)) 24px max(36px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 50% 18%, rgba(204, 0, 28, 0.14), transparent 34%),
+    radial-gradient(circle at 50% 90%, rgba(15, 23, 42, 0.08), transparent 36%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.startup-splash-inner {
+  width: min(320px, 88vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.startup-splash-logo-wrap {
+  width: 108px;
+  height: 108px;
+  border-radius: 30px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.startup-splash-logo {
+  width: 82px;
+  height: 82px;
+  object-fit: contain;
+}
+
+.startup-splash-title {
+  margin: 24px 0 0;
+  font-size: clamp(30px, 8vw, 42px);
+  line-height: 0.95;
+  letter-spacing: -0.07em;
+  color: var(--ink-strong, #0f172a);
+}
+
+.startup-splash-copy {
+  margin: 12px 0 0;
+  max-width: 260px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: var(--text-secondary, #64748b);
+}
+
+.startup-splash-loader {
+  position: relative;
+  width: 136px;
+  height: 4px;
+  margin-top: 28px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.10);
+}
+
+.startup-splash-loader::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 44%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(204, 0, 28, 0.15), rgba(204, 0, 28, 0.92));
+  animation: startupLoader 1.05s ease-in-out infinite;
+}
+
+@keyframes startupLoader {
+  0% {
+    transform: translateX(-115%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-splash-loader::after {
+    animation: none;
+    width: 100%;
+  }
+}
+
 .auth-stage-success .auth-card {
   animation: authSuccessPulse 620ms ease;
 }
