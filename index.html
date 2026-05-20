@@ -15,8 +15,27 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" href="./assets/app-icon.png?v=v2gameday3" />
   <link rel="apple-touch-icon" href="./assets/app-icon.png?v=v2gameday3" />
+
+  <script>
+    window.CR = window.CR || {};
+    window.CR.serviceWorkerRegistrationPromise = null;
+
+    if ('serviceWorker' in navigator) {
+      window.CR.serviceWorkerRegistrationPromise = navigator.serviceWorker.register('./sw.js', {
+        scope: './'
+      }).then((registration) => {
+        window.CR.serviceWorkerRegistration = registration;
+        console.log('Service worker registered', registration.scope);
+        return registration;
+      }).catch((error) => {
+        console.error('Service worker registration failed', error);
+        throw error;
+      });
+    }
+  </script>
 
   <link rel="stylesheet" href="css/app-shell.css?v=shell19" />
   <link rel="stylesheet" href="css/app-foundation.css?v=foundation15" />
