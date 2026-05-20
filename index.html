@@ -32,7 +32,15 @@
   <link rel="stylesheet" href="css/manage/manage.css?v=v2manage31" />
 </head>
 <body>
-  <div id="appRoot"></div>
+  <div id="appRoot">
+    <div class="boot-stage auth-stage boot-enter is-visible" id="staticBootStage">
+      <div class="auth-card">
+        <div class="eyebrow">Canes Rivalry</div>
+        <h1>Loading Game Day…</h1>
+        <p class="auth-support-copy">Waking up the rivalry.</p>
+      </div>
+    </div>
+  </div>
 
   <template id="appShellTemplate">
     <div class="sync-flash" id="syncFlash"></div>
@@ -148,6 +156,6 @@
   <script src="js/notifications/rivalry-events-consumer.js?v=v2notify1"></script>
   <script src="js/notifications/active-device-service.js?v=v2notify-active6"></script>
   <script src="js/app.js?v=app22"></script>
-  <script src="js/boot.js?v=authboot15-testnotify"></script>
+  <script src="js/boot.js?v=authboot16-firstpaint"></script>
 </body>
 </html>
