@@ -20,7 +20,8 @@ window.CR = window.CR || {};
   }
 
   function getBuffer() {
-    return ensureState().bufferPregame || {};
+    const state = ensureState();
+    return state.bufferPregame || null;
   }
 
   function updatePick(sideKey, pickIndex, value) {
