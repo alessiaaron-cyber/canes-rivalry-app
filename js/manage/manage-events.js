@@ -72,22 +72,59 @@ window.CR = window.CR || {};
     } catch (error) { console.error('Temporary notification test failed', error); test.status = 'error'; test.response = { error: error?.message || String(error || 'Unknown error') }; rerender(); CR.showToast?.({ message: error?.message || 'Notification test failed', tier: 'warning' }); }
   }
 
+  function watchSnapshot(watch = {}) {
+    return {
+      pushDelaySeconds: Number(watch.pushDelaySeconds ?? 90),
+      toastDelaySeconds: Number(watch.toastDelaySeconds ?? 90),
+      pushEnabled: watch.pushEnabled !== false,
+      toastEnabled: watch.toastEnabled !== false
+    };
+  }
+
+  function syncSavedWatchExperience(savedSettings = {}) {
+    const latest = state();
+    if (!latest?.watchExperience) return latest;
+
+    const stream = savedSettings.stream_settings || {};
+    const notifications = savedSettings.notification_settings || {};
+
+    latest.watchExperience.pushDelaySeconds = CR.userSettingsService?.normalizeDelay?.(stream.push_delay_seconds, latest.watchExperience.pushDelaySeconds) ?? latest.watchExperience.pushDelaySeconds;
+    latest.watchExperience.toastDelaySeconds = CR.userSettingsService?.normalizeDelay?.(stream.toast_delay_seconds, latest.watchExperience.toastDelaySeconds) ?? latest.watchExperience.toastDelaySeconds;
+    latest.watchExperience.pushEnabled = notifications.push_enabled !== false;
+    latest.watchExperience.toastEnabled = notifications.toast_enabled !== false;
+
+    if (latest.notifications) {
+      latest.notifications.pushEnabled = latest.watchExperience.pushEnabled;
+      latest.notifications.toastsEnabled = latest.watchExperience.toastEnabled;
+    }
+
+    if (latest.streamMode) {
+      latest.streamMode.selected = `${latest.watchExperience.toastDelaySeconds}s`;
+      latest.streamMode.delayPush = latest.watchExperience.pushDelaySeconds > 0;
+      latest.streamMode.delayToasts = latest.watchExperience.toastDelaySeconds > 0;
+    }
+
+    return latest;
+  }
+
   function scheduleWatchSave() {
     const current = state();
     if (!current?.watchExperience) return;
     clearTimeout(watchSaveTimer);
     const sequence = ++watchSaveSequence;
+    const pendingWatchExperience = watchSnapshot(current.watchExperience);
     current.watchExperience.saveState = 'saving';
     rerender();
     watchSaveTimer = setTimeout(async () => {
       try {
-        const latest = state();
         if (typeof CR.userSettingsService?.saveWatchExperience !== 'function') {
           throw new Error('Notification settings service unavailable.');
         }
-        await CR.userSettingsService.saveWatchExperience(latest.watchExperience);
+        const savedSettings = await CR.userSettingsService.saveWatchExperience(pendingWatchExperience);
         if (sequence !== watchSaveSequence) return;
-        latest.watchExperience.saveState = 'saved';
+        syncSavedWatchExperience(savedSettings);
+        const synced = state();
+        synced.watchExperience.saveState = 'saved';
         rerender();
       } catch (error) {
         console.error('Watch experience save failed', error);
