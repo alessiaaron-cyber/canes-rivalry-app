@@ -24,6 +24,10 @@ window.CR = window.CR || {};
     return opponent ? `${opponent} • Live` : 'Live';
   }
 
+  function renderPickCount(count) {
+    return `<div class="gd-pregame-count"><span>${count}</span><span class="gd-pregame-slash">/</span><span class="gd-pregame-total">2</span></div>`;
+  }
+
   function renderHeroSection({
     mode,
     game,
@@ -104,7 +108,7 @@ window.CR = window.CR || {};
 
             ${pregame
               ? `
-                <div class="gd-pregame-count">${left.picks.length}<span class="gd-pregame-total">/2</span></div>
+                ${renderPickCount(left.picks.length)}
                 <div class="gd-pregame-meta">Picks Locked</div>
               `
               : `<div class="gd-side-value gd-score-pop">${left.score}</div>`}
@@ -119,7 +123,7 @@ window.CR = window.CR || {};
 
             ${pregame
               ? `
-                <div class="gd-pregame-count">${right.picks.length}<span class="gd-pregame-total">/2</span></div>
+                ${renderPickCount(right.picks.length)}
                 <div class="gd-pregame-meta">Picks Locked</div>
               `
               : `<div class="gd-side-value gd-score-pop">${right.score}</div>`}
