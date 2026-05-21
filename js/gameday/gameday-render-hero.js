@@ -104,10 +104,7 @@ window.CR = window.CR || {};
 
             ${pregame
               ? `
-                <div class="gd-pregame-count">
-                  ${left.picks.length}
-                  <span class="gd-pregame-total">/2</span>
-                </div>
+                <div class="gd-pregame-count">${left.picks.length}<span class="gd-pregame-total">/2</span></div>
                 <div class="gd-pregame-meta">Picks Locked</div>
               `
               : `<div class="gd-side-value gd-score-pop">${left.score}</div>`}
@@ -122,10 +119,7 @@ window.CR = window.CR || {};
 
             ${pregame
               ? `
-                <div class="gd-pregame-count">
-                  ${right.picks.length}
-                  <span class="gd-pregame-total">/2</span>
-                </div>
+                <div class="gd-pregame-count">${right.picks.length}<span class="gd-pregame-total">/2</span></div>
                 <div class="gd-pregame-meta">Picks Locked</div>
               `
               : `<div class="gd-side-value gd-score-pop">${right.score}</div>`}
