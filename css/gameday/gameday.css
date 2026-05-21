@@ -67,6 +67,7 @@
 .gd-side-label.red { color: var(--gd-danger); }
 .gd-side-value { margin-top: 6px; width: 100%; text-align: center; font-size: 3.5rem; line-height: .85; letter-spacing: -.08em; font-weight: 1000; }
 .gd-pregame-count { margin-top: 8px; font-size: 1.5rem; line-height: 1; font-weight: 1000; letter-spacing: -.05em; color: var(--gd-text); }
+.gd-pregame-slash { color: var(--gd-text-muted); margin: 0 .045em; }
 .gd-pregame-total { color: var(--gd-text-muted); }
 .gd-pregame-meta { margin-top: 6px; font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--gd-text-muted); }
 .gd-center { text-align: center; width: 60px; flex: 0 0 60px; }
