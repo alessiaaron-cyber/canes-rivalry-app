@@ -216,6 +216,7 @@ async function enqueueDelayedNotification(
     suppress_self: suppressSelf,
     visible_after: visibleAfter,
     target_user_id: recipient.user_id,
+    target_user_email: recipient.user_email,
   });
 
   if (!error) return { inserted: true, visible_after: visibleAfter };
