@@ -48,6 +48,45 @@ window.CR = window.CR || {};
     }
   }
 
+  function syncWatchExperienceFromSettings(state = CR.manageStore?.getState?.() || CR.manageState, options = {}) {
+    if (!state?.watchExperience) return state;
+    if (options.skipIfSaving !== false && state.watchExperience.saveState === 'saving') return state;
+
+    const settings = CR.userSettingsService?.get?.() || CR.userSettings || {};
+    const stream = settings.stream_settings || {};
+    const notifications = settings.notification_settings || {};
+    const normalizeDelay = CR.userSettingsService?.normalizeDelay || ((value, fallback) => Number(value ?? fallback));
+
+    state.watchExperience.pushDelaySeconds = normalizeDelay(stream.push_delay_seconds, state.watchExperience.pushDelaySeconds ?? 90);
+    state.watchExperience.toastDelaySeconds = normalizeDelay(stream.toast_delay_seconds, state.watchExperience.toastDelaySeconds ?? 90);
+    state.watchExperience.pushEnabled = notifications.push_enabled !== false;
+    state.watchExperience.toastEnabled = notifications.toast_enabled !== false;
+    state.watchExperience.delayOptions = state.watchExperience.delayOptions || CR.manageModel?.DELAY_OPTIONS || [];
+    state.watchExperience.saveState = state.watchExperience.saveState || 'idle';
+
+    if (state.notifications) {
+      state.notifications.pushEnabled = state.watchExperience.pushEnabled;
+      state.notifications.toastsEnabled = state.watchExperience.toastEnabled;
+    }
+
+    if (state.streamMode) {
+      state.streamMode.selected = `${state.watchExperience.toastDelaySeconds}s`;
+      state.streamMode.delayPush = state.watchExperience.pushDelaySeconds > 0;
+      state.streamMode.delayToasts = state.watchExperience.toastDelaySeconds > 0;
+    }
+
+    return state;
+  }
+
+  function replaceManageState(nextState, options = {}) {
+    const shouldSyncSettings = options.syncSettings === true;
+    const synced = shouldSyncSettings ? syncWatchExperienceFromSettings(nextState, options) : nextState;
+    CR.manageState = synced;
+    CR.manageStore?.replaceState?.(synced, { render: false });
+    if (options.render !== false) CR.manageStore?.render?.();
+    return synced;
+  }
+
   async function hydrateNotificationDeviceStatus() {
     if (notificationStatusInFlight) return;
     if (!CR.activeDeviceService?.getDeviceStatus) return;
@@ -65,18 +104,14 @@ window.CR = window.CR || {};
         loading: false
       };
 
-      CR.manageState = current;
-      CR.manageStore?.replaceState?.(current, { render: false });
-      CR.manageStore?.render?.();
+      replaceManageState(current);
     } catch (error) {
       console.warn('Could not hydrate notification status', error);
       const current = CR.manageStore?.getState?.() || CR.manageState;
       if (current?.notificationDevice) {
         current.notificationDevice.loading = false;
         current.notificationDevice.lastActiveError = error?.message || String(error || 'Could not read notification status');
-        CR.manageState = current;
-        CR.manageStore?.replaceState?.(current, { render: false });
-        CR.manageStore?.render?.();
+        replaceManageState(current);
       }
     } finally {
       notificationStatusInFlight = false;
@@ -93,9 +128,7 @@ window.CR = window.CR || {};
       const liveData = await CR.manageDataService.load();
       const current = CR.manageStore?.getState?.() || CR.manageState;
       CR.manageDataService.mergeIntoState(current, liveData);
-      CR.manageState = current;
-      CR.manageStore?.replaceState?.(current, { render: false });
-      CR.manageStore?.render?.();
+      replaceManageState(current);
     } catch (error) {
       console.warn('Could not hydrate Manage live data', error);
       const current = CR.manageStore?.getState?.() || CR.manageState;
@@ -107,9 +140,7 @@ window.CR = window.CR || {};
           syncStatus: 'Preview data',
           lastSyncLabel: 'Live load failed'
         };
-        CR.manageState = current;
-        CR.manageStore?.replaceState?.(current, { render: false });
-        CR.manageStore?.render?.();
+        replaceManageState(current);
       }
     } finally {
       manageDataInFlight = false;
@@ -128,6 +159,11 @@ window.CR = window.CR || {};
 
   function renderManage(options = {}) {
     if (CR.manageStore) {
+      if (options.syncSettings) {
+        const current = CR.manageStore.getState?.() || CR.manageState;
+        replaceManageState(current, { render: false, syncSettings: true });
+      }
+
       if (options.scrollTop) {
         CR.manageStore.render();
         requestAnimationFrame(scrollManageToTop);
@@ -140,6 +176,7 @@ window.CR = window.CR || {};
       return;
     }
 
+    if (options.syncSettings) syncWatchExperienceFromSettings(CR.manageState);
     renderManageView(CR.manageState);
     requestAnimationFrame(hydrateNotificationDeviceStatus);
 
@@ -149,7 +186,7 @@ window.CR = window.CR || {};
   }
 
   function initManage() {
-    CR.manageState = CR.manageModel.build();
+    CR.manageState = syncWatchExperienceFromSettings(CR.manageModel.build(), { skipIfSaving: false });
     CR.manageStore = CR.ui?.createViewStore?.({
       initialState: CR.manageState,
       render: renderManageView,
@@ -174,6 +211,7 @@ window.CR = window.CR || {};
   CR.renderManage = renderManage;
   CR.scrollManageToTop = scrollManageToTop;
   CR.syncManageSheetScrollLock = syncManageSheetScrollLock;
+  CR.syncWatchExperienceFromSettings = syncWatchExperienceFromSettings;
   CR.hydrateNotificationDeviceStatus = hydrateNotificationDeviceStatus;
   CR.hydrateManageData = hydrateManageData;
   CR.initManage = initManage;
