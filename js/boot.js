@@ -211,7 +211,7 @@ window.CR = window.CR || {};
         .then(() => {
           CR.identity?.applyUserColorVariables?.();
           CR.renderAccountIdentity?.();
-          CR.renderManage?.();
+          CR.renderManage?.({ syncSettings: true });
         })
         .catch((error) => {
           console.warn('Deferred user settings load failed', error);
@@ -333,7 +333,7 @@ window.CR = window.CR || {};
             loadUserSettingsAfterPaint(resolved.user);
             CR.identity?.applyUserColorVariables?.();
             CR.renderAccountIdentity?.();
-            CR.renderManage?.();
+            CR.renderManage?.({ syncSettings: true });
             return;
           }
 
