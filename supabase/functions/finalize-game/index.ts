@@ -499,17 +499,66 @@ Deno.serve(async (req) => {
     );
 
     if (filledPicks.length < 4) {
-      return json(
-        {
-          ok: false,
-          error: "Pick all 4 players first.",
-          game_id: gameId,
-          filledPicks: filledPicks.length,
-          scoringProfile,
-          scoringRulesUsed: scoring,
+      const noCanesGoal = !String(game.first_goal_scorer || "").trim();
+
+      if (!noCanesGoal) {
+        return json(
+          {
+            ok: false,
+            error: "Pick all 4 players first.",
+            game_id: gameId,
+            filledPicks: filledPicks.length,
+            scoringProfile,
+            scoringRulesUsed: scoring,
+          },
+          400,
+        );
+      }
+
+      const recap = "No Canes goals. Rivalry ends scoreless. Nobody gets bragging rights, which frankly feels illegal.";
+
+      const { data: finalizedGame, error: updateError } = await serviceDb
+        .from("games")
+        .update({
+          status: "Final",
+          aaron_points: 0,
+          julie_points: 0,
+          winner: "Tie",
+          winner_user_id: null,
+          recap,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", gameId)
+        .neq("status", "Final")
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) throw updateError;
+
+      return json({
+        ok: true,
+        alreadyFinal: !finalizedGame,
+        authorizedVia: auth.via,
+        game_id: gameId,
+        scoringProfile,
+        scoringRulesUsed: scoring,
+        score: {
+          [slot1.id]: 0,
+          [slot2.id]: 0,
         },
-        400,
-      );
+        legacyScore: {
+          Aaron: 0,
+          Julie: 0,
+        },
+        winner_user_id: null,
+        winner: "Tie",
+        recap,
+        noContest: true,
+        notification: {
+          skipped: "no-canes-goals-no-picks",
+          sent: false,
+        },
+      });
     }
 
     const names = filledPicks.map((p: any) => normalizeName(p.player_name));
