@@ -499,22 +499,6 @@ Deno.serve(async (req) => {
     );
 
     if (filledPicks.length < 4) {
-      const noCanesGoal = !String(game.first_goal_scorer || "").trim();
-
-      if (!noCanesGoal) {
-        return json(
-          {
-            ok: false,
-            error: "Pick all 4 players first.",
-            game_id: gameId,
-            filledPicks: filledPicks.length,
-            scoringProfile,
-            scoringRulesUsed: scoring,
-          },
-          400,
-        );
-      }
-
       const recap = "No Canes goals. Rivalry ends scoreless. Nobody gets bragging rights, which frankly feels illegal.";
 
       const { data: finalizedGame, error: updateError } = await serviceDb
@@ -535,6 +519,30 @@ Deno.serve(async (req) => {
 
       if (updateError) throw updateError;
 
+      for (const userId of [slot1.id, slot2.id]) {
+        const { error: scoreError } = await serviceDb
+          .from("game_user_scores")
+          .upsert(
+            {
+              game_id: gameId,
+              user_id: userId,
+              points: 0,
+            },
+            { onConflict: "game_id,user_id" },
+          );
+
+        if (scoreError) throw scoreError;
+      }
+
+      const scoreLabel = buildScoreLabel(slot1, slot2, 0, 0);
+      const finalMessage = buildFinalMessage(null, scoreLabel);
+      const notification = finalizedGame
+        ? await enqueueFinalNotifications(gameId, finalMessage.title, finalMessage.body)
+        : {
+            skipped: "already-final-race",
+            sent: false,
+          };
+
       return json({
         ok: true,
         alreadyFinal: !finalizedGame,
@@ -554,10 +562,7 @@ Deno.serve(async (req) => {
         winner: "Tie",
         recap,
         noContest: true,
-        notification: {
-          skipped: "no-canes-goals-no-picks",
-          sent: false,
-        },
+        notification,
       });
     }
 
