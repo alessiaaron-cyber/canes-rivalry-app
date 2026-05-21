@@ -27,6 +27,15 @@ window.CR = window.CR || {};
 
   async function refreshManageAndGameDay() { if (typeof CR.hydrateManageData === 'function') await CR.hydrateManageData(); try { if (typeof CR.refreshGameDayData === 'function') await CR.refreshGameDayData({ skipIfEditing: true, flash: false }); else CR.renderGameDayState?.(); } catch (error) { console.warn('Game Day refresh after Manage change failed', error); } }
 
+  async function refreshHistoryAfterProfileSave() {
+    if (typeof CR.refreshHistoryData !== 'function') return;
+    try {
+      await CR.refreshHistoryData({ force: true });
+    } catch (error) {
+      console.warn('History refresh after profile change failed', error);
+    }
+  }
+
   async function saveProfile(button) {
     const current = state();
     const profile = CR.currentProfile || {};
@@ -51,6 +60,7 @@ window.CR = window.CR || {};
     CR.identity?.applyUserColorVariables?.();
     CR.renderAccountIdentity?.();
     await refreshManageAndGameDay();
+    await refreshHistoryAfterProfileSave();
   }
 
   async function handleManageSignOut() { try { await CR.auth?.signOut?.(); } catch (error) { console.error('Manage sign out failed', error); } CR.currentUser = null; CR.currentProfile = null; CR.currentProfiles = []; CR.session = null; window.location.reload(); }
