@@ -17,7 +17,7 @@ window.CR = window.CR || {};
     if (!hit) {
       return { icon: '👑', title: 'First goal bonus still open', detail: 'The first picked Canes goal will light this up.', points: '—' };
     }
-    return { icon: '👑', title: `${hit.player} hit first goal`, detail: 'First goal bonus has been awarded.', points: '+2' };
+    return { icon: '👑', title: `${hit.player} hit first goal`, detail: 'First goal bonus has been awarded.', points: '+1' };
   }
 
   function renderFirstGoalStatus(state = {}, isPlayoffs) {
