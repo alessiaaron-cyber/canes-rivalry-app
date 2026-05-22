@@ -1,3 +1,10 @@
+const APP_URL = '/canes-rivalry-app/';
+
+function normalizeUrl(url) {
+  if (!url || url === '/') return APP_URL;
+  return url;
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -23,7 +30,7 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'Canes Rivalry';
   const body = payload.body || payload.message || '';
   const tag = payload.tag || 'canes-rivalry';
-  const url = payload.url || '/canes-rivalry-app/';
+  const url = normalizeUrl(payload.url);
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -39,7 +46,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const url = event.notification?.data?.url || '/canes-rivalry-app/';
+  const url = normalizeUrl(event.notification?.data?.url);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsArr) => {
