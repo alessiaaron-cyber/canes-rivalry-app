@@ -25,7 +25,8 @@ window.CR = window.CR || {};
   function gameTimestamp(game) { const value = game?.game_start_time || game?.game_date || null; const time = value ? new Date(value).getTime() : 0; return Number.isFinite(time) ? time : 0; }
   function isFinalGame(game) { return String(game?.status || '').toLowerCase() === 'final' || String(game?.nhl_game_state || '').toUpperCase() === 'FINAL'; }
   function isHiddenGame(game) { return String(game?.status || '').toLowerCase() === 'hidden'; }
-  function isLiveGame(game) { const state = String(game?.nhl_game_state || '').toUpperCase(); return !isFinalGame(game) && ['LIVE', 'CRIT'].includes(state); }
+  function normalizeGameStatus(value) { return String(value || '').trim().toUpperCase(); }
+  function isLiveGame(game) { const status = normalizeGameStatus(game?.status); const state = normalizeGameStatus(game?.nhl_game_state); return !isFinalGame(game) && (['IN PROGRESS', 'IN_PROGRESS', 'INPROGRESS', 'LIVE', 'CRIT'].includes(status) || ['LIVE', 'CRIT', 'IN_PROGRESS', 'INPROGRESS'].includes(state)); }
   function modeFromGame(game) { if (isFinalGame(game)) return 'final'; if (isLiveGame(game)) return 'live'; return 'pregame'; }
   function sortedVisibleGames(games = []) { return games.filter((game) => !isHiddenGame(game)).sort((a, b) => gameTimestamp(a) - gameTimestamp(b)); }
   function nextUpcomingGame(games = [], afterGame = null) { const now = Date.now(); const after = afterGame ? gameTimestamp(afterGame) : 0; return sortedVisibleGames(games).filter((game) => !isFinalGame(game) && gameTimestamp(game) >= now && (!after || gameTimestamp(game) > after || String(game.id) !== String(afterGame?.id || '')))[0] || null; }
