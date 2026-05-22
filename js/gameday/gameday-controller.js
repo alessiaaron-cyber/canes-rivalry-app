@@ -38,7 +38,7 @@ window.CR = window.CR || {};
   function derivedDraft() { return draft().computeDraftState?.(CR.gameDay?.pregame || {}, CR.gameDay?.users || [], CR.gameDay?.draft || {}) || CR.gameDay?.draft || {}; }
   function pregameStructured() { return pregameStructuredFrom(CR.gameDay?.pregame || {}); }
   function finalData() { return { scores: clone(CR.gameDay?.live?.scores || {}), users: clone(CR.gameDay?.live?.users || {}) }; }
-  function pointsFor(pick = {}) { return CR.gameDayModel?.pointsFor?.(pick) || ((Number(pick.goals || 0) * 2) + Number(pick.assists || 0) + (pick.firstGoal ? 2 : 0)); }
+  function pointsFor(pick = {}) { const explicit = Number(pick.points); if (Number.isFinite(explicit)) return explicit; return CR.gameDayModel?.pointsFor?.(pick) || ((Number(pick.goals || 0) * 2) + Number(pick.assists || 0) + (pick.firstGoal ? 1 : 0)); }
   function allLivePicks(users = {}) { return Object.values(users || {}).flat(); }
   function totalGoals(users = {}) { return allLivePicks(users).reduce((total, pick) => total + Number(pick.goals || 0), 0); }
   function totalAssists(users = {}) { return allLivePicks(users).reduce((total, pick) => total + Number(pick.assists || 0), 0); }
