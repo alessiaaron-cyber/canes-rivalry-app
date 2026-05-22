@@ -54,9 +54,10 @@
   --cr-current-user-color-dark: var(--cr-user-1-color-dark);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { min-height: 100%; background: var(--bg-canvas-top); touch-action: manipulation; }
+html { min-height: 100%; background: #fff; touch-action: manipulation; }
 body { min-height: 100vh; min-height: 100dvh; margin: 0; background: linear-gradient(180deg, var(--bg-canvas-top) 0%, var(--bg-canvas) 100%); background-attachment: fixed; color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; }
 #appRoot { min-height: 100vh; min-height: 100dvh; background: linear-gradient(180deg, var(--bg-canvas-top) 0%, var(--bg-canvas) 100%); }
+#appRoot:has(.boot-stage) { background: #fff; }
 .app-shell { width: 100%; max-width: 520px; margin: 0 auto; padding: calc(18px + env(safe-area-inset-top)) 16px calc(var(--bottom-nav-height) + var(--bottom-nav-offset) + env(safe-area-inset-bottom) + 36px); }
 .pull-refresh { position: fixed; top: calc(env(safe-area-inset-top) + 6px); left: 50%; z-index: 5003; pointer-events: none; opacity: 0; transform: translateX(-50%) translateY(calc(-100% + var(--pull-distance, 0px))); transition: opacity var(--motion-fast) var(--ease-soft), transform var(--motion-fast) var(--ease-soft); }
 .pull-refresh.visible, .pull-refresh.refreshing { opacity: 1; }
