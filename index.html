@@ -1,1 +1,38 @@
-REPLACED_VERSION_REFERENCES_ONLY
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+
+  <title>Canes Rivalry</title>
+
+  <meta name="theme-color" content="#fff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Canes Rivalry" />
+
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="./assets/app-icon.png?v=v2gameday3" />
+  <link rel="apple-touch-icon" href="./assets/app-icon.png?v=v2gameday3" />
+</head>
+<body>
+  <div id="appRoot"></div>
+  <script>
+    window.CR = window.CR || {};
+    window.CR.config = {
+      supabaseUrl: 'https://hhhxgbztfizmwxbuoprq.supabase.co',
+      supabaseAnonKey: 'sb_publishable_4laNe86TxiC5pLkAF5NeIg_oMmf1unQ',
+      authRedirectUrl: window.location.origin + '/canes-rivalry-app/',
+      vapidPublicKey: 'BCtu4eICB4IXlVESLhWYmyaUP1P-qFi2dL0I0QYzmPDxjpZSiZY7Eulp1VemhtQnNe8647Q16NUdoT-a5qyKNhM'
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/gameday/gameday-data-service.js?v=v2gameday-live33-first-goal-missed"></script>
+  <script src="js/gameday/gameday-render-live.js?v=gdlive8-first-goal-missed"></script>
+  <script src="js/gameday/gameday-controller.js?v=v2controller14-first-goal-state"></script>
+</body>
+</html>
