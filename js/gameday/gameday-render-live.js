@@ -13,11 +13,33 @@ window.CR = window.CR || {};
   }
 
   function firstGoalStatus(state = {}) {
+    const scorer = state.game?.firstGoalScorer || state.game?.first_goal_scorer || '';
     const hit = firstGoalPick(state);
-    if (!hit) {
-      return { icon: '👑', title: 'First goal bonus still open', detail: 'The first picked Canes goal will light this up.', points: '—' };
+
+    if (hit) {
+      return {
+        icon: '👑',
+        title: `${hit.player} hit first goal`,
+        detail: 'First goal bonus has been awarded.',
+        points: '+1'
+      };
     }
-    return { icon: '👑', title: `${hit.player} hit first goal`, detail: 'First goal bonus has been awarded.', points: '+1' };
+
+    if (scorer) {
+      return {
+        icon: '🔒',
+        title: 'First goal bonus missed',
+        detail: `${scorer} scored first, but was not picked.`,
+        points: '0'
+      };
+    }
+
+    return {
+      icon: '👑',
+      title: 'First goal bonus still open',
+      detail: 'The first picked Canes goal will light this up.',
+      points: '—'
+    };
   }
 
   function renderFirstGoalStatus(state = {}, isPlayoffs) {
