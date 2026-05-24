@@ -153,6 +153,15 @@ window.CR = window.CR || {};
     return `${wildest.label}: highest combined score (${wildest.combined} pts).`;
   }
 
+  function currentSeasonFeaturedResult(data) {
+    const seasonData = data.hqSeasonData || data;
+    const board = seasonData.seasonBoard || {};
+    const seasonId = String(seasonData.currentSeasonId || data.currentSeasonId || data.selectedSeason?.id || '').trim();
+    const summary = (data.seasonSummaries || []).find((item) => String(item.seasonId || item.id) === seasonId) || { seasonId, id: seasonId, label: board.seasonLabel, recordText: board.recordText, bestGameTitle: board.bestGameTitle };
+    const games = data.seasonGames?.[seasonId] || seasonData.gameLog || seasonData.selectedGames || data.gameLog || [];
+    return seasonFeaturedResult(data, summary, games) || board.bestGameTitle || '';
+  }
+
   function momentumInitial(data, winner) {
     if (String(winner || '').toLowerCase() === 'tie') return 'T';
     return String(winnerDisplayName(data, winner) || '').slice(0, 1);
@@ -171,7 +180,8 @@ window.CR = window.CR || {};
     const seasonData = data.hqSeasonData || data;
     const board = seasonData.seasonBoard || {};
     const leaderClass = leaderClassFromRecord(data, board.recordText);
-    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid"><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</div><div class="rivalry-score-value">${escapeHtml(String(board.first ?? 0))}</div></article><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</div><div class="rivalry-score-value">${escapeHtml(String(board.second ?? 0))}</div></article></div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(board.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(board.recentText || 'Form still developing')}</span></div>${board.bestGameTitle ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(board.bestGameTitle)}</p>` : ''}</section>`;
+    const featuredResult = currentSeasonFeaturedResult(data);
+    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid"><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</div><div class="rivalry-score-value">${escapeHtml(String(board.first ?? 0))}</div></article><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</div><div class="rivalry-score-value">${escapeHtml(String(board.second ?? 0))}</div></article></div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(board.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(board.recentText || 'Form still developing')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</section>`;
   }
 
   function renderMomentum(data) {
