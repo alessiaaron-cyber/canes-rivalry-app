@@ -104,6 +104,19 @@ window.CR = window.CR || {};
     return null;
   }
 
+  function buildHistoryEditRecap(payload) {
+    const firstName = sideDisplayName(0);
+    const secondName = sideDisplayName(1);
+    const firstPoints = Number(payload.firstPoints || 0);
+    const secondPoints = Number(payload.secondPoints || 0);
+    const opponent = payload.opponent ? ` vs ${payload.opponent}` : '';
+    if (firstPoints === secondPoints) {
+      return `Tie ${firstPoints}-${secondPoints}.${opponent}. Nobody gets bragging rights, which feels deeply inconvenient.`;
+    }
+    const winnerName = firstPoints > secondPoints ? firstName : secondName;
+    return `${winnerName} wins ${firstPoints}-${secondPoints}.${opponent}. History has been corrected, and the scoreboard is acting like it knew all along.`;
+  }
+
   function buildFirstGoalOptions(game) {
     const names = new Set();
     SIDES.forEach((side) => {
@@ -418,7 +431,7 @@ window.CR = window.CR || {};
       status: 'Final',
       first_goal_scorer: payload.firstGoal || null,
       winner_user_id: payload.winnerUserId,
-      recap: `Edited historical record. ${sideDisplayName(0)} ${payload.firstPoints}, ${sideDisplayName(1)} ${payload.secondPoints}.`
+      recap: buildHistoryEditRecap(payload)
     };
 
     const gameRes = await db.from('games').update(gamePatch).eq('id', payload.gameId);
