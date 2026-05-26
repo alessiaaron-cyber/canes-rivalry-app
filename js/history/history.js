@@ -229,12 +229,12 @@ window.CR = window.CR || {};
   }
 
   function buildHighlightCards(highlights, games = [], users) {
-    const completedCount = scoredGames(games, users).length;
+    const completedCount = games.length;
     const cards = [];
     if (highlights.longest?.count) cards.push({ label: 'Longest run', value: `${highlights.longest.count} straight`, owner: highlights.longest.owner, copy: 'built the longest winning streak.' });
     if (highlights.biggestBlowout?.margin) cards.push({ label: 'Biggest swing', value: `+${highlights.biggestBlowout.margin}`, owner: highlights.biggestBlowout.owner, copy: `owned ${highlights.biggestBlowout.title}.` });
     if (highlights.topFirstGoal?.[0]) cards.push({ label: 'First-goal magnet', value: highlights.topFirstGoal[0], owner: null, copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` });
-    cards.push({ label: 'Games logged', value: String(completedCount || games.length || 0), owner: null, copy: 'Completed rivalry games in the archive.' });
+    cards.push({ label: 'Games logged', value: String(completedCount), owner: null, copy: 'Completed rivalry games in the archive.' });
     return cards.slice(0, 4);
   }
 
@@ -254,7 +254,8 @@ window.CR = window.CR || {};
 
   function buildSeasonBoard(season, gameLog, summary, users, recentGameLog = gameLog) {
     const totals = seasonTotals(season, gameLog, users);
-    const record = recordFromSummary(summary || {}) || recordForGames(gameLog, users);
+    const derivedRecord = recordForGames(gameLog, users);
+    const record = gameLog.length ? derivedRecord : recordFromSummary(summary || {}) || derivedRecord;
     return { seasonLabel: season?.label || summary?.label || 'Season', first: totals.first, second: totals.second, recordText: recordText(record), recentText: recentRecordText(recentGameLog, users), bestGameTitle: buildRecentTen(gameLog)[0]?.title || '' };
   }
 
@@ -292,8 +293,20 @@ window.CR = window.CR || {};
     return `${seasonPart}|${gamePart}`;
   }
 
+  function buildSeasonSummaries(model) {
+    const users = model.users || [];
+    return (model.seasonSummaries || []).map((summary) => {
+      const seasonId = resolveSeasonId(summary.seasonId || summary.id);
+      const season = findSeason(model, seasonId) || {};
+      const gameLog = buildGameLog(canonicalGames(model, seasonId));
+      if (!gameLog.length) return summary;
+      const board = buildSeasonBoard(season, gameLog, summary, users);
+      return { ...summary, gameCount: gameLog.length, gamesLogged: gameLog.length, recordText: board.recordText };
+    });
+  }
+
   function buildStaticHistoryData(model) {
-    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: model.seasonSummaries || [], scoreSignature: scoreSignature(model) };
+    return { allTimeBoard: buildAllTimeBoard(model), seasonSummaries: buildSeasonSummaries(model), scoreSignature: scoreSignature(model) };
   }
 
   function getScopedData(model, state) {
