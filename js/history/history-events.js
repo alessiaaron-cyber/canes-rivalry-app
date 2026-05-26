@@ -365,6 +365,7 @@ window.CR = window.CR || {};
 
     const row = {
       game_id: gameId,
+      owner: pick.ownerSide || null,
       owner_user_id: pick.ownerUserId || null,
       pick_slot: pick.slot,
       player_name: pick.playerName || null,
