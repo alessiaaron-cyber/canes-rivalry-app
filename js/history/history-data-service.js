@@ -198,7 +198,7 @@ window.CR = window.CR || {};
       .forEach((pick) => {
         const ownerUserId = normalizeKey(pick.owner_user_id);
         const sideKey = pick.owner ? String(pick.owner) : ownerSideKey(ownerUserId);
-        const owner = users().find((user) => normalizeKey(user.id) === ownerUserId) || userBySlot(sideIndexForKey(sideKey) + 1);
+        const owner = users().find((user) => normalizeKey(user.id) === normalizeKey(ownerUserId)) || userBySlot(sideIndexForKey(sideKey) + 1);
         const name = pick.player_name || '';
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(normalizeKey(pick.player_id)) || fallbackId;
