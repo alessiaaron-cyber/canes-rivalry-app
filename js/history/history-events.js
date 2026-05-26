@@ -104,6 +104,32 @@ window.CR = window.CR || {};
     return null;
   }
 
+  function normalizeIdentityValue(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  function userIdentityValues(user) {
+    return [
+      user?.id,
+      user?.legacy_owner_key,
+      user?.legacyOwnerKey,
+      user?.displayName,
+      user?.display_name,
+      user?.username,
+      user?.email
+    ].map(normalizeIdentityValue).filter(Boolean);
+  }
+
+  function resolveFirstPickerSide(game) {
+    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker || game?.first_picker_user_id);
+    if (!raw) return 0;
+    const firstKey = normalizeIdentityValue(sideKey(0));
+    const secondKey = normalizeIdentityValue(sideKey(1));
+    if (raw === secondKey) return 1;
+    if (raw === firstKey) return 0;
+    return SIDES.find((side) => userIdentityValues(sideUser(side)).includes(raw)) ?? 0;
+  }
+
   function buildHistoryEditRecap(payload) {
     const firstName = sideDisplayName(0);
     const secondName = sideDisplayName(1);
@@ -181,11 +207,8 @@ window.CR = window.CR || {};
   }
 
   function firstPickerDisplay(game) {
-    const users = CR.historyData?.users || [];
-    const hit = users.find((user) => String(user.id || '') === String(game.firstPick || ''));
-    if (hit) return hit.displayName || hit.display_name || hit.username || 'Player';
-    const sideHit = SIDES.find((side) => sideKey(side) === game.firstPick);
-    if (sideHit !== undefined) return sideDisplayName(sideHit);
+    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker || game?.first_picker_user_id);
+    if (raw) return sideDisplayName(resolveFirstPickerSide(game));
     return game.firstPick || '—';
   }
 
@@ -200,9 +223,7 @@ window.CR = window.CR || {};
     const firstGoalOptions = buildFirstGoalOptions(game);
     const firstLabel = sideDisplayName(0);
     const secondLabel = sideDisplayName(1);
-    const firstUserId = sideOwnerUserId(0);
-    const secondUserId = sideOwnerUserId(1);
-    const firstPickValue = String(game.firstPick || '') === String(secondUserId) || game.firstPick === sideKey(1) ? sideKey(1) : sideKey(0);
+    const firstPickValue = sideKey(resolveFirstPickerSide(game));
 
     const detailsHtml = `
       <form class="history-sheet-form history-sheet-form-v2" data-history-edit-form="1" data-history-game-id="${escapeHtml(game.id)}" onsubmit="return false;">
