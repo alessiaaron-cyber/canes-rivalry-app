@@ -21,6 +21,12 @@ window.CR = window.CR || {};
     return user.displayName || user.display_name || user.username || `Player ${index + 1}`;
   }
 
+  function winnerNameForId(users = [], winnerId) {
+    const value = String(winnerId || '').trim();
+    if (!value || value.toLowerCase() === 'tie') return 'Tie';
+    return users.find((user) => String(user.id) === value)?.displayName || users.find((user) => String(user.id) === value)?.display_name || users.find((user) => String(user.id) === value)?.username || value;
+  }
+
   function scoreForSide(row = {}, users = [], index = 0) {
     const id = userId(users, index);
     const sideValue = index === 1 ? row.secondScore : row.firstScore;
@@ -124,48 +130,41 @@ window.CR = window.CR || {};
   }
 
   function buildSeasonPlayerSpotlights(selectedGames, users) {
-    const byPlayer = new Map();
+    return [0, 1].map((index) => {
+      const ownerId = userId(users, index);
+      const byPlayer = new Map();
 
-    selectedGames.forEach((game) => {
-      [0, 1].forEach((index) => {
-        const ownerId = userId(users, index);
+      selectedGames.forEach((game) => {
         picksForUser(game, users, index).forEach((pick) => {
           const existing = byPlayer.get(pick.playerName) || {
             name: pick.playerName,
             position: pick.position,
             vibe: pick.vibe,
-            owner: 'Split',
+            owner: ownerId,
             totalPoints: 0,
             gamesPicked: 0,
-            pickedByFirst: 0,
-            pickedBySecond: 0,
             winsWhenPicked: 0,
             recordWhenPicked: '0-0',
             bestGame: null,
             clutch: 'Quietly clutch'
           };
+          const points = Number(pick.points || 0);
 
-          existing.totalPoints += Number(pick.points || 0);
+          existing.totalPoints += points;
           existing.gamesPicked += 1;
-          if (index === 0) existing.pickedByFirst += 1;
-          if (index === 1) existing.pickedBySecond += 1;
           if (scoreWinner(game, users) === ownerId) existing.winsWhenPicked += 1;
-          if (!existing.bestGame || Number(pick.points || 0) > Number(existing.bestGame.points || 0)) {
-            existing.bestGame = { title: game.title, points: Number(pick.points || 0) };
+          if (!existing.bestGame || points > Number(existing.bestGame.points || 0)) {
+            existing.bestGame = { title: gameLabel(game), points };
           }
-
-          existing.owner = existing.pickedByFirst === existing.pickedBySecond
-            ? 'Split'
-            : existing.pickedByFirst > existing.pickedBySecond ? userId(users, 0) : userId(users, 1);
 
           existing.recordWhenPicked = `${existing.winsWhenPicked}-${Math.max(0, existing.gamesPicked - existing.winsWhenPicked)}`;
           existing.clutch = existing.totalPoints >= 10 ? 'Season-shaping chaos' : existing.totalPoints >= 6 ? 'Reliable momentum piece' : 'Quietly clutch';
           byPlayer.set(pick.playerName, existing);
         });
       });
-    });
 
-    return Array.from(byPlayer.values()).sort((a, b) => b.totalPoints - a.totalPoints || b.gamesPicked - a.gamesPicked).slice(0, 3);
+      return Array.from(byPlayer.values()).sort((a, b) => b.totalPoints - a.totalPoints || b.gamesPicked - a.gamesPicked || Number(b.bestGame?.points || 0) - Number(a.bestGame?.points || 0))[0] || null;
+    }).filter(Boolean);
   }
 
   function buildRecentTen(gameLog) {
@@ -220,7 +219,7 @@ window.CR = window.CR || {};
         current = { owner: '', count: 0 };
       }
       const margin = Math.abs(scoreForSide(game, users, 0) - scoreForSide(game, users, 1));
-      if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game) };
+      if (!biggestBlowout || margin > biggestBlowout.margin) biggestBlowout = { owner: winner, margin, title: gameLabel(game), meta: `${winnerNameForId(users, winner)} • ${gameLabel(game)}` };
       const scorer = firstGoalScorer(game, users);
       if (scorer && scorer !== '—') firstGoalCounts.set(scorer, (firstGoalCounts.get(scorer) || 0) + 1);
     });
@@ -232,8 +231,9 @@ window.CR = window.CR || {};
     const completedCount = games.length;
     const cards = [];
     if (highlights.longest?.count) cards.push({ label: 'Longest run', value: `${highlights.longest.count} straight`, owner: highlights.longest.owner, copy: 'built the longest winning streak.' });
-    if (highlights.biggestBlowout?.margin) cards.push({ label: 'Biggest swing', value: `+${highlights.biggestBlowout.margin}`, owner: highlights.biggestBlowout.owner, copy: `owned ${highlights.biggestBlowout.title}.` });
-    if (highlights.topFirstGoal?.[0]) cards.push({ label: 'First-goal magnet', value: highlights.topFirstGoal[0], owner: null, copy: `${highlights.topFirstGoal[1]} first-goal bonus hit${highlights.topFirstGoal[1] === 1 ? '' : 's'}.` });
+    if (highlights.biggestBlowout?.margin) cards.push({ label: 'Biggest swing', value: `+${highlights.biggestBlowout.margin}`, owner: highlights.biggestBlowout.owner, copy: `owned ${highlights.biggestBlowout.title}.`, meta: highlights.biggestBlowout.meta });
+    if (highlights.topFirstGoal?.[1] >= 2) cards.push({ label: 'First-goal magnet', value: highlights.topFirstGoal[0], owner: null, copy: `${highlights.topFirstGoal[1]} first-goal bonus hits.`, meta: `${highlights.topFirstGoal[1]} first-goal hits` });
+    else cards.push({ label: 'First-goal magnet', value: 'Up for grabs', owner: null, copy: 'No repeat first-goal scorer yet.', meta: 'No repeat first-goal scorer yet' });
     cards.push({ label: 'Games logged', value: String(completedCount), owner: null, copy: 'Completed rivalry games in the archive.' });
     return cards.slice(0, 4);
   }
