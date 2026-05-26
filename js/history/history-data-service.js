@@ -323,6 +323,8 @@ window.CR = window.CR || {};
       picksRows = sortPicks(picksRes.data || []);
     }
 
+    CR.historyRawPicks = picksRows;
+
     const players = mapPlayers(playersRes.data || []);
     const playerLookup = buildPlayerLookup(players);
     const scoresByGame = rowsByKey(gameScoresRes.error ? [] : gameScoresRes.data || [], 'game_id');
