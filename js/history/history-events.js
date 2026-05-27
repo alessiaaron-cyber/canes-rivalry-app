@@ -448,7 +448,6 @@ window.CR = window.CR || {};
       opponent: payload.opponent || null,
       game_type: payload.gameType,
       first_picker_user_id: payload.firstPickerUserId || null,
-      status: 'Final',
       first_goal_scorer: payload.firstGoal || null,
       winner_user_id: payload.winnerUserId,
       recap: buildHistoryEditRecap(payload)
