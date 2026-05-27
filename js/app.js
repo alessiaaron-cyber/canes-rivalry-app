@@ -140,12 +140,13 @@ window.CR = window.CR || {};
     if (gameDayFailure) failures.push(gameDayFailure);
 
     const historyFailure = await runRefreshStep('History', async () => {
-      await window.CR.refreshHistoryData?.();
+      await window.CR.refreshHistoryData?.({ force: true });
     });
     if (historyFailure) failures.push(historyFailure);
 
     const manageFailure = await runRefreshStep('Manage', async () => {
-      window.CR.renderManage?.();
+      if (window.CR.hydrateManageData) await window.CR.hydrateManageData();
+      else window.CR.renderManage?.();
     });
     if (manageFailure) failures.push(manageFailure);
 
@@ -162,6 +163,9 @@ window.CR = window.CR || {};
       window.CR.identity?.applyUserColorVariables?.();
       renderAccountIdentity();
       bindAccountUi();
+
+      window.CR.realtime?.start?.();
+      window.CR.realtimeRefreshHandler?.register?.();
 
       window.CR.initTabs?.();
       window.CR.initGameDay?.();
