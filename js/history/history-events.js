@@ -73,10 +73,17 @@ window.CR = window.CR || {};
     return sideIndex(side) === 1 ? 'owner-secondary' : 'owner-primary';
   }
 
-  function scoringRules(isPlayoff) {
-    return isPlayoff
-      ? { goal: 2, assist: 1, firstGoalBonus: 1 }
-      : { goal: 1, assist: 1, firstGoalBonus: 1 };
+  function scoringRulesForGame(game, isPlayoff) {
+    const seasonId = String(game?.seasonId || game?.season_id || '');
+    const season = (CR.historyData?.seasons || []).find((item) => String(item.id) === seasonId);
+    const profile = isPlayoff ? 'Playoffs' : 'Regular';
+    const scoring = season?.scoringSystems?.[profile] || {};
+
+    return {
+      goal: Number(scoring.goal ?? 2),
+      assist: Number(scoring.assist ?? 1),
+      firstGoalBonus: Number(scoring.firstGoal ?? 1)
+    };
   }
 
   function normalizeGameType(value) {
@@ -358,8 +365,9 @@ window.CR = window.CR || {};
   }
 
   function collectEditPayload(form) {
+    const game = (CR.historyData?.games || []).find((item) => String(item.id) === String(form.dataset.historyGameId));
     const isPlayoff = form.querySelector('[data-history-game-type="1"]')?.value === 'playoffs';
-    const rules = scoringRules(isPlayoff);
+    const rules = scoringRulesForGame(game, isPlayoff);
     const firstGoal = (form.querySelector('[data-history-first-goal="1"]')?.value || '').trim();
     const picks = [...collectSheetPicks(form, sideKey(0)), ...collectSheetPicks(form, sideKey(1))];
     const chosen = picks.map((pick) => pick.playerName).filter(Boolean);
@@ -378,6 +386,7 @@ window.CR = window.CR || {};
 
     return {
       gameId: form.dataset.historyGameId,
+      seasonId: game?.seasonId || game?.season_id || null,
       gameDate: (form.querySelector('[data-history-game-date="1"]')?.value || '').trim(),
       opponent: (form.querySelector('[data-history-game-opponent="1"]')?.value || '').trim(),
       gameType: normalizeGameType(form.querySelector('[data-history-game-type="1"]')?.value),
@@ -430,6 +439,14 @@ window.CR = window.CR || {};
     if (res.error) throw res.error;
   }
 
+  async function refreshSeasonTotals(db, seasonId) {
+    if (!seasonId) return;
+    const res = await db.rpc('refresh_season_user_totals', {
+      p_season_id: seasonId
+    });
+    if (res.error) throw res.error;
+  }
+
   async function reloadHistoryAfterSave() {
     const source = await CR.historyDataService.fetchHistoryData();
     CR.historyData = CR.historyModel.build(source);
@@ -465,6 +482,8 @@ window.CR = window.CR || {};
       upsertGameUserScore(db, payload.gameId, sideOwnerUserId(1), payload.secondPoints)
     ]);
 
+    await refreshSeasonTotals(db, payload.seasonId);
+
     await reloadHistoryAfterSave();
     CR.historyState.sheet = { open: false };
     CR.showToast?.({ message: 'History updated', tier: 'light' });
@@ -473,8 +492,9 @@ window.CR = window.CR || {};
 
   function refreshSheetTotals(form) {
     if (!form) return;
+    const game = (CR.historyData?.games || []).find((item) => String(item.id) === String(form.dataset.historyGameId));
     const isPlayoff = form.querySelector('[data-history-game-type="1"]')?.value === 'playoffs';
-    const rules = scoringRules(isPlayoff);
+    const rules = scoringRulesForGame(game, isPlayoff);
     const firstGoalName = (form.querySelector('[data-history-first-goal="1"]')?.value || '').trim().toLowerCase();
     const totals = { [sideKey(0)]: 0, [sideKey(1)]: 0 };
 

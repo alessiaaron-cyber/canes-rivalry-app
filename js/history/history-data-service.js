@@ -30,6 +30,25 @@ window.CR = window.CR || {};
     return row?.short_label || row?.season_key || seasonLabel(row).replace(/^20/, '');
   }
 
+  function seasonScoringSystems(row = {}) {
+    const rules = row.scoring_rules || {};
+    const regular = rules.regular || {};
+    const playoffs = rules.playoffs || {};
+
+    return {
+      Regular: {
+        firstGoal: toNumber(regular.first_goal_bonus, 1),
+        goal: toNumber(regular.goal, 2),
+        assist: toNumber(regular.assist, 1)
+      },
+      Playoffs: {
+        firstGoal: toNumber(playoffs.first_goal_bonus, 1),
+        goal: toNumber(playoffs.goal, 2),
+        assist: toNumber(playoffs.assist, 1)
+      }
+    };
+  }
+
   function gameTitle(row) {
     if (row?.title) return row.title;
     const number = row?.game_number ? `Game ${row.game_number}` : 'Game';
@@ -280,6 +299,7 @@ window.CR = window.CR || {};
         shortLabel: seasonShortLabel(row),
         isCurrent: normalizeKey(row.id) === normalizeKey(currentSeasonId),
         note: row.note || (row.is_active ? 'Current season.' : 'Completed season.'),
+        scoringSystems: seasonScoringSystems(row),
         firstScore,
         secondScore,
         totalsByUserId: scoresByUserIdFromValues(firstScore, secondScore),
