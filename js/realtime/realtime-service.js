@@ -106,6 +106,10 @@ window.CR.realtime = window.CR.realtime || {};
         .channel('canes-rivalry-v2-sync')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, (payload) => dispatch(normalizePayload(payload)))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'picks' }, (payload) => dispatch(normalizePayload(payload)))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'seasons' }, (payload) => dispatch(normalizePayload(payload)))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, (payload) => dispatch(normalizePayload(payload)))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'game_user_scores' }, (payload) => dispatch(normalizePayload(payload)))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'season_user_totals' }, (payload) => dispatch(normalizePayload(payload)))
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rivalry_events' }, (payload) => dispatch(normalizePayload(payload)))
         .subscribe((status) => {
           CR.realtime.status = status;
