@@ -4,17 +4,13 @@ window.CR = window.CR || {};
   const CR = window.CR;
   const params = new URLSearchParams(window.location.search || '');
   const STORAGE_KEY = 'cr.mockGameDayState';
-  const hasMockGameDayQuery = params.has('mockGameDay');
 
   function setting(name, fallback = '') { const queryValue = params.get(name); if (queryValue !== null) return queryValue; try { return window.localStorage.getItem(`cr.${name}`) || fallback; } catch (_) { return fallback; } }
   function setSetting(name, value) { try { if (value === null || value === undefined || value === '') window.localStorage.removeItem(`cr.${name}`); else window.localStorage.setItem(`cr.${name}`, String(value)); } catch (_) {} }
-  function clearStoredMockState() { ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, '')); try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {} }
-  function isEnabled() { return hasMockGameDayQuery && params.get('mockGameDay') === '1'; }
-  function currentMode() { return hasMockGameDayQuery ? (setting('mockMode', 'pregame') || 'pregame') : 'pregame'; }
-  function isPlayoffs() { return hasMockGameDayQuery && setting('mockPlayoffs') === '1'; }
-  function isCarryover() { return hasMockGameDayQuery && setting('mockCarryover') === '1'; }
-
-  if (!hasMockGameDayQuery) clearStoredMockState();
+  function isEnabled() { return setting('mockGameDay') === '1'; }
+  function currentMode() { return setting('mockMode', 'pregame') || 'pregame'; }
+  function isPlayoffs() { return setting('mockPlayoffs') === '1'; }
+  function isCarryover() { return setting('mockCarryover') === '1'; }
 
   const mockUsers = [
     { id: '00000000-0000-4000-8000-000000000001', username: 'player-1', displayName: 'Player 1', display_name: 'Player 1', rivalrySlot: 1, rivalry_slot: 1, profileKey: '00000000-0000-4000-8000-000000000001', profile_key: '00000000-0000-4000-8000-000000000001', scoreKey: '00000000-0000-4000-8000-000000000001', score_key: '00000000-0000-4000-8000-000000000001', themeClass: 'owner-primary', avatarClass: 'avatar-primary', colorHex: '#c8102e', color_hex: '#c8102e', colorLabel: 'Canes Red', color_label: 'Canes Red' },
@@ -52,8 +48,8 @@ window.CR = window.CR || {};
   }
 
   function ensureState() { mockState = mockState || loadState() || buildState(currentMode()); mockState.users = mockUsers; mockState.roster = roster; mockState.pregame = normalizePregameBuckets(mockState.pregame || {}); mockState.nextGame = mockState.nextGame || buildState(currentMode()).nextGame; return mockState; }
-  function setMockOptions(options = {}) { setSetting('mockGameDay', options.enabled ? '1' : ''); setSetting('mockMode', options.mode || currentMode() || 'pregame'); setSetting('mockPlayoffs', options.playoffs ? '1' : ''); setSetting('mockCarryover', options.carryover ? '1' : ''); mockState = buildState(currentMode()); saveState(); }
-  function clearMockOptions() { clearStoredMockState(); mockState = null; }
+  function setMockOptions(options = {}) { setSetting('mockGameDay', options.enabled ? '1' : ''); setSetting('mockMode', options.mode || currentMode() || 'pregame'); setSetting('mockPlayoffs', options.playoffs ? '1' : ''); setSetting('mockCarryover', options.carryover ? '1' : ''); mockState = options.enabled ? buildState(currentMode()) : null; if (mockState) saveState(); else { try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {} } }
+  function clearMockOptions() { ['mockGameDay', 'mockMode', 'mockPlayoffs', 'mockCarryover'].forEach((name) => setSetting(name, '')); try { window.localStorage.removeItem(STORAGE_KEY); } catch (_) {} mockState = null; }
   function resetDraft() { mockState = buildState(currentMode()); saveState(); }
   function pickCountByDraftOrder() { ensureState(); const buckets = mockState.pregame || {}; const order = draftOrder(); let count = 0; for (let i = 0; i < order.length; i += 1) { const bucket = buckets[order[i]] || []; const occurrence = order.slice(0, i + 1).filter((ownerKey) => ownerKey === order[i]).length; if (bucket[occurrence - 1]) count += 1; else break; } return count; }
   function syncDraftState() { ensureState(); const total = pickCountByDraftOrder(); const nextPick = total + 1; const order = draftOrder(); const nextOwnerKey = order[total] || ''; const picker = mockUsers.find((user) => user.profileKey === nextOwnerKey); mockState.draft.currentPickNumber = Math.min(nextPick, 5); mockState.draft.status = nextPick > 4 ? 'complete' : 'open'; mockState.draft.currentPicker = nextPick > 4 || !picker ? { id: '', displayName: '', profileKey: '' } : { id: picker.id, displayName: picker.displayName, profileKey: picker.profileKey }; saveState(); }
