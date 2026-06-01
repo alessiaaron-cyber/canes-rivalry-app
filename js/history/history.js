@@ -268,7 +268,10 @@ window.CR = window.CR || {};
     const users = model.users || [];
     const gameLog = buildGameLog(selectedGames);
     const seasonHighlights = buildHighlights(gameLog, users);
-    const playerSpotlights = buildSeasonPlayerSpotlights(scoredGames(selectedGames, users), users);
+    const spotlightGames = selectedGames.filter((game) =>
+      picksForUser(game, users, 0).length || picksForUser(game, users, 1).length
+    );
+    const playerSpotlights = buildSeasonPlayerSpotlights(spotlightGames, users);
     return { selectedSeason, selectedSummary, selectedGames, seasonBoard: buildSeasonBoard(selectedSeason, gameLog, selectedSummary, users), momentum: buildMomentum(gameLog, users), recentGames: buildRecentTen(gameLog).slice(0, 4), gameLog, playerSpotlights, highlights: { ...seasonHighlights, cards: buildHighlightCards(seasonHighlights, gameLog, users) } };
   }
 
