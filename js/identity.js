@@ -101,8 +101,28 @@ window.CR = window.CR || {};
   function findUser(indexOrName = 0, source) {
     if (typeof indexOrName === 'number') return getUser(indexOrName, source);
     const lookup = compact(indexOrName).toLowerCase();
-    return getUsers(source).find((user) => [user.id, user.profileKey, user.profile_key, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key]
+    return getUsers(source).find((user) => [user.id, user.user_id, user.profileKey, user.profile_key, user.username, user.display_name, user.displayName, user.scoreKey, user.score_key]
       .some((value) => compact(value).toLowerCase() === lookup)) || null;
+  }
+
+  function currentProfileId() { return compact(CR.currentProfile?.id || CR.currentUser?.id); }
+
+  function getPerspectiveIndex(source) {
+    const id = currentProfileId();
+    if (!id) return 0;
+    const index = getUsers(source).findIndex((user) => [user.id, user.user_id, user.profileKey, user.profile_key, user.scoreKey, user.score_key]
+      .some((value) => compact(value) === id));
+    return index >= 0 ? index : 0;
+  }
+
+  function getPerspectiveOrder(source) {
+    const primary = getPerspectiveIndex(source);
+    return primary === 1 ? [1, 0] : [0, 1];
+  }
+
+  function getPerspectiveUsers(source) {
+    const users = getUsers(source);
+    return getPerspectiveOrder(source).map((index) => users[index]).filter(Boolean);
   }
 
   function getDisplayName(index = 0, source) { return getUser(index, source).displayName; }
@@ -142,5 +162,5 @@ window.CR = window.CR || {};
     setVar(root, '--cr-current-user-border', `rgba(${currentRgb}, 0.16)`);
   }
 
-  CR.identity = { getUsers, getUser, findUser, getDisplayName, getThemeClass, getAvatarClass, getColor, getScoreKey, getProfileKey, ownerClass, leaderClass, winnerClass, applyUserColorVariables, normalizeUser, normalizeHex, shade, rgbString };
+  CR.identity = { getUsers, getUser, findUser, getPerspectiveIndex, getPerspectiveOrder, getPerspectiveUsers, getDisplayName, getThemeClass, getAvatarClass, getColor, getScoreKey, getProfileKey, ownerClass, leaderClass, winnerClass, applyUserColorVariables, normalizeUser, normalizeHex, shade, rgbString };
 })();
