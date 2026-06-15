@@ -25,7 +25,6 @@ type ActiveSeason = {
 type RivalryProfile = {
   id: string;
   display_name: string | null;
-  legacy_owner_key: string | null;
   rivalry_slot: number | null;
 };
 
@@ -114,14 +113,10 @@ function gameKey(game: ImportedGame) {
   return `${game.game_date}|${game.opponent}|${game.home_away}`;
 }
 
-function profileDisplayName(profile: RivalryProfile | null | undefined) {
-  return cleanText(profile?.display_name) || cleanText(profile?.legacy_owner_key) || "";
-}
-
 async function loadProfiles() {
   const { data, error } = await serviceDb
     .from("user_profiles")
-    .select("id, display_name, legacy_owner_key, rivalry_slot")
+    .select("id, display_name, rivalry_slot")
     .eq("is_active", true)
     .order("rivalry_slot", { ascending: true });
 
@@ -141,7 +136,6 @@ function otherProfile(profiles: RivalryProfile[], profile: RivalryProfile | null
 function pickerPayload(profile: RivalryProfile | null | undefined) {
   return {
     first_picker_user_id: profile?.id || null,
-    first_picker: profileDisplayName(profile) || null,
     current_pick_user_id: profile?.id || null,
   };
 }
@@ -205,7 +199,7 @@ async function nextGameNumber(seasonId: number) {
 async function loadExistingGames(seasonId: number) {
   const { data, error } = await serviceDb
     .from("games")
-    .select("id, season_id, game_number, game_date, opponent, home_away, game_type, status, draft_status, nhl_game_id, first_picker, first_picker_user_id")
+    .select("id, season_id, game_number, game_date, opponent, home_away, game_type, status, draft_status, nhl_game_id, first_picker_user_id")
     .eq("season_id", seasonId);
 
   if (error) throw error;
