@@ -30,6 +30,16 @@ begin
     raise exception 'Not allowed';
   end if;
 
+  if not exists (
+    select 1
+    from public.user_profiles
+    where id = auth.uid()
+      and role = 'admin'
+      and is_active = true
+  ) then
+    raise exception 'Admin access required';
+  end if;
+
   select id, season_id into v_game
   from public.games
   where id = p_game_id
