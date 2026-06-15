@@ -52,13 +52,6 @@ window.CR = window.CR || {};
     return `Last 10 ${perspectiveRecordText(data, `${match[1]}-${match[2]}${match[3] ? `-${match[3]}` : ''}`)}`;
   }
 
-  function renderScorePair(data, values = {}, options = {}) {
-    const sides = perspectivePair(data, values);
-    const leftClass = options.leftClass || '';
-    const rightClass = options.rightClass || 'is-right';
-    return sides.map((side, position) => `<div class="${position === 0 ? leftClass : rightClass}"><span class="${options.nameClass || ''} ${side.themeClass}">${escapeHtml(side.name)}</span><strong>${escapeHtml(String(side.score ?? 0))}</strong></div>`).join(options.divider || '');
-  }
-
   function userThemeClass(data, indexOrWinner) {
     if (typeof indexOrWinner === 'number') return getUser(data, indexOrWinner).themeClass || (indexOrWinner === 1 ? 'owner-secondary' : 'owner-primary');
     const winner = String(indexOrWinner || '');
