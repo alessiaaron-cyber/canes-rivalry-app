@@ -31,7 +31,7 @@ window.CR = window.CR || {};
       opponent: row.opponent || 'TBD',
       homeAway: row.home_away || '',
       type: row.game_type || 'Regular Season',
-      firstPicker: picker?.display_name || row.first_picker || 'TBD',
+      firstPicker: picker?.display_name || picker?.username || 'TBD',
       firstPickerUserId: row.first_picker_user_id || null,
       status: row.status || 'Scheduled',
       draftStatus: row.draft_status || '',
@@ -140,7 +140,7 @@ window.CR = window.CR || {};
     if (activeSeason?.id) {
       const gamesResult = await db
         .from('games')
-        .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
+        .select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at')
         .eq('season_id', activeSeason.id)
         .neq('status', 'Hidden')
         .order('game_date', { ascending: false, nullsFirst: true })
@@ -212,7 +212,7 @@ window.CR = window.CR || {};
     const activeSeason = await getActiveSeasonRow();
     const gameNumber = await nextGameNumber(activeSeason.id);
 
-    const result = await db.from('games').insert({ season_id: activeSeason.id, game_number: gameNumber, game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker: payload.firstPicker || null, first_picker_user_id: payload.firstPickerUserId || null, status: 'Scheduled', draft_status: 'open', current_pick_number: 1, current_pick_user_id: payload.firstPickerUserId || null }).select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
+    const result = await db.from('games').insert({ season_id: activeSeason.id, game_number: gameNumber, game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker_user_id: payload.firstPickerUserId || null, status: 'Scheduled', draft_status: 'open', current_pick_number: 1, current_pick_user_id: payload.firstPickerUserId || null }).select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
 
     if (result.error) throw result.error;
     return normalizeGame(result.data, CR.currentProfiles || []);
@@ -220,7 +220,7 @@ window.CR = window.CR || {};
 
   async function updateGame(id, payload) {
     const db = await CR.getSupabase();
-    const result = await db.from('games').update({ game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker: payload.firstPicker || null, first_picker_user_id: payload.firstPickerUserId || null, current_pick_user_id: payload.firstPickerUserId || null }).eq('id', id).select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
+    const result = await db.from('games').update({ game_date: payload.date || null, opponent: String(payload.opponent || '').trim().toUpperCase(), home_away: payload.homeAway || null, game_type: normalizeGameType(payload.type), first_picker_user_id: payload.firstPickerUserId || null, current_pick_user_id: payload.firstPickerUserId || null }).eq('id', id).select('id, season_id, game_number, game_date, opponent, home_away, game_type, first_picker_user_id, status, draft_status, nhl_game_id, game_start_time, nhl_game_state, last_synced_at').single();
 
     if (result.error) throw result.error;
     return normalizeGame(result.data, CR.currentProfiles || []);
