@@ -1,5 +1,5 @@
 create or replace function public.save_history_game_edit(
-  p_game_id uuid,
+  p_game_id bigint,
   p_game_date date,
   p_opponent text,
   p_game_type text,
@@ -132,4 +132,4 @@ begin
 end;
 $$;
 
-grant execute on function public.save_history_game_edit(uuid, date, text, text, uuid, text, uuid, text, jsonb, jsonb) to authenticated;
+grant execute on function public.save_history_game_edit(bigint, date, text, text, uuid, text, uuid, text, jsonb, jsonb) to authenticated;
