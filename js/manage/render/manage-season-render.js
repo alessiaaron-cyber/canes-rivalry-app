@@ -13,6 +13,19 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     };
   }
 
+
+  function liveDataStatus(state) {
+    const { renderCardHeader } = deps();
+    const error = String(state.manageDataError || '').trim();
+    const title = error ? 'Live season failed to load' : 'Loading live season…';
+    const copy = error ? 'Season and scoring edits are disabled until live data loads successfully.' : 'Season and scoring settings will be available after live Manage data finishes loading.';
+    return `
+      <section class="panel-card manage-card">
+        ${renderCardHeader('Season setup', title, copy, { className: error ? 'warning' : 'neutral', label: error ? 'Load failed' : 'Loading' })}
+      </section>
+    `;
+  }
+
   function scoringLockLabel(profile, state) {
     if (profile === 'Regular') {
       return state.season.regularScoringLocked ? 'Locked' : 'Unlocked';
@@ -58,6 +71,8 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
   }
 
   function renderSeasonSetup(state) {
+    if (!state.manageDataLoaded) return liveDataStatus(state);
+
     const { escapeHtml, renderCardHeader } = deps();
     const activeSeasonLabel = state.season.activeSeasonLabel || 'Active season';
 

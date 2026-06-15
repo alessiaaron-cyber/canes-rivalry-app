@@ -127,6 +127,9 @@ window.CR = window.CR || {};
       profileColorOpen: false,
       editingScheduleGameId: null,
       editingRosterPlayerId: null,
+      manageDataLoading: true,
+      manageDataLoaded: false,
+      manageDataError: '',
       watchExperience,
       notificationDevice: buildNotificationDevice(),
       tempNotificationTest: {
@@ -188,10 +191,10 @@ window.CR = window.CR || {};
       },
       appHealth: {
         realtimeStatus: 'Connected',
-        syncStatus: 'Healthy',
+        syncStatus: 'Loading live data',
         notificationStatus: 'Ready',
         pwaStatus: 'Installed',
-        lastSyncLabel: '2 minutes ago'
+        lastSyncLabel: 'Loading…'
       },
       users,
       profileColorOptions: PROFILE_COLOR_OPTIONS,
