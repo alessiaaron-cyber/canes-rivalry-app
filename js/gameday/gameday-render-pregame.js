@@ -51,7 +51,7 @@ window.CR = window.CR || {};
 
   function renderAdminOverrideButton(scheduled) {
     if (!scheduled || !isAdmin()) return '';
-    return `<button class="gd-manage-tiny gd-header-action" data-action="open-manage" type="button">Manage</button>`;
+    return '<button class="gd-manage-tiny gd-header-action" data-action="open-manage" type="button">Manage</button>';
   }
 
   function lastNameFirstName(name) {
@@ -88,8 +88,7 @@ window.CR = window.CR || {};
     return `<div class="gd-pick-row ${isFocus ? 'gd-pick-row-focus' : ''} ${!picksEnabled ? 'is-disabled' : ''}" data-pick-player="${pick.player}"><div class="gd-pick-icon" aria-hidden="true">✓</div><div class="gd-pick-main"><strong>${pick.player}</strong><small>${picksEnabled ? (isPlayoffs ? 'Locked for playoff night' : 'Locked pick') : 'Pick locked'}</small></div></div>`;
   }
 
-  function renderOwnerPanel(index, users, isPlayoffs, lastDrafted, scheduled) {
-    const side = utils().getSideContext(index, { users });
+  function renderOwnerPanel(side, isPlayoffs, lastDrafted, scheduled) {
     return `<article class="gd-panel ${isPlayoffs && scheduled ? 'gd-panel-playoff' : ''}"><div class="gd-panel-head ${side.ownerClass} ${isPlayoffs && scheduled ? 'gd-panel-head-playoff' : ''}" ${headerStyle(side)}><span class="gd-panel-owner">${side.name}</span><span class="gd-panel-count">${side.picks.length}/2</span></div>${[0, 1].map((pickIndex) => renderPickSlot({ pick: side.picks[pickIndex], isPlayoffs, isFocus: scheduled && side.picks[pickIndex] && side.picks[pickIndex].player === lastDrafted, picksEnabled: scheduled })).join('')}</article>`;
   }
 
@@ -106,7 +105,8 @@ window.CR = window.CR || {};
     const scheduled = canEditPicks();
     const picksEnabled = canUsePublicDraftControls();
     const title = isPlayoffs && scheduled ? 'Playoff Picks' : 'Picks';
-    return `<div class="gd-section-header gd-pregame-header" id="gdPregamePicksAnchor"><div class="gd-section-title-row"><div class="gd-label">${title}</div>${renderAdminOverrideButton(scheduled)}</div><div class="gd-section-meta-row"><div class="gd-inline-note gd-pick-status-note">${draftStatusText()}</div></div></div><section class="gd-picks-grid" id="gdPregamePicksGrid">${renderOwnerPanel(0, users, isPlayoffs, lastDrafted, scheduled)}${renderOwnerPanel(1, users, isPlayoffs, lastDrafted, scheduled)}</section><div class="gd-label-row"><div class="gd-label">Current Canes Roster</div></div><section class="gd-panel gd-roster ${isPlayoffs && scheduled ? 'gd-panel-playoff' : ''}">${roster.map((entry) => renderRosterRow(entry, claimedOwner, isPlayoffs, picksEnabled)).join('')}</section>`;
+    const sides = utils().sides({ users });
+    return `<div class="gd-section-header gd-pregame-header" id="gdPregamePicksAnchor"><div class="gd-section-title-row"><div class="gd-label">${title}</div>${renderAdminOverrideButton(scheduled)}</div><div class="gd-section-meta-row"><div class="gd-inline-note gd-pick-status-note">${draftStatusText()}</div></div></div><section class="gd-picks-grid" id="gdPregamePicksGrid">${sides.map((side) => renderOwnerPanel(side, isPlayoffs, lastDrafted, scheduled)).join('')}</section><div class="gd-label-row"><div class="gd-label">Current Canes Roster</div></div><section class="gd-panel gd-roster ${isPlayoffs && scheduled ? 'gd-panel-playoff' : ''}">${roster.map((entry) => renderRosterRow(entry, claimedOwner, isPlayoffs, picksEnabled)).join('')}</section>`;
   }
 
   CR.gameDayPregameRender = { renderPregameSection };
