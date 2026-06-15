@@ -18,7 +18,25 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     };
   }
 
+
+  function liveDataStatus(state) {
+    const error = String(state.manageDataError || '').trim();
+    const title = error ? 'Live schedule failed to load' : 'Loading live schedule…';
+    const copy = error ? 'Schedule editing and imports are disabled until live data loads successfully.' : 'Schedule editing and imports will be available after live Manage data finishes loading.';
+    const { renderCardHeader, renderSubviewHeader } = deps();
+    return `
+      <div class="content-stack manage-stack">
+        ${renderSubviewHeader('Schedule', 'Schedule', 'Manage future games. Finalized history is protected from deletion.')}
+        <section class="panel-card manage-card">
+          ${renderCardHeader('Games', title, copy, { className: error ? 'warning' : 'neutral', label: error ? 'Load failed' : 'Loading' })}
+        </section>
+      </div>
+    `;
+  }
+
   function renderScheduleView(state) {
+    if (!state.manageDataLoaded) return liveDataStatus(state);
+
     const {
       escapeHtml,
       iconButton,

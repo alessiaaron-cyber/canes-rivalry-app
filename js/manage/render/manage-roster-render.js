@@ -19,6 +19,22 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
     };
   }
 
+
+  function liveDataStatus(state) {
+    if (state.manageDataLoaded) return '';
+    const error = String(state.manageDataError || '').trim();
+    const title = error ? 'Live roster failed to load' : 'Loading live roster…';
+    const copy = error ? 'Roster editing is disabled until live data loads successfully.' : 'Roster editing will be available after live Manage data finishes loading.';
+    return `
+      <div class="content-stack manage-stack">
+        ${getDeps().renderSubviewHeader('Roster', 'Roster', 'Active pick list for future games. Removed players stay available in history records.')}
+        <section class="panel-card manage-card">
+          ${getDeps().renderCardHeader('Players', title, copy, { className: error ? 'warning' : 'neutral', label: error ? 'Load failed' : 'Loading' })}
+        </section>
+      </div>
+    `;
+  }
+
   function renderRosterActions(player, deps) {
     const { escapeHtml, iconButton } = deps;
     const playerId = escapeHtml(player.id);
@@ -47,6 +63,8 @@ window.CR.manageRenderModules = window.CR.manageRenderModules || {};
   }
 
   function renderRosterView(state) {
+    if (!state.manageDataLoaded) return liveDataStatus(state);
+
     const deps = getDeps();
     const {
       escapeHtml,
