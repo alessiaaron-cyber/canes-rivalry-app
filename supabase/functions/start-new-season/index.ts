@@ -80,22 +80,19 @@ async function loadActiveSeason() {
   return data || null;
 }
 
-async function computeLegacyTotals(seasonId: number) {
+async function computeSeasonTotals(seasonId: number) {
   const { data, error } = await serviceDb
-    .from("games")
-    .select("aaron_points, julie_points")
-    .eq("season_id", seasonId)
-    .eq("status", "Final");
+    .from("season_user_totals")
+    .select("user_id, total_points")
+    .eq("season_id", seasonId);
 
   if (error) throw error;
 
-  return (data || []).reduce(
-    (acc, game: any) => ({
-      aaron: acc.aaron + Number(game.aaron_points || 0),
-      julie: acc.julie + Number(game.julie_points || 0),
-    }),
-    { aaron: 0, julie: 0 },
-  );
+  return (data || []).reduce((acc: Record<string, number>, row: any) => {
+    const userId = cleanText(row.user_id);
+    if (userId) acc[userId] = Number(row.total_points || 0);
+    return acc;
+  }, {});
 }
 
 async function validateFirstPicker(firstPickerUserId: string | null) {
@@ -103,7 +100,7 @@ async function validateFirstPicker(firstPickerUserId: string | null) {
 
   const { data, error } = await serviceDb
     .from("user_profiles")
-    .select("id, display_name, legacy_owner_key")
+    .select("id, display_name")
     .eq("id", firstPickerUserId)
     .eq("is_active", true)
     .maybeSingle();
@@ -136,15 +133,13 @@ Deno.serve(async (req) => {
 
     const firstPicker = await validateFirstPicker(firstPickerUserId);
     const activeSeason = await loadActiveSeason();
-    const archivedTotals = activeSeason?.id ? await computeLegacyTotals(Number(activeSeason.id)) : { aaron: 0, julie: 0 };
+    const archivedTotals = activeSeason?.id ? await computeSeasonTotals(Number(activeSeason.id)) : {};
 
     if (activeSeason?.id) {
       const { error: archiveError } = await serviceDb
         .from("seasons")
         .update({
           is_active: false,
-          aaron_final_total: archivedTotals.aaron,
-          julie_final_total: archivedTotals.julie,
           total_source: "computed",
           regular_scoring_locked: true,
           playoff_scoring_locked: true,
@@ -166,8 +161,6 @@ Deno.serve(async (req) => {
         scoring_rules: body.scoring_rules && typeof body.scoring_rules === "object" ? body.scoring_rules : DEFAULT_SCORING_RULES,
         regular_scoring_locked: false,
         playoff_scoring_locked: false,
-        aaron_final_total: 0,
-        julie_final_total: 0,
         total_source: "active",
       })
       .select("*")
@@ -188,7 +181,7 @@ Deno.serve(async (req) => {
       archived_totals: archivedTotals,
       season,
       first_picker_user_id: firstPicker?.id || null,
-      first_picker: cleanText(firstPicker?.display_name) || cleanText(firstPicker?.legacy_owner_key) || null,
+      first_picker: cleanText(firstPicker?.display_name) || null,
     });
   } catch (err) {
     console.error("start-new-season failed:", err);

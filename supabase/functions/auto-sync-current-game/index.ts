@@ -313,8 +313,8 @@ function bonusIncluded(playerName: string, goals: number, firstGoal: string) {
 }
 
 function winner(a: number, j: number, slot1?: any, slot2?: any) {
-  const slot1Name = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
-  const slot2Name = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
+  const slot1Name = String(slot1?.display_name || "Player 1").trim();
+  const slot2Name = String(slot2?.display_name || "Player 2").trim();
 
   return a > j ? slot1Name : j > a ? slot2Name : "Tie";
 }
@@ -721,8 +721,8 @@ function buildNotification({
   const oldW = winner(oldA, oldJ, slot1, slot2);
   const newW = winner(newA, newJ, slot1, slot2);
 
-  const slot1Name = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
-  const slot2Name = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
+  const slot1Name = String(slot1?.display_name || "Player 1").trim();
+  const slot2Name = String(slot2?.display_name || "Player 2").trim();
 
   const score = `${slot1Name} ${newA} – ${slot2Name} ${newJ}`;
 
@@ -848,7 +848,6 @@ async function loadPreviousGameWithFourPicks(seasonId: number, game: any) {
 function carryForwardRows(gameId: number, sourcePicks: any[]) {
   return sourcePicks.slice(0, 4).map((pick: any) => ({
     game_id: gameId,
-    owner: pick.owner,
     owner_user_id: pick.owner_user_id || null,
     pick_slot: Number(pick.pick_slot || 1),
     player_name: String(pick.player_name || "").trim(),
@@ -1092,7 +1091,7 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error: profilesError } = await db
       .from("user_profiles")
-      .select("id, display_name, legacy_owner_key, rivalry_slot")
+      .select("id, display_name, rivalry_slot")
       .eq("is_active", true)
       .order("rivalry_slot", { ascending: true });
 
@@ -1272,12 +1271,12 @@ Deno.serve(async (req) => {
       changes,
       firstGoalBonusHit,
       oldScore: {
-        [slot1.display_name]: oldA,
-        [slot2.display_name]: oldJ,
+        [String(slot1.display_name || "Player 1")]: oldA,
+        [String(slot2.display_name || "Player 2")]: oldJ,
       },
       newScore: {
-        [slot1.display_name]: newA,
-        [slot2.display_name]: newJ,
+        [String(slot1.display_name || "Player 1")]: newA,
+        [String(slot2.display_name || "Player 2")]: newJ,
       },
       reminderNotification,
       notification,

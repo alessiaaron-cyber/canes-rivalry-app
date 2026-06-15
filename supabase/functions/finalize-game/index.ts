@@ -45,27 +45,12 @@ function cleanEmail(value: unknown) {
   return String(value || "").toLowerCase().trim();
 }
 
-function normalizeDelaySeconds(value: unknown) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return DEFAULT_PUSH_DELAY_SECONDS;
-  return Math.max(0, Math.min(600, Math.round(n)));
+function cleanText(value: unknown) {
+  return String(value || "").trim();
 }
 
-function normalizeSettings(row: any): NotificationSettings {
-  const stream =
-    row?.stream_settings && typeof row.stream_settings === "object"
-      ? row.stream_settings
-      : {};
-
-  const notifications =
-    row?.notification_settings && typeof row.notification_settings === "object"
-      ? row.notification_settings
-      : {};
-
-  return {
-    push_enabled: notifications.push_enabled !== false,
-    push_delay_seconds: normalizeDelaySeconds(stream.push_delay_seconds),
-  };
+function profileName(profile: any | null | undefined, fallback = "Player") {
+  return cleanText(profile?.display_name) || fallback;
 }
 
 async function isAuthorized(req: Request) {
@@ -190,22 +175,8 @@ function pickPoints(
   return g * Number(scoring.goal || 0) + a * Number(scoring.assist || 0) + bonus;
 }
 
-function legacyScoreKey(profile: any) {
-  const key = String(profile?.legacy_owner_key || "").toLowerCase().trim();
-  if (key === "aaron") return "aaron";
-  if (key === "julie") return "julie";
-  return "";
-}
-
-function legacyWinnerKey(winnerProfile: any | null) {
-  if (!winnerProfile) return "Tie";
-  return String(winnerProfile.legacy_owner_key || winnerProfile.display_name || "").trim();
-}
-
 function buildScoreLabel(slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
-  const name1 = String(slot1?.display_name || slot1?.legacy_owner_key || "Player 1").trim();
-  const name2 = String(slot2?.display_name || slot2?.legacy_owner_key || "Player 2").trim();
-  return `${name1} ${slot1Points} – ${name2} ${slot2Points}`;
+  return `${profileName(slot1, "Player 1")} ${slot1Points} – ${profileName(slot2, "Player 2")} ${slot2Points}`;
 }
 
 function getWinnerProfile(slot1: any, slot2: any, slot1Points: number, slot2Points: number) {
@@ -231,9 +202,9 @@ function buildRecap(
     return `Tie ${slot1Points}-${slot2Points}. ${matchup}. Nobody gets bragging rights, which frankly feels illegal.`;
   }
 
-  const winnerName = String(winnerProfile.display_name || winnerProfile.legacy_owner_key || "Winner").trim();
+  const winnerName = profileName(winnerProfile, "Winner");
   const loserProfile = winnerProfile.id === slot1.id ? slot2 : slot1;
-  const loserName = String(loserProfile.display_name || loserProfile.legacy_owner_key || "the loser").trim();
+  const loserName = profileName(loserProfile, "the loser");
 
   return `${winnerName} wins ${slot1Points}-${slot2Points}. ${matchup}. ${loserName} may file a formal complaint with the Department of Rivalry Affairs.`;
 }
@@ -246,11 +217,9 @@ function buildFinalMessage(winnerProfile: any | null, scoreLabel: string) {
     };
   }
 
-  const winnerName = String(winnerProfile.display_name || winnerProfile.legacy_owner_key || "Winner").trim();
-
   return {
     title: "Final",
-    body: `${winnerName} takes it. ${scoreLabel}.`,
+    body: `${profileName(winnerProfile, "Winner")} takes it. ${scoreLabel}.`,
   };
 }
 
@@ -281,6 +250,29 @@ async function loadRecipients(): Promise<Recipient[]> {
   }
 
   return recipients;
+}
+
+function normalizeDelaySeconds(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_PUSH_DELAY_SECONDS;
+  return Math.max(0, Math.min(600, Math.round(n)));
+}
+
+function normalizeSettings(row: any): NotificationSettings {
+  const stream =
+    row?.stream_settings && typeof row.stream_settings === "object"
+      ? row.stream_settings
+      : {};
+
+  const notifications =
+    row?.notification_settings && typeof row.notification_settings === "object"
+      ? row.notification_settings
+      : {};
+
+  return {
+    push_enabled: notifications.push_enabled !== false,
+    push_delay_seconds: normalizeDelaySeconds(stream.push_delay_seconds),
+  };
 }
 
 async function loadSettingsByUserId(userIds: string[]) {
@@ -387,6 +379,24 @@ async function enqueueFinalNotifications(gameId: number, title: string, body: st
   };
 }
 
+async function loadGameScores(gameId: number) {
+  const { data, error } = await serviceDb
+    .from("game_user_scores")
+    .select("user_id, points")
+    .eq("game_id", gameId);
+
+  if (error) throw error;
+
+  return new Map((data || []).map((row: any) => [String(row.user_id), Number(row.points || 0)]));
+}
+
+function scorePayload(slot1: any, slot2: any, totalsByUserId: Map<string, number>) {
+  return {
+    [slot1.id]: Number(totalsByUserId.get(slot1.id) || 0),
+    [slot2.id]: Number(totalsByUserId.get(slot2.id) || 0),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -407,7 +417,7 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error: profilesError } = await serviceDb
       .from("user_profiles")
-      .select("id, display_name, legacy_owner_key, rivalry_slot")
+      .select("id, display_name, rivalry_slot")
       .eq("is_active", true)
       .order("rivalry_slot", { ascending: true });
 
@@ -430,23 +440,7 @@ Deno.serve(async (req) => {
     if (!game) return json({ ok: false, error: "Game not found" }, 404);
 
     if (game.status === "Final") {
-      const slot1Legacy = legacyScoreKey(slot1);
-      const slot2Legacy = legacyScoreKey(slot2);
-
-      const slot1Points =
-        slot1Legacy === "aaron"
-          ? Number(game.aaron_points || 0)
-          : slot1Legacy === "julie"
-            ? Number(game.julie_points || 0)
-            : 0;
-
-      const slot2Points =
-        slot2Legacy === "aaron"
-          ? Number(game.aaron_points || 0)
-          : slot2Legacy === "julie"
-            ? Number(game.julie_points || 0)
-            : 0;
-
+      const existingScores = await loadGameScores(gameId);
       const existingWinnerProfile = game.winner_user_id
         ? (profiles || []).find((p: any) => p.id === game.winner_user_id) || null
         : null;
@@ -456,16 +450,9 @@ Deno.serve(async (req) => {
         alreadyFinal: true,
         authorizedVia: auth.via,
         game_id: gameId,
-        score: {
-          [slot1.id]: slot1Points,
-          [slot2.id]: slot2Points,
-        },
-        legacyScore: {
-          Aaron: Number(game.aaron_points || 0),
-          Julie: Number(game.julie_points || 0),
-        },
+        score: scorePayload(slot1, slot2, existingScores),
         winner_user_id: game.winner_user_id || null,
-        winner: game.winner || legacyWinnerKey(existingWinnerProfile),
+        winner: existingWinnerProfile ? profileName(existingWinnerProfile, "Winner") : "Tie",
         recap: game.recap || "",
         notification: {
           skipped: "already-final",
@@ -489,7 +476,7 @@ Deno.serve(async (req) => {
       .from("picks")
       .select("*")
       .eq("game_id", gameId)
-      .order("owner")
+      .order("owner_user_id", { ascending: true, nullsFirst: false })
       .order("pick_slot");
 
     if (picksError) throw picksError;
@@ -505,9 +492,6 @@ Deno.serve(async (req) => {
         .from("games")
         .update({
           status: "Final",
-          aaron_points: 0,
-          julie_points: 0,
-          winner: "Tie",
           winner_user_id: null,
           recap,
           last_synced_at: new Date().toISOString(),
@@ -554,10 +538,6 @@ Deno.serve(async (req) => {
           [slot1.id]: 0,
           [slot2.id]: 0,
         },
-        legacyScore: {
-          Aaron: 0,
-          Julie: 0,
-        },
         winner_user_id: null,
         winner: "Tie",
         recap,
@@ -584,9 +564,6 @@ Deno.serve(async (req) => {
     totalsByUserId.set(slot1.id, 0);
     totalsByUserId.set(slot2.id, 0);
 
-    let aaronPoints = 0;
-    let juliePoints = 0;
-
     for (const pick of picks || []) {
       const points = pickPoints(
         String(pick.player_name || ""),
@@ -610,25 +587,18 @@ Deno.serve(async (req) => {
       if (ownerUserId) {
         totalsByUserId.set(ownerUserId, Number(totalsByUserId.get(ownerUserId) || 0) + points);
       }
-
-      if (pick.owner === "Aaron") aaronPoints += points;
-      if (pick.owner === "Julie") juliePoints += points;
     }
 
     const slot1Points = Number(totalsByUserId.get(slot1.id) || 0);
     const slot2Points = Number(totalsByUserId.get(slot2.id) || 0);
 
     const winnerProfile = getWinnerProfile(slot1, slot2, slot1Points, slot2Points);
-    const finalWinnerLegacy = legacyWinnerKey(winnerProfile);
     const recap = buildRecap(game, winnerProfile, slot1, slot2, slot1Points, slot2Points);
 
     const { data: finalizedGame, error: updateError } = await serviceDb
       .from("games")
       .update({
         status: "Final",
-        aaron_points: aaronPoints,
-        julie_points: juliePoints,
-        winner: finalWinnerLegacy,
         winner_user_id: winnerProfile?.id || null,
         recap,
         last_synced_at: new Date().toISOString(),
@@ -649,16 +619,9 @@ Deno.serve(async (req) => {
         game_id: gameId,
         scoringProfile,
         scoringRulesUsed: scoring,
-        score: {
-          [slot1.id]: slot1Points,
-          [slot2.id]: slot2Points,
-        },
-        legacyScore: {
-          Aaron: aaronPoints,
-          Julie: juliePoints,
-        },
+        score: scorePayload(slot1, slot2, totalsByUserId),
         winner_user_id: winnerProfile?.id || null,
-        winner: finalWinnerLegacy,
+        winner: winnerProfile ? profileName(winnerProfile, "Winner") : "Tie",
         recap,
         notification: {
           skipped: "already-final-race",
@@ -715,16 +678,9 @@ Deno.serve(async (req) => {
       scoringProfile,
       scoringRulesUsed: scoring,
       scoringLockUpdated: scoringProfile,
-      score: {
-        [slot1.id]: slot1Points,
-        [slot2.id]: slot2Points,
-      },
-      legacyScore: {
-        Aaron: aaronPoints,
-        Julie: juliePoints,
-      },
+      score: scorePayload(slot1, slot2, totalsByUserId),
       winner_user_id: winnerProfile?.id || null,
-      winner: finalWinnerLegacy,
+      winner: winnerProfile ? profileName(winnerProfile, "Winner") : "Tie",
       recap,
       notification,
     });
