@@ -385,7 +385,6 @@ window.CR = window.CR || {};
 
     return {
       gameId: form.dataset.historyGameId,
-      seasonId: game?.seasonId || game?.season_id || null,
       gameDate: (form.querySelector('[data-history-game-date="1"]')?.value || '').trim(),
       opponent: (form.querySelector('[data-history-game-opponent="1"]')?.value || '').trim(),
       gameType: normalizeGameType(form.querySelector('[data-history-game-type="1"]')?.value),
@@ -398,51 +397,22 @@ window.CR = window.CR || {};
     };
   }
 
-  async function upsertHistoryPick(db, gameId, pick) {
-    const existing = (CR.historyRawPicks || []).find((row) =>
-      String(row.game_id) === String(gameId) &&
-      String(row.owner_user_id) === String(pick.ownerUserId) &&
-      Number(row.pick_slot) === Number(pick.slot)
-    );
-
-    const row = {
-      game_id: gameId,
+  function rpcPicksPayload(picks = []) {
+    return picks.map((pick) => ({
       owner_user_id: pick.ownerUserId || null,
-      pick_slot: pick.slot,
+      pick_slot: Number(pick.slot || 0),
       player_name: pick.playerName || null,
-      goals: pick.playerName ? pick.goals : 0,
-      assists: pick.playerName ? pick.assists : 0,
-      points: pick.playerName ? pick.points : 0,
-      updated_by_user_id: CR.currentUser?.id || CR.currentProfile?.id || null,
-      updated_at: new Date().toISOString()
-    };
-
-    if (existing?.id) {
-      const res = await db.from('picks').update(row).eq('id', existing.id);
-      if (res.error) throw res.error;
-      return;
-    }
-
-    const res = await db.from('picks').upsert(row, { onConflict: 'game_id,owner_user_id,pick_slot' });
-    if (res.error) throw res.error;
+      goals: pick.playerName ? Number(pick.goals || 0) : 0,
+      assists: pick.playerName ? Number(pick.assists || 0) : 0,
+      points: pick.playerName ? Number(pick.points || 0) : 0
+    }));
   }
 
-  async function upsertGameUserScore(db, gameId, userId, points) {
-    if (!userId) return;
-    const res = await db.from('game_user_scores').upsert({
-      game_id: gameId,
-      user_id: userId,
-      points: Number(points || 0)
-    }, { onConflict: 'game_id,user_id' });
-    if (res.error) throw res.error;
-  }
-
-  async function refreshSeasonTotals(db, seasonId) {
-    if (!seasonId) return;
-    const res = await db.rpc('refresh_season_user_totals', {
-      p_season_id: seasonId
-    });
-    if (res.error) throw res.error;
+  function rpcScoresPayload(payload) {
+    return [
+      { user_id: sideOwnerUserId(0) || null, points: Number(payload.firstPoints || 0) },
+      { user_id: sideOwnerUserId(1) || null, points: Number(payload.secondPoints || 0) }
+    ];
   }
 
   async function reloadHistoryAfterSave() {
@@ -457,30 +427,20 @@ window.CR = window.CR || {};
     if (!form) return;
     const payload = collectEditPayload(form);
     const db = await CR.getSupabase();
+    const result = await db.rpc('save_history_game_edit', {
+      p_game_id: payload.gameId,
+      p_game_date: payload.gameDate || null,
+      p_opponent: payload.opponent || null,
+      p_game_type: payload.gameType,
+      p_first_picker_user_id: payload.firstPickerUserId || null,
+      p_first_goal_scorer: payload.firstGoal || null,
+      p_winner_user_id: payload.winnerUserId || null,
+      p_recap: buildHistoryEditRecap(payload),
+      p_picks: rpcPicksPayload(payload.picks),
+      p_scores: rpcScoresPayload(payload)
+    });
 
-    const gamePatch = {
-      game_date: payload.gameDate || null,
-      opponent: payload.opponent || null,
-      game_type: payload.gameType,
-      first_picker_user_id: payload.firstPickerUserId || null,
-      first_goal_scorer: payload.firstGoal || null,
-      winner_user_id: payload.winnerUserId,
-      recap: buildHistoryEditRecap(payload)
-    };
-
-    const gameRes = await db.from('games').update(gamePatch).eq('id', payload.gameId);
-    if (gameRes.error) throw gameRes.error;
-
-    for (const pick of payload.picks) {
-      await upsertHistoryPick(db, payload.gameId, pick);
-    }
-
-    await Promise.all([
-      upsertGameUserScore(db, payload.gameId, sideOwnerUserId(0), payload.firstPoints),
-      upsertGameUserScore(db, payload.gameId, sideOwnerUserId(1), payload.secondPoints)
-    ]);
-
-    await refreshSeasonTotals(db, payload.seasonId);
+    if (result.error) throw result.error;
 
     await reloadHistoryAfterSave();
     CR.historyState.sheet = { open: false };
