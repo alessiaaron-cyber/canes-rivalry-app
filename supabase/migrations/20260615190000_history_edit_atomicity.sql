@@ -118,7 +118,7 @@ begin
     do update set points = excluded.points;
   end loop;
 
-  perform public.refresh_season_user_totals(v_game.season_id);
+  perform public.refresh_season_user_totals(v_game.season_id::bigint);
 end;
 $$;
 
