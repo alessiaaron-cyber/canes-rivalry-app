@@ -216,8 +216,8 @@ window.CR = window.CR || {};
       .filter((pick) => normalizeKey(pick.game_id) === normalizeKey(game.id))
       .forEach((pick) => {
         const ownerUserId = normalizeKey(pick.owner_user_id);
-        const sideKey = pick.owner ? String(pick.owner) : ownerSideKey(ownerUserId);
-        const owner = users().find((user) => normalizeKey(user.id) === normalizeKey(ownerUserId)) || userBySlot(sideIndexForKey(sideKey) + 1);
+        const owner = users().find((user) => normalizeKey(user.id) === normalizeKey(ownerUserId));
+        const sideKey = ownerSideKey(ownerUserId);
         const name = pick.player_name || '';
         const fallbackId = playerIdForName(name);
         const playerId = playerLookup.get(String(name).toLowerCase()) || playerLookup.get(normalizeKey(pick.player_id)) || fallbackId;
@@ -263,7 +263,7 @@ window.CR = window.CR || {};
           display_number: row.game_number ?? row.display_number ?? '',
           date: row.game_date || row.date || '',
           opponent: row.opponent || '',
-          firstPick: row.first_picker || row.first_picker_user_id || '',
+          firstPick: row.first_picker_user_id || '',
           firstPickerUserId: row.first_picker_user_id || '',
           first_picker_user_id: row.first_picker_user_id || '',
           firstGoalScorer: row.first_goal_scorer || '',

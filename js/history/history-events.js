@@ -128,7 +128,7 @@ window.CR = window.CR || {};
   }
 
   function resolveFirstPickerSide(game) {
-    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker || game?.first_picker_user_id);
+    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker_user_id);
     if (!raw) return 0;
     const firstKey = normalizeIdentityValue(sideKey(0));
     const secondKey = normalizeIdentityValue(sideKey(1));
@@ -214,7 +214,7 @@ window.CR = window.CR || {};
   }
 
   function firstPickerDisplay(game) {
-    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker || game?.first_picker_user_id);
+    const raw = normalizeIdentityValue(game?.firstPick || game?.first_picker_user_id);
     if (raw) return sideDisplayName(resolveFirstPickerSide(game));
     return game.firstPick || '—';
   }
@@ -346,7 +346,6 @@ window.CR = window.CR || {};
     const index = sideIndex(side);
     return Array.from(form.querySelectorAll(`[data-history-side="${sideKey(index)}"] [data-history-pick-card="1"]`)).map((card, cardIndex) => ({
       ownerUserId: sideOwnerUserId(index),
-      ownerSide: sideKey(index),
       slot: Number(card.dataset.historyPickSlot || cardIndex + 1),
       playerName: (card.querySelector('[data-history-pick-name="1"]')?.value || '').trim(),
       goals: parseNumber(card.querySelector('[data-history-goals="1"]')?.value),
@@ -379,8 +378,8 @@ window.CR = window.CR || {};
       pick.points = calculatePickPoints(pick, firstGoal, rules);
     });
 
-    const firstPoints = picks.filter((pick) => pick.ownerSide === sideKey(0)).reduce((total, pick) => total + pick.points, 0);
-    const secondPoints = picks.filter((pick) => pick.ownerSide === sideKey(1)).reduce((total, pick) => total + pick.points, 0);
+    const firstPoints = picks.filter((pick) => pick.ownerUserId === sideOwnerUserId(0)).reduce((total, pick) => total + pick.points, 0);
+    const secondPoints = picks.filter((pick) => pick.ownerUserId === sideOwnerUserId(1)).reduce((total, pick) => total + pick.points, 0);
     const firstPickerSide = form.querySelector('[data-history-first-picker="1"]')?.value || sideKey(0);
     const firstPickerUserId = firstPickerSide === sideKey(1) ? sideOwnerUserId(1) : sideOwnerUserId(0);
 
@@ -408,7 +407,6 @@ window.CR = window.CR || {};
 
     const row = {
       game_id: gameId,
-      owner: pick.ownerSide || null,
       owner_user_id: pick.ownerUserId || null,
       pick_slot: pick.slot,
       player_name: pick.playerName || null,
