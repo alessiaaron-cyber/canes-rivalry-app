@@ -7,6 +7,10 @@ window.CR = window.CR || {};
     return CR.identity || {};
   }
 
+  function sourceForPerspective() {
+    return { users: CR.gameDay?.users || [] };
+  }
+
   function stateUser(index) {
     return CR.gameDay?.users?.[index] || null;
   }
@@ -115,9 +119,17 @@ window.CR = window.CR || {};
     };
   }
 
-  function sides(data = {}) {
-    return [getSideContext(0, data), getSideContext(1, data)];
+  function perspectiveOrder() {
+    return identity().getPerspectiveOrder?.(sourceForPerspective()) || [0, 1];
   }
 
-  CR.gameDayRenderUtils = { user, userName, profileKey, scoreKey, ownerClass, colorHex, colorStyle, changedClass, normalizeKeyPart, scoreChangedKey, pickChangedKey, firstGoalChangedKey, feedChangedKey, lookupKeys, getUserPicks, getUserScore, getSideContext, sides };
+  function perspectiveSides(data = {}) {
+    return perspectiveOrder().map((index) => getSideContext(index, data));
+  }
+
+  function sides(data = {}) {
+    return perspectiveSides(data);
+  }
+
+  CR.gameDayRenderUtils = { user, userName, profileKey, scoreKey, ownerClass, colorHex, colorStyle, changedClass, normalizeKeyPart, scoreChangedKey, pickChangedKey, firstGoalChangedKey, feedChangedKey, lookupKeys, getUserPicks, getUserScore, getSideContext, perspectiveOrder, perspectiveSides, sides };
 })();
