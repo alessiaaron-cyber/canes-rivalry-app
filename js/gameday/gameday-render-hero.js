@@ -47,16 +47,7 @@ window.CR = window.CR || {};
     const hasScheduledGame = Boolean(game?.hasGame && scheduleText !== 'Schedule pending');
 
     const scoreSource = pregame ? {} : (finalMode ? final.scores : live.scores);
-
-    const left = utils().getSideContext(0, {
-      users: pregameUsers,
-      scores: scoreSource
-    });
-
-    const right = utils().getSideContext(1, {
-      users: pregameUsers,
-      scores: scoreSource
-    });
+    const [left, right] = utils().sides({ users: pregameUsers, scores: scoreSource });
 
     const period = pregame ? compactInfo : (liveMode ? liveContext(game) : compactInfo);
 
