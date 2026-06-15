@@ -23,6 +23,35 @@ window.CR = window.CR || {};
     return String(getUser(data, index).id || '').trim();
   }
 
+  function perspectiveOrder(data) {
+    return CR.identity?.getPerspectiveOrder?.(data) || [0, 1];
+  }
+
+  function perspectivePair(data, values = {}) {
+    return perspectiveOrder(data).map((index) => ({
+      index,
+      name: userName(data, index),
+      id: userId(data, index),
+      themeClass: userThemeClass(data, index),
+      score: index === 1 ? Number(values.second ?? 0) : Number(values.first ?? 0),
+      recordValue: index === 1 ? values.second : values.first
+    }));
+  }
+
+  function perspectiveRecordText(data, recordText = '') {
+    const match = String(recordText || '').match(/(\d+)\s*[–-]\s*(\d+)(?:\s*[–-]\s*(\d+))?/);
+    if (!match) return recordText || '—';
+    const sides = perspectivePair(data, { first: Number(match[1]), second: Number(match[2]) });
+    const base = `${sides[0].recordValue}-${sides[1].recordValue}`;
+    return match[3] ? `${base}-${Number(match[3])}` : base;
+  }
+
+  function perspectiveRecentText(data, recentText = '') {
+    const match = String(recentText || '').match(/^Last\s+10\s+(\d+)\s*[–-]\s*(\d+)(?:\s*[–-]\s*(\d+))?/i);
+    if (!match) return recentText || 'Form still developing';
+    return `Last 10 ${perspectiveRecordText(data, `${match[1]}-${match[2]}${match[3] ? `-${match[3]}` : ''}`)}`;
+  }
+
   function userThemeClass(data, indexOrWinner) {
     if (typeof indexOrWinner === 'number') return getUser(data, indexOrWinner).themeClass || (indexOrWinner === 1 ? 'owner-secondary' : 'owner-primary');
     const winner = String(indexOrWinner || '');
@@ -97,7 +126,8 @@ window.CR = window.CR || {};
   }
 
   function ownerPerformersOnly(data, performers = []) {
-    return [userId(data, 0), userId(data, 1)]
+    return perspectiveOrder(data)
+      .map((index) => userId(data, index))
       .map((id) => performers.find((player) => String(player.owner || '').toLowerCase() === String(id).toLowerCase()))
       .filter(Boolean);
   }
@@ -139,11 +169,12 @@ window.CR = window.CR || {};
   function seasonFeaturedResult(data, summary, games) {
     const scoredGames = (games || []).filter((game) => hasScoredResult(data, game)).map((game) => {
       const scores = gameScores(data, game);
-      return { ...game, scores, label: gameLabel(game), margin: Math.abs(scores.first - scores.second), combined: scores.first + scores.second };
+      const sides = perspectivePair(data, scores);
+      return { ...game, scores, sides, label: gameLabel(game), margin: Math.abs(scores.first - scores.second), combined: scores.first + scores.second };
     });
     if (!scoredGames.length) return '';
     const playoff = scoredGames.find((game) => game.playoff);
-    if (playoff) return `${playoff.label}: playoff result (${playoff.scores.first}-${playoff.scores.second}).`;
+    if (playoff) return `${playoff.label}: playoff result (${playoff.sides[0].score}-${playoff.sides[1].score}).`;
     const biggest = scoredGames.slice().sort((a, b) => b.margin - a.margin)[0];
     if (biggest && biggest.margin >= 3) {
       const winner = biggest.scores.first === biggest.scores.second ? 'Tie' : biggest.scores.first > biggest.scores.second ? userName(data, 0) : userName(data, 1);
@@ -173,15 +204,17 @@ window.CR = window.CR || {};
 
   function renderBoard(data) {
     const board = data.allTimeBoard || {};
-    return `<section class="panel-card rivalry-board-card history-legacy-card"><div class="rivalry-board-topline"><span class="eyebrow">All-Time Rivalry</span></div><h2 class="rivalry-board-title">${escapeHtml(board.lead || 'Rivalry tied')}</h2><div class="history-scoreboard-banner"><div class="history-scoreboard-grid"><div class="history-scoreboard-team"><span class="history-scoreboard-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(board.first ?? 0))}</strong></div><span class="history-scoreboard-divider" aria-hidden="true">—</span><div class="history-scoreboard-team is-right"><span class="history-scoreboard-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(board.second ?? 0))}</strong></div></div></div><p class="history-hero-copy">All completed season and game totals feed this card.</p></section>`;
+    const sides = perspectivePair(data, board);
+    return `<section class="panel-card rivalry-board-card history-legacy-card"><div class="rivalry-board-topline"><span class="eyebrow">All-Time Rivalry</span></div><h2 class="rivalry-board-title">${escapeHtml(board.lead || 'Rivalry tied')}</h2><div class="history-scoreboard-banner"><div class="history-scoreboard-grid"><div class="history-scoreboard-team"><span class="history-scoreboard-name ${sides[0].themeClass}">${escapeHtml(sides[0].name)}</span><strong>${escapeHtml(String(sides[0].score ?? 0))}</strong></div><span class="history-scoreboard-divider" aria-hidden="true">—</span><div class="history-scoreboard-team is-right"><span class="history-scoreboard-name ${sides[1].themeClass}">${escapeHtml(sides[1].name)}</span><strong>${escapeHtml(String(sides[1].score ?? 0))}</strong></div></div></div><p class="history-hero-copy">All completed season and game totals feed this card.</p></section>`;
   }
 
   function renderSeasonSnapshot(data) {
     const seasonData = data.hqSeasonData || data;
     const board = seasonData.seasonBoard || {};
+    const sides = perspectivePair(data, board);
     const leaderClass = leaderClassFromRecord(data, board.recordText);
     const featuredResult = currentSeasonFeaturedResult(data);
-    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid"><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</div><div class="rivalry-score-value">${escapeHtml(String(board.first ?? 0))}</div></article><article class="rivalry-score-card"><div class="eyebrow ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</div><div class="rivalry-score-value">${escapeHtml(String(board.second ?? 0))}</div></article></div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(board.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(board.recentText || 'Form still developing')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</section>`;
+    return `<section class="panel-card history-hq-card"><div class="history-season-overview-topline history-hq-topline"><div><div class="eyebrow">Current Season</div><h3 class="history-hq-title">${escapeHtml(board.seasonLabel || 'Season')}</h3></div><button class="cr-button secondary" type="button" data-history-access="seasons">View All</button></div><div class="history-season-score-grid">${sides.map((side) => `<article class="rivalry-score-card"><div class="eyebrow ${side.themeClass}">${escapeHtml(side.name)}</div><div class="rivalry-score-value">${escapeHtml(String(side.score ?? 0))}</div></article>`).join('')}</div><div class="history-season-meta-row"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(perspectiveRecordText(data, board.recordText))}</span><span class="history-meta-pill">${escapeHtml(perspectiveRecentText(data, board.recentText))}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</section>`;
   }
 
   function renderMomentum(data) {
@@ -224,7 +257,8 @@ window.CR = window.CR || {};
     const scoreChangedClass = CR.ui?.changedClass?.(`history:game:${game.id}:score`) || '';
     const gameTypeBadge = game.playoff ? '<span class="cr-pill playoff">Playoffs</span>' : '<span class="cr-pill regular">Regular</span>';
     const gameNumber = game.displayNumber || game.display_number || '';
-    return `<article class="history-log-card rivalry-recap-card ${winnerClass} ${gameChangedClass} ${isArchive ? 'is-archive' : ''}" id="history-game-${escapeHtml(game.id)}"><div class="history-log-topline"><div><div class="history-log-kicker-row"><span class="history-log-kicker">${gameNumber ? `Game ${escapeHtml(String(gameNumber))}` : 'Game'}</span>${gameTypeBadge}<span class="history-outcome-pill ${winnerClass}">${escapeHtml(outcomeText(data, game))}</span></div><div class="history-log-subtitle">${escapeHtml(game.subtitle || game.date)}</div></div></div><div class="history-recap-sides"><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</strong><span>${escapeHtml(String(scores.first))}</span></div><div class="history-recap-picks">${picksFor(data, game, 0).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section><section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</strong><span>${escapeHtml(String(scores.second))}</span></div><div class="history-recap-picks">${picksFor(data, game, 1).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section></div><div class="history-recap-footer"><span class="history-recap-first-goal">First goal: ${escapeHtml(game.firstGoalScorer || '—')}</span><div class="history-recap-actions"><button class="cr-button edit" type="button" data-history-edit-game="${escapeHtml(game.id)}" data-history-edit-context="${context}">Edit</button></div></div></article>`;
+    const sides = perspectivePair(data, scores);
+    return `<article class="history-log-card rivalry-recap-card ${winnerClass} ${gameChangedClass} ${isArchive ? 'is-archive' : ''}" id="history-game-${escapeHtml(game.id)}"><div class="history-log-topline"><div><div class="history-log-kicker-row"><span class="history-log-kicker">${gameNumber ? `Game ${escapeHtml(String(gameNumber))}` : 'Game'}</span>${gameTypeBadge}<span class="history-outcome-pill ${winnerClass}">${escapeHtml(outcomeText(data, game))}</span></div><div class="history-log-subtitle">${escapeHtml(game.subtitle || game.date)}</div></div></div><div class="history-recap-sides">${sides.map((side) => `<section class="history-recap-side"><div class="history-recap-side-head ${scoreChangedClass}"><strong class="${side.themeClass}">${escapeHtml(side.name)}</strong><span>${escapeHtml(String(side.score))}</span></div><div class="history-recap-picks">${picksFor(data, game, side.index).map((pick) => `<div class="history-recap-pick">${escapeHtml(pickLine(pick))}</div>`).join('')}</div></section>`).join('')}</div><div class="history-recap-footer"><span class="history-recap-first-goal">First goal: ${escapeHtml(game.firstGoalScorer || '—')}</span><div class="history-recap-actions"><button class="cr-button edit" type="button" data-history-edit-game="${escapeHtml(game.id)}" data-history-edit-context="${context}">Edit</button></div></div></article>`;
   }
 
   function renderSeasonCard(data, summary) {
@@ -245,7 +279,8 @@ window.CR = window.CR || {};
     const featuredResult = seasonFeaturedResult(data, summary, games);
     const isCurrent = Boolean(season?.isCurrent || summary.isCurrent);
     const completionClass = isCurrent ? 'is-current' : 'is-complete';
-    return `<button class="history-season-overview-card ${winnerClass} ${completionClass}" type="button" data-history-open-season="${escapeHtml(seasonId)}" aria-label="View ${escapeHtml(summary.label || season?.label || seasonId)} season details"><div class="history-season-overview-topline"><div><div class="eyebrow">${escapeHtml(isCurrent ? 'Current season' : 'Completed season')}</div><h3>${escapeHtml(summary.label || season?.label || seasonId)}</h3></div><span class="history-outcome-pill ${winnerClass}">${escapeHtml(seasonOutcomeText(data, winner, isCurrent))}</span></div><div class="history-season-overview-score"><div class="history-season-overview-side"><span class="history-season-overview-name ${userThemeClass(data, 0)}">${escapeHtml(userName(data, 0))}</span><strong>${escapeHtml(String(totals.first))}</strong></div><div class="history-season-overview-divider" aria-hidden="true">—</div><div class="history-season-overview-side is-right"><span class="history-season-overview-name ${userThemeClass(data, 1)}">${escapeHtml(userName(data, 1))}</span><strong>${escapeHtml(String(totals.second))}</strong></div></div><div class="history-season-overview-meta"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(summary.recordText || '—')}</span><span class="history-meta-pill">${escapeHtml(String(games.length))} games</span><span class="history-meta-pill">${escapeHtml(playoffCount ? `${playoffCount} playoff games` : 'No playoff games')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</button>`;
+    const sides = perspectivePair(data, totals);
+    return `<button class="history-season-overview-card ${winnerClass} ${completionClass}" type="button" data-history-open-season="${escapeHtml(seasonId)}" aria-label="View ${escapeHtml(summary.label || season?.label || seasonId)} season details"><div class="history-season-overview-topline"><div><div class="eyebrow">${escapeHtml(isCurrent ? 'Current season' : 'Completed season')}</div><h3>${escapeHtml(summary.label || season?.label || seasonId)}</h3></div><span class="history-outcome-pill ${winnerClass}">${escapeHtml(seasonOutcomeText(data, winner, isCurrent))}</span></div><div class="history-season-overview-score"><div class="history-season-overview-side"><span class="history-season-overview-name ${sides[0].themeClass}">${escapeHtml(sides[0].name)}</span><strong>${escapeHtml(String(sides[0].score))}</strong></div><div class="history-season-overview-divider" aria-hidden="true">—</div><div class="history-season-overview-side is-right"><span class="history-season-overview-name ${sides[1].themeClass}">${escapeHtml(sides[1].name)}</span><strong>${escapeHtml(String(sides[1].score))}</strong></div></div><div class="history-season-overview-meta"><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(perspectiveRecordText(data, summary.recordText))}</span><span class="history-meta-pill">${escapeHtml(String(games.length))} games</span><span class="history-meta-pill">${escapeHtml(playoffCount ? `${playoffCount} playoff games` : 'No playoff games')}</span></div>${featuredResult ? `<p class="history-meta-note"><strong>Featured result:</strong> ${escapeHtml(featuredResult)}</p>` : ''}</button>`;
   }
 
   function renderSeasonsOverview(data) {
@@ -257,7 +292,7 @@ window.CR = window.CR || {};
     const playoffCount = (data.gameLog || []).filter((game) => game.playoff).length;
     const regularCount = Math.max(0, (data.gameLog?.length || 0) - playoffCount);
     const leaderClass = leaderClassFromRecord(data, data.seasonBoard?.recordText);
-    return `<section class="history-all-games-view"><section class="panel-card history-all-games-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Season archive</div><h2>${escapeHtml(data.selectedSeason?.label || 'Season')} Games</h2></div><button class="cr-button back" type="button" data-history-back="1">Back</button></div><p class="history-support-copy">Browse every rivalry game for the active season and make commissioner edits where needed.</p><div class="history-season-meta-row history-archive-meta-row"><span class="history-meta-pill">${escapeHtml(String(data.gameLog?.length || 0))} games</span><span class="history-meta-pill">${escapeHtml(String(regularCount))} regular</span><span class="history-meta-pill">${escapeHtml(String(playoffCount))} playoff</span><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(data.seasonBoard?.recordText || '—')}</span></div></section>${renderSeasonArchiveHighlights(data)}<section class="panel-card history-all-games-list-card"><div class="history-section-head"><div><div class="eyebrow">Game archive</div><h3>Games</h3><p class="history-support-copy">${escapeHtml(String(data.gameLog?.length || 0))} games in this season</p></div></div><div class="history-log-stack archive-log-stack">${(data.gameLog || []).map((game) => renderGameCard(data, game, true)).join('')}</div></section></section>`;
+    return `<section class="history-all-games-view"><section class="panel-card history-all-games-header-card"><div class="history-section-head history-all-games-head"><div><div class="eyebrow">Season archive</div><h2>${escapeHtml(data.selectedSeason?.label || 'Season')} Games</h2></div><button class="cr-button back" type="button" data-history-back="1">Back</button></div><p class="history-support-copy">Browse every rivalry game for the active season and make commissioner edits where needed.</p><div class="history-season-meta-row history-archive-meta-row"><span class="history-meta-pill">${escapeHtml(String(data.gameLog?.length || 0))} games</span><span class="history-meta-pill">${escapeHtml(String(regularCount))} regular</span><span class="history-meta-pill">${escapeHtml(String(playoffCount))} playoff</span><span class="history-meta-pill history-record-pill ${leaderClass}">Record ${escapeHtml(perspectiveRecordText(data, data.seasonBoard?.recordText))}</span></div></section>${renderSeasonArchiveHighlights(data)}<section class="panel-card history-all-games-list-card"><div class="history-section-head"><div><div class="eyebrow">Game archive</div><h3>Games</h3><p class="history-support-copy">${escapeHtml(String(data.gameLog?.length || 0))} games in this season</p></div></div><div class="history-log-stack archive-log-stack">${(data.gameLog || []).map((game) => renderGameCard(data, game, true)).join('')}</div></section></section>`;
   }
 
   function renderHQ(data) {

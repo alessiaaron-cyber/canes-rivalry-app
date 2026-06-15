@@ -19,8 +19,7 @@ window.CR = window.CR || {};
   }
 
   function renderFinalSection({ state, bonusText, mvpText, edgeText, totalEventsText, renderPlayerCard, carryover, isPlayoffs, nextGame }) {
-    const left = utils().getSideContext(0, state);
-    const right = utils().getSideContext(1, state);
+    const [left, right] = utils().sides(state);
 
     return `${renderNextUpTicker(nextGame, isPlayoffs)}<section class="gd-card gd-postgame-card ${isPlayoffs ? 'gd-postgame-card-playoff' : ''}"><div class="gd-postgame-top"><div class="gd-postgame-icon ${isPlayoffs ? 'gd-postgame-icon-playoff' : ''}">🏆</div><div><div class="gd-postgame-title">${isPlayoffs ? 'Playoff Summary' : 'Postgame Summary'}</div><div class="gd-postgame-sub">${isPlayoffs ? 'How the playoff night swung the rivalry.' : 'How the night was won.'}</div></div></div><div class="gd-postgame-grid"><div class="gd-postgame-pill"><strong>MVP</strong><span>${mvpText}</span></div><div class="gd-postgame-pill"><strong>Edge</strong><span>${edgeText}</span></div><div class="gd-postgame-pill"><strong>Bonus</strong><span>${bonusText}</span></div><div class="gd-postgame-pill"><strong>${isPlayoffs ? 'Playoff Events' : 'Total Events'}</strong><span>${totalEventsText}</span></div></div></section>${renderSectionHeader({ title: isPlayoffs ? 'Playoff Pick Breakdown' : 'Final Pick Breakdown', carryover, isPlayoffs, playoffLabel: 'Playoffs' })}<section class="gd-final-picks">${renderPlayerCard({ side: left.name, picks: left.picks, score: left.score, themeClass: left.ownerClass, isPlayoffs })}${renderPlayerCard({ side: right.name, picks: right.picks, score: right.score, themeClass: right.ownerClass, isPlayoffs })}</section>`;
   }
