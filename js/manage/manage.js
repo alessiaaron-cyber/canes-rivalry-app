@@ -128,16 +128,20 @@ window.CR = window.CR || {};
       const liveData = await CR.manageDataService.load();
       const current = CR.manageStore?.getState?.() || CR.manageState;
       CR.manageDataService.mergeIntoState(current, liveData);
+      current.manageDataLoading = false;
+      current.manageDataLoaded = true;
+      current.manageDataError = '';
       replaceManageState(current);
     } catch (error) {
       console.warn('Could not hydrate Manage live data', error);
       const current = CR.manageStore?.getState?.() || CR.manageState;
       if (current) {
+        current.manageDataLoading = false;
         current.manageDataLoaded = false;
         current.manageDataError = error?.message || String(error || 'Could not load Manage data');
         current.appHealth = {
           ...current.appHealth,
-          syncStatus: 'Preview data',
+          syncStatus: 'Live load failed',
           lastSyncLabel: 'Live load failed'
         };
         replaceManageState(current);
