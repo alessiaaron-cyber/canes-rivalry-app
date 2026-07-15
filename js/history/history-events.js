@@ -555,6 +555,7 @@ window.CR = window.CR || {};
     if (access) {
       const id = access.dataset.historyAccess;
       if (id === 'all_games') {
+        CR.historyState.seasonId = CR.historyData.currentSeasonId;
         navigate('all_games', { returnView: 'hq' });
         return;
       }

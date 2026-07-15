@@ -276,10 +276,7 @@ window.CR = window.CR || {};
   }
 
   function buildHqSeasonData(model, seasonId) {
-    const users = model.users || [];
-    const seasonData = buildSeasonScopedData(model, seasonId);
-    const globalRecentGameLog = buildGameLog(canonicalGames(model));
-    return { ...seasonData, seasonBoard: { ...seasonData.seasonBoard, recentText: recentRecordText(globalRecentGameLog, users) }, momentum: buildMomentum(globalRecentGameLog, users) };
+    return buildSeasonScopedData(model, seasonId);
   }
 
   function scoreSignature(model = {}) {
