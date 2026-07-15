@@ -99,16 +99,6 @@ function nhlSeasonKey(seasonKey: string) {
   return season;
 }
 
-function formatDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function addDays(d: Date, days: number) {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
 function gameKey(game: ImportedGame) {
   return `${game.game_date}|${game.opponent}|${game.home_away}`;
 }
@@ -221,7 +211,7 @@ function isProtectedFinal(game: any) {
   return String(game?.status || "").toLowerCase() === "final" || String(game?.draft_status || "").toLowerCase() === "complete";
 }
 
-async function fetchNhlGames(season: string, from: string, to: string): Promise<ImportedGame[]> {
+async function fetchNhlGames(season: string): Promise<ImportedGame[]> {
   const url = `${NHL_BASE}/club-schedule-season/${TEAM}/${season}`;
 
   const res = await fetch(url, {
@@ -236,14 +226,11 @@ async function fetchNhlGames(season: string, from: string, to: string): Promise<
   const data = await res.json();
 
   return (data.games || [])
-    .filter((g: any) => {
-      const d = String(g.gameDate || "").slice(0, 10);
-      return d >= from && d <= to;
-    })
+    .filter((g: any) => [2, 3].includes(Number(g.gameType)))
     .map((g: any) => {
       const isHome = g.homeTeam?.abbrev === TEAM;
       const opponent = isHome ? g.awayTeam?.abbrev : g.homeTeam?.abbrev;
-      const gameType = Number(g.gameType) === 3 || String(g.gameType || "").toLowerCase().includes("playoff") ? "Playoffs" : "Regular Season";
+      const gameType = Number(g.gameType) === 3 ? "Playoffs" : "Regular Season";
 
       return {
         nhl_game_id: String(g.id),
@@ -269,14 +256,10 @@ Deno.serve(async (req) => {
   if (!allowed.ok) return json({ ok: false, error: allowed.error }, allowed.status as number);
 
   try {
-    const today = new Date();
-    const from = formatDate(addDays(today, -1));
-    const to = formatDate(addDays(today, 60));
-
     const activeSeason = await getActiveSeason();
     const season = nhlSeasonKey(activeSeason.season_key);
     const profiles = await loadProfiles();
-    const importedGames = await fetchNhlGames(season, from, to);
+    const importedGames = await fetchNhlGames(season);
     const existingGames = await loadExistingGames(activeSeason.id);
     const carryForwardGameIds = await loadCarryForwardGameIds(existingGames.map((game: any) => Number(game.id)).filter(Boolean));
 
@@ -365,8 +348,6 @@ Deno.serve(async (req) => {
       authorizedEmail: allowed.email,
       season,
       season_id: activeSeason.id,
-      from,
-      to,
       count: importedGames.length,
       imported: inserted,
       updated,
