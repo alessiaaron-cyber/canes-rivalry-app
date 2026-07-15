@@ -128,8 +128,11 @@ Deno.serve(async (req) => {
 
     if (!displayName) return json({ ok: false, error: "Missing season name" }, 400);
 
-    const seasonKey = cleanText(body.season_key) || seasonKeyFromLabel(displayName);
-    if (!seasonKey) return json({ ok: false, error: "Could not derive season key" }, 400);
+    const requestedSeasonKey = cleanText(body.season_key) || displayName;
+    const seasonKey = seasonKeyFromLabel(requestedSeasonKey);
+    if (!/^\d{8}$/.test(seasonKey)) {
+      return json({ ok: false, error: "Season key must resolve to an 8-digit NHL season value." }, 400);
+    }
 
     const firstPicker = await validateFirstPicker(firstPickerUserId);
     const activeSeason = await loadActiveSeason();
