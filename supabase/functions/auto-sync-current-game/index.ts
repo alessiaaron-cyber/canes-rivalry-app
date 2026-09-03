@@ -772,25 +772,19 @@ function buildNotification({
 // =========================
 
 async function getCurrentCandidateGame(seasonId: number) {
-  const { data: games, error } = await db
+  const { data: game, error } = await db
     .from("games")
     .select("*")
     .eq("season_id", seasonId)
     .neq("status", "Final")
-    .neq("status", "Hidden");
+    .neq("status", "Hidden")
+    .order("game_start_time", { ascending: true, nullsFirst: false })
+    .order("game_number", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
-
-  const sorted = (games || []).slice().sort((a: any, b: any) => {
-    const at = gameStartMs(a) ?? Number.MAX_SAFE_INTEGER;
-    const bt = gameStartMs(b) ?? Number.MAX_SAFE_INTEGER;
-
-    if (at !== bt) return at - bt;
-
-    return Number(a.game_number || 0) - Number(b.game_number || 0);
-  });
-
-  return sorted[0] || null;
+  return game || null;
 }
 
 // =========================
@@ -983,6 +977,22 @@ Deno.serve(async (req) => {
 
     if (!game) return json({ ok: true, skipped: "no-current-game" });
 
+    const inWindow = isInsideGameWindow(game);
+    const inReminderWindow = isInsidePickReminderWindow(game);
+    const storedState = String(game.nhl_game_state || "").toUpperCase();
+    let forceSync = FORCE_SYNC_STATES.includes(storedState);
+
+    if (!inWindow && !inReminderWindow && !forceSync) {
+      return json({
+        ok: true,
+        game_id: game.id,
+        state: storedState || null,
+        skipped: "outside-game-window",
+        inWindow,
+        forceSync,
+      });
+    }
+
     const scoringRules = normalizeScoringRules(season.scoring_rules);
     const { profile: scoringProfile, scoring } = scoringProfileForGame(game, scoringRules);
 
@@ -1000,7 +1010,7 @@ Deno.serve(async (req) => {
 
     let reminderNotification = null;
 
-    if (isInsidePickReminderWindow(game) && pickedCount < 4) {
+    if (inReminderWindow && pickedCount < 4) {
       const reminderKey = `reminder-${game.id}`;
 
       reminderNotification = await emitNotificationOnce(
@@ -1021,6 +1031,21 @@ Deno.serve(async (req) => {
         ok: true,
         game_id: game.id,
         skipped: "missing-nhl-game-id",
+        pickedCount,
+        scoringProfile,
+        scoringRulesUsed: scoring,
+        reminderNotification,
+      });
+    }
+
+    if (!inWindow && !forceSync) {
+      return json({
+        ok: true,
+        game_id: game.id,
+        state: storedState || null,
+        skipped: "outside-game-window",
+        inWindow,
+        forceSync,
         pickedCount,
         scoringProfile,
         scoringRulesUsed: scoring,
@@ -1058,8 +1083,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const inWindow = isInsideGameWindow(game);
-    const forceSync = FORCE_SYNC_STATES.includes(state);
+    forceSync = FORCE_SYNC_STATES.includes(state);
 
     if (!inWindow && !forceSync) {
       await db.from("games").update({
