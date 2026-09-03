@@ -44,8 +44,8 @@
   --motion-emphasis: 340ms;
   --ease-standard: cubic-bezier(.22, 1, .36, 1);
   --ease-soft: ease;
-  --bottom-nav-height: 64px;
-  --bottom-nav-offset: 4px;
+  --bottom-nav-height: 56px;
+  --bottom-nav-offset: 8px;
   --cr-user-1-color: #c8102e;
   --cr-user-1-color-dark: #7f1021;
   --cr-user-2-color: #111827;
@@ -97,7 +97,7 @@ body { min-height: 100vh; min-height: 100dvh; margin: 0; background: linear-grad
 .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .panel-header-actions { display: flex; align-items: center; gap: 8px; }
 .compact-header { align-items: flex-start; }
-.panel-card, .bottom-nav { background: var(--surface-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+.panel-card { background: var(--surface-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
 .panel-card { padding: 16px; }
 .eyebrow { font-size: 11px; font-weight: var(--font-strong); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
 h1,h2,h3,p { margin: 0; }
@@ -117,9 +117,9 @@ h3 { margin-top: 4px; font-size: 18px; letter-spacing: -0.03em; }
 .icon-button { border: 0; width: 42px; height: 42px; flex: 0 0 auto; }
 .icon-button-soft { background: #f3f4f6; color: var(--ink-strong); }
 .mini-button { border: 0; padding: 10px 14px; }
-.bottom-nav { position: fixed; left: 50%; bottom: calc(var(--bottom-nav-offset) + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; justify-content: space-between; width: calc(100% - 28px); max-width: 470px; min-height: var(--bottom-nav-height); padding: 7px; gap: 8px; z-index: 5000; }
-.bottom-nav button { position: relative; z-index: 1; flex: 1; border: 0; border-radius: var(--radius-pill); padding: 10px 12px; background: #f2f4f7; font-size: 0.98rem; font-weight: 650; letter-spacing: -0.01em; pointer-events: auto; touch-action: manipulation; }
-.bottom-nav button.active { background: var(--ink-strong); color: #ffffff; }
+.bottom-nav { position: fixed; left: 50%; bottom: calc(var(--bottom-nav-offset) + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; justify-content: space-between; width: calc(100% - 40px); max-width: 440px; min-height: var(--bottom-nav-height); padding: 6px; gap: 4px; z-index: 5000; border-radius: var(--radius-pill); background: rgba(246, 247, 249, 0.72); border: 1px solid rgba(255, 255, 255, 0.72); box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.55); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
+.bottom-nav button { position: relative; z-index: 1; flex: 1; min-height: 44px; border: 0; border-radius: var(--radius-pill); padding: 8px 10px; background: transparent; color: var(--text-secondary); font-size: 0.92rem; font-weight: 700; letter-spacing: -0.01em; pointer-events: auto; touch-action: manipulation; transition: background var(--motion-fast) var(--ease-soft), color var(--motion-fast) var(--ease-soft), box-shadow var(--motion-fast) var(--ease-soft); }
+.bottom-nav button.active { background: rgba(255, 255, 255, 0.64); color: #c8102e; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.75); }
 .toast { position: fixed; left: 50%; bottom: calc(var(--bottom-nav-height) + var(--bottom-nav-offset) + env(safe-area-inset-bottom) + 12px); transform: translateX(-50%) translateY(20px); width: max-content; max-width: min(82vw, 360px); background: rgba(17,24,39,.96); color: #ffffff; padding: 12px 16px; border-radius: 28px; opacity: 0; transition: opacity var(--motion-standard) var(--ease-soft), transform var(--motion-standard) var(--ease-standard), box-shadow var(--motion-standard) var(--ease-soft), background var(--motion-standard) var(--ease-soft), color var(--motion-standard) var(--ease-soft); font-size: 15px; font-weight: var(--font-strong); line-height: 1.22; text-align: left; z-index: 5001; box-shadow: 0 18px 40px rgba(15,23,42,.24); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .sync-flash { position: fixed; inset: 0; background: rgba(200, 16, 46, 0.14); opacity: 0; pointer-events: none; z-index: 999; }
