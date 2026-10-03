@@ -43,6 +43,12 @@ type NotificationSettings = {
   push_delay_seconds: number;
 };
 
+type ScoringUpdatePayload = {
+  changes: string[];
+  score: string;
+  first_goal_bonus_hit: boolean;
+};
+
 type ScoringRules = typeof DEFAULT_SCORING_RULES;
 type ScoringProfile = ScoringRules["regular"];
 
@@ -533,6 +539,32 @@ async function sendPushToRecipient(
   };
 }
 
+function uniqueNotificationChanges(values: unknown[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const change = String(value || "").trim();
+    if (!change || seen.has(change)) continue;
+    seen.add(change);
+    result.push(change);
+  }
+
+  return result;
+}
+
+function notificationTitleRank(title: string) {
+  if (title.includes("FIRST GOAL BONUS")) return 3;
+  if (title.includes("LEAD CHANGE")) return 2;
+  return 1;
+}
+
+function preferredNotificationTitle(existingTitle: string, nextTitle: string) {
+  return notificationTitleRank(existingTitle) >= notificationTitleRank(nextTitle)
+    ? existingTitle
+    : nextTitle;
+}
+
 async function enqueueDelayedForRecipient(
   gameId: number,
   eventKey: string,
@@ -543,10 +575,110 @@ async function enqueueDelayedForRecipient(
   delaySeconds: number,
 ) {
   const visibleAfter = new Date(Date.now() + delaySeconds * 1000).toISOString();
+  const scoringUpdate =
+    payload.scoring_update && typeof payload.scoring_update === "object"
+      ? (payload.scoring_update as ScoringUpdatePayload)
+      : null;
+
+  if (scoringUpdate) {
+    let pendingQuery = db
+      .from("delayed_notifications")
+      .select("id, event_key, title, message, payload")
+      .eq("game_id", gameId)
+      .eq("event_type", "scoring_update")
+      .is("sent_at", null)
+      .gt("visible_after", nowIso());
+
+    pendingQuery = recipient.user_id
+      ? pendingQuery.eq("target_user_id", recipient.user_id)
+      : pendingQuery.ilike("target_user_email", recipient.user_email);
+
+    const { data: pending, error: pendingError } = await pendingQuery
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingError) {
+      console.error("pending scoring notification lookup failed:", pendingError);
+      throw pendingError;
+    }
+
+    if (pending) {
+      const existingPayload =
+        pending.payload && typeof pending.payload === "object"
+          ? (pending.payload as Record<string, unknown>)
+          : {};
+
+      const existingScoring =
+        existingPayload.scoring_update &&
+          typeof existingPayload.scoring_update === "object"
+          ? (existingPayload.scoring_update as ScoringUpdatePayload)
+          : null;
+
+      const combinedChanges = uniqueNotificationChanges([
+        ...(Array.isArray(existingScoring?.changes) ? existingScoring.changes : []),
+        ...(Array.isArray(scoringUpdate.changes) ? scoringUpdate.changes : []),
+      ]);
+
+      const combinedScoring: ScoringUpdatePayload = {
+        changes: combinedChanges,
+        score: String(scoringUpdate.score || existingScoring?.score || "").trim(),
+        first_goal_bonus_hit:
+          existingScoring?.first_goal_bonus_hit === true ||
+          scoringUpdate.first_goal_bonus_hit === true,
+      };
+
+      const combinedTitle = preferredNotificationTitle(
+        String(pending.title || title),
+        title,
+      );
+
+      const combinedBody = combinedChanges.length
+        ? `${combinedChanges.join(" • ")}. ${combinedScoring.score}.`
+        : body;
+
+      const combinedPayload = {
+        ...existingPayload,
+        ...payload,
+        title: combinedTitle,
+        message: combinedBody,
+        tag: eventKey,
+        scoring_update: combinedScoring,
+        target_user_id: recipient.user_id,
+        target_user_email: recipient.user_email,
+        delay_seconds_applied: delaySeconds,
+        coalesced: true,
+      };
+
+      const { data: updated, error: updateError } = await db
+        .from("delayed_notifications")
+        .update({
+          event_key: eventKey,
+          title: combinedTitle,
+          message: combinedBody,
+          payload: combinedPayload,
+          visible_after: visibleAfter,
+        })
+        .eq("id", pending.id)
+        .is("sent_at", null)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) {
+        console.error("pending scoring notification update failed:", updateError);
+        throw updateError;
+      }
+
+      if (updated) {
+        return { inserted: false, coalesced: true, visible_after: visibleAfter };
+      }
+    }
+  }
 
   const { error } = await db.from("delayed_notifications").insert({
     game_id: gameId,
     event_key: eventKey,
+    event_type: scoringUpdate ? "scoring_update" : null,
     title,
     message: body,
     payload: {
@@ -562,8 +694,10 @@ async function enqueueDelayedForRecipient(
     target_user_email: recipient.user_email,
   });
 
-  if (!error) return { inserted: true, visible_after: visibleAfter };
-  if ((error as any).code === "23505") return { inserted: false, visible_after: visibleAfter };
+  if (!error) return { inserted: true, coalesced: false, visible_after: visibleAfter };
+  if ((error as any).code === "23505") {
+    return { inserted: false, coalesced: false, visible_after: visibleAfter };
+  }
 
   console.error("delayed notification insert failed:", error);
   throw error;
@@ -579,6 +713,7 @@ async function emitNotificationOnce(
     bypassActiveDeviceSuppression?: boolean;
     triggeredBy?: string;
     triggeredByName?: string;
+    scoringUpdate?: ScoringUpdatePayload;
   } = {},
 ) {
   const spoilerSensitive = options.spoilerSensitive === true;
@@ -593,6 +728,7 @@ async function emitNotificationOnce(
     triggered_by_name: options.triggeredByName || "Auto Sync",
     delay_visible: spoilerSensitive,
     spoiler_sensitive: spoilerSensitive,
+    scoring_update: options.scoringUpdate || null,
   };
 
   const recipients = await loadRecipients();
@@ -1275,6 +1411,11 @@ Deno.serve(async (req) => {
           spoilerSensitive: true,
           triggeredBy: "auto-sync",
           triggeredByName: "Auto Sync",
+          scoringUpdate: {
+            changes,
+            score: `${String(slot1.display_name || "Player 1").trim()} ${newA} – ${String(slot2.display_name || "Player 2").trim()} ${newJ}`,
+            first_goal_bonus_hit: firstGoalBonusHit,
+          },
         },
       );
     }
