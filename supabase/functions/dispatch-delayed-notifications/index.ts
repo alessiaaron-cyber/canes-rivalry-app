@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     const { data: rows, error } = await serviceDb
       .from("delayed_notifications")
       .select(
-        "id, game_id, event_key, title, message, payload, triggered_by, suppress_self, visible_after, sent_at, created_at, target_user_id",
+        "id, game_id, event_key, event_type, title, message, payload, triggered_by, suppress_self, visible_after, sent_at, created_at, target_user_id",
       )
       .is("sent_at", null)
       .lte("visible_after", nowIso)
@@ -259,6 +259,7 @@ Deno.serve(async (req) => {
         push_sent: 0,
         push_skipped_active: 0,
         matched_subscriptions: 0,
+        waiting_for_fresh_sync: 0,
       });
     }
 
@@ -270,8 +271,45 @@ Deno.serve(async (req) => {
     let pushSent = 0;
     let pushSkippedActive = 0;
     let matchedSubscriptions = 0;
+    let waitingForFreshSync = 0;
+
+    const gameLastSyncedAt = new Map<number, string | null>();
 
     for (const row of rows) {
+      const gameId = Number(row.game_id || 0);
+
+      if (row.event_type === "scoring_update") {
+        if (!gameLastSyncedAt.has(gameId)) {
+          const { data: gameSync, error: gameSyncError } = await serviceDb
+            .from("games")
+            .select("last_synced_at")
+            .eq("id", gameId)
+            .maybeSingle();
+
+          if (gameSyncError) {
+            console.error(`game sync freshness lookup failed for game ${gameId}:`, gameSyncError);
+            failed += 1;
+            continue;
+          }
+
+          gameLastSyncedAt.set(gameId, gameSync?.last_synced_at || null);
+        }
+
+        const lastSyncedAt = gameLastSyncedAt.get(gameId);
+        const lastSyncedMs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : NaN;
+        const visibleAfterMs = new Date(row.visible_after).getTime();
+
+        if (
+          !Number.isFinite(lastSyncedMs) ||
+          !Number.isFinite(visibleAfterMs) ||
+          lastSyncedMs <= visibleAfterMs
+        ) {
+          waitingForFreshSync += 1;
+          skipped += 1;
+          continue;
+        }
+      }
+
       const claimTime = new Date().toISOString();
 
       const { data: claimedRow, error: claimError } = await serviceDb
@@ -297,7 +335,6 @@ Deno.serve(async (req) => {
         const title = cleanString(row.title);
         const message = cleanString(row.message);
         const eventKey = cleanString(row.event_key);
-        const gameId = Number(row.game_id || 0);
         const triggeredBy = cleanString(row.triggered_by);
         const suppressSelf = row.suppress_self === true;
         const targetUserId = row.target_user_id ? String(row.target_user_id) : null;
@@ -376,6 +413,7 @@ Deno.serve(async (req) => {
       push_sent: pushSent,
       push_skipped_active: pushSkippedActive,
       matched_subscriptions: matchedSubscriptions,
+      waiting_for_fresh_sync: waitingForFreshSync,
     });
   } catch (err: any) {
     console.error("dispatch-delayed-notifications failed:", err);
