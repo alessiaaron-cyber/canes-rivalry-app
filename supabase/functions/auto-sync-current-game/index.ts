@@ -28,7 +28,6 @@ const POST_GAME_WINDOW_MS = 4.5 * 60 * 60 * 1000;
 const PICK_REMINDER_WINDOW_MS = 75 * 60 * 1000;
 const ACTIVE_DEVICE_SUPPRESS_MS = 60 * 1000;
 const DEFAULT_PUSH_DELAY_SECONDS = 90;
-const MIN_SCORING_STABILIZATION_SECONDS = 150;
 const DEFAULT_SCORING_RULES = {
   regular: { goal: 2, assist: 1, first_goal_bonus: 1 },
   playoffs: { goal: 2, assist: 1, first_goal_bonus: 1 },
@@ -666,10 +665,7 @@ async function enqueueDelayedForRecipient(
       ? (payload.scoring_update as ScoringUpdatePayload)
       : null;
 
-  const effectiveDelaySeconds = scoringUpdate
-    ? Math.max(delaySeconds, MIN_SCORING_STABILIZATION_SECONDS)
-    : delaySeconds;
-
+  const effectiveDelaySeconds = delaySeconds;
   const visibleAfter = new Date(
     Date.now() + effectiveDelaySeconds * 1000,
   ).toISOString();
@@ -677,7 +673,7 @@ async function enqueueDelayedForRecipient(
   if (scoringUpdate?.play_key) {
     let pendingQuery = db
       .from("delayed_notifications")
-      .select("id, event_key, title, message, payload")
+      .select("id, event_key, title, message, payload, visible_after")
       .eq("game_id", gameId)
       .eq("event_type", "scoring_update")
       .is("sent_at", null);
@@ -758,6 +754,7 @@ async function enqueueDelayedForRecipient(
         target_user_id: recipient.user_id,
         target_user_email: recipient.user_email,
         delay_seconds_applied: effectiveDelaySeconds,
+        original_visible_after: String(pending.visible_after || visibleAfter),
         coalesced: true,
       };
 
@@ -768,7 +765,6 @@ async function enqueueDelayedForRecipient(
           title: combinedTitle,
           message: combinedBody,
           payload: combinedPayload,
-          visible_after: visibleAfter,
         })
         .eq("id", pending.id)
         .is("sent_at", null)
@@ -781,7 +777,11 @@ async function enqueueDelayedForRecipient(
       }
 
       if (updated) {
-        return { inserted: false, coalesced: true, visible_after: visibleAfter };
+        return {
+          inserted: false,
+          coalesced: true,
+          visible_after: String(pending.visible_after || visibleAfter),
+        };
       }
     }
   }
