@@ -28,6 +28,7 @@ const POST_GAME_WINDOW_MS = 4.5 * 60 * 60 * 1000;
 const PICK_REMINDER_WINDOW_MS = 75 * 60 * 1000;
 const ACTIVE_DEVICE_SUPPRESS_MS = 60 * 1000;
 const DEFAULT_PUSH_DELAY_SECONDS = 90;
+const MIN_SCORING_STABILIZATION_SECONDS = 150;
 const DEFAULT_SCORING_RULES = {
   regular: { goal: 2, assist: 1, first_goal_bonus: 1 },
   playoffs: { goal: 2, assist: 1, first_goal_bonus: 1 },
@@ -43,8 +44,21 @@ type NotificationSettings = {
   push_delay_seconds: number;
 };
 
+type ScoringPlay = {
+  key: string;
+  scorer: string;
+  assists: string[];
+};
+
+type ScoringChangeItem = {
+  player: string;
+  delta: number;
+};
+
 type ScoringUpdatePayload = {
+  play_key: string;
   changes: string[];
+  change_items: ScoringChangeItem[];
   score: string;
   first_goal_bonus_hit: boolean;
 };
@@ -201,10 +215,20 @@ function buildPlayerMap(pbp: any, box: any) {
   return map;
 }
 
+function scoringPlayKey(play: any, details: any) {
+  const raw =
+    play?.eventId ??
+    play?.sortOrder ??
+    `${play?.periodDescriptor?.number || "p"}-${play?.timeInPeriod || "time"}-${details?.scoringPlayerId || details?.shootingPlayerId || "goal"}`;
+
+  return String(raw).replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 function parseScoring(pbp: any, box: any) {
   const map = buildPlayerMap(pbp, box);
 
   const stats = new Map<string, { goals: number; assists: number }>();
+  const scoringPlays: ScoringPlay[] = [];
   let firstGoal = "";
 
   for (const play of pbp?.plays || []) {
@@ -227,14 +251,20 @@ function parseScoring(pbp: any, box: any) {
 
     if (!scorer) continue;
 
+    const assists = [d.assist1PlayerId, d.assist2PlayerId]
+      .map((id: any) => map.get(Number(id)))
+      .filter(Boolean) as string[];
+
+    scoringPlays.push({
+      key: scoringPlayKey(play, d),
+      scorer,
+      assists,
+    });
+
     if (!firstGoal) firstGoal = scorer;
 
     if (!stats.has(scorer)) stats.set(scorer, { goals: 0, assists: 0 });
     stats.get(scorer)!.goals += 1;
-
-    const assists = [d.assist1PlayerId, d.assist2PlayerId]
-      .map((id: any) => map.get(Number(id)))
-      .filter(Boolean) as string[];
 
     for (const assist of assists) {
       if (!stats.has(assist)) stats.set(assist, { goals: 0, assists: 0 });
@@ -242,7 +272,32 @@ function parseScoring(pbp: any, box: any) {
     }
   }
 
-  return { stats, firstGoal };
+  return { stats, firstGoal, scoringPlays };
+}
+
+function scoringPlayKeysForIncrease(
+  scoringPlays: ScoringPlay[],
+  playerName: string,
+  oldGoals: number,
+  newGoals: number,
+  oldAssists: number,
+  newAssists: number,
+) {
+  const keys = new Set<string>();
+
+  if (newGoals > oldGoals) {
+    const goalPlays = scoringPlays.filter((play) => nameMatches(play.scorer, playerName));
+    goalPlays.slice(oldGoals, newGoals).forEach((play) => keys.add(play.key));
+  }
+
+  if (newAssists > oldAssists) {
+    const assistPlays = scoringPlays.filter((play) =>
+      play.assists.some((assist) => nameMatches(assist, playerName))
+    );
+    assistPlays.slice(oldAssists, newAssists).forEach((play) => keys.add(play.key));
+  }
+
+  return [...keys];
 }
 
 function findStatForPick(stats: Map<string, { goals: number; assists: number }>, pickName: string) {
@@ -553,6 +608,38 @@ function uniqueNotificationChanges(values: unknown[]) {
   return result;
 }
 
+function normalizeChangeItems(value: unknown): ScoringChangeItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item: any) => ({
+      player: String(item?.player || "").trim(),
+      delta: Number(item?.delta || 0),
+    }))
+    .filter((item) => item.player && Number.isFinite(item.delta));
+}
+
+function combineChangeItems(
+  existing: ScoringChangeItem[],
+  incoming: ScoringChangeItem[],
+) {
+  const totals = new Map<string, number>();
+
+  for (const item of [...existing, ...incoming]) {
+    totals.set(item.player, Number(totals.get(item.player) || 0) + Number(item.delta || 0));
+  }
+
+  return [...totals.entries()]
+    .map(([player, delta]) => ({ player, delta }))
+    .filter((item) => item.delta !== 0);
+}
+
+function formatChangeItems(items: ScoringChangeItem[]) {
+  return items.map((item) =>
+    `${item.player} ${item.delta >= 0 ? "+" : ""}${item.delta}`
+  );
+}
+
 function notificationTitleRank(title: string) {
   if (title.includes("FIRST GOAL BONUS")) return 3;
   if (title.includes("LEAD CHANGE")) return 2;
@@ -574,34 +661,49 @@ async function enqueueDelayedForRecipient(
   recipient: Recipient,
   delaySeconds: number,
 ) {
-  const visibleAfter = new Date(Date.now() + delaySeconds * 1000).toISOString();
   const scoringUpdate =
     payload.scoring_update && typeof payload.scoring_update === "object"
       ? (payload.scoring_update as ScoringUpdatePayload)
       : null;
 
-  if (scoringUpdate) {
+  const effectiveDelaySeconds = scoringUpdate
+    ? Math.max(delaySeconds, MIN_SCORING_STABILIZATION_SECONDS)
+    : delaySeconds;
+
+  const visibleAfter = new Date(
+    Date.now() + effectiveDelaySeconds * 1000,
+  ).toISOString();
+
+  if (scoringUpdate?.play_key) {
     let pendingQuery = db
       .from("delayed_notifications")
       .select("id, event_key, title, message, payload")
       .eq("game_id", gameId)
       .eq("event_type", "scoring_update")
-      .is("sent_at", null)
-      .gt("visible_after", nowIso());
+      .is("sent_at", null);
 
     pendingQuery = recipient.user_id
       ? pendingQuery.eq("target_user_id", recipient.user_id)
       : pendingQuery.ilike("target_user_email", recipient.user_email);
 
-    const { data: pending, error: pendingError } = await pendingQuery
+    const { data: pendingRows, error: pendingError } = await pendingQuery
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
     if (pendingError) {
       console.error("pending scoring notification lookup failed:", pendingError);
       throw pendingError;
     }
+
+    const pending = (pendingRows || []).find((row: any) => {
+      const stored =
+        row?.payload?.scoring_update &&
+          typeof row.payload.scoring_update === "object"
+          ? (row.payload.scoring_update as ScoringUpdatePayload)
+          : null;
+
+      return stored?.play_key === scoringUpdate.play_key;
+    });
 
     if (pending) {
       const existingPayload =
@@ -615,13 +717,22 @@ async function enqueueDelayedForRecipient(
           ? (existingPayload.scoring_update as ScoringUpdatePayload)
           : null;
 
-      const combinedChanges = uniqueNotificationChanges([
-        ...(Array.isArray(existingScoring?.changes) ? existingScoring.changes : []),
-        ...(Array.isArray(scoringUpdate.changes) ? scoringUpdate.changes : []),
-      ]);
+      const combinedItems = combineChangeItems(
+        normalizeChangeItems(existingScoring?.change_items),
+        normalizeChangeItems(scoringUpdate.change_items),
+      );
+
+      const combinedChanges = combinedItems.length
+        ? formatChangeItems(combinedItems)
+        : uniqueNotificationChanges([
+            ...(Array.isArray(existingScoring?.changes) ? existingScoring.changes : []),
+            ...(Array.isArray(scoringUpdate.changes) ? scoringUpdate.changes : []),
+          ]);
 
       const combinedScoring: ScoringUpdatePayload = {
+        play_key: scoringUpdate.play_key,
         changes: combinedChanges,
+        change_items: combinedItems,
         score: String(scoringUpdate.score || existingScoring?.score || "").trim(),
         first_goal_bonus_hit:
           existingScoring?.first_goal_bonus_hit === true ||
@@ -646,7 +757,7 @@ async function enqueueDelayedForRecipient(
         scoring_update: combinedScoring,
         target_user_id: recipient.user_id,
         target_user_email: recipient.user_email,
-        delay_seconds_applied: delaySeconds,
+        delay_seconds_applied: effectiveDelaySeconds,
         coalesced: true,
       };
 
@@ -685,7 +796,7 @@ async function enqueueDelayedForRecipient(
       ...payload,
       target_user_id: recipient.user_id,
       target_user_email: recipient.user_email,
-      delay_seconds_applied: delaySeconds,
+      delay_seconds_applied: effectiveDelaySeconds,
     },
     triggered_by: String(payload.triggered_by || "auto-sync"),
     suppress_self: false,
@@ -1264,7 +1375,7 @@ Deno.serve(async (req) => {
       throw new Error("Missing rivalry slot profiles");
     }
 
-    const { stats, firstGoal } = parseScoring(pbp, box);
+    const { stats, firstGoal, scoringPlays } = parseScoring(pbp, box);
     const firstGoalResolved = resolveRosterName(firstGoal, roster);
 
     let carryForward = {
@@ -1300,7 +1411,9 @@ Deno.serve(async (req) => {
     let firstGoalBonusHit = false;
 
     const changes: string[] = [];
+    const changeItems: ScoringChangeItem[] = [];
     const changedKeys: string[] = [];
+    const changedPlayKeys = new Set<string>();
 
     for (const pick of picks || []) {
       const playerName = String(pick.player_name || "").trim();
@@ -1335,10 +1448,24 @@ Deno.serve(async (req) => {
         changed = true;
 
         const delta = points - oldPoints;
+        const playerLabel = shortName(playerName);
+
         if (delta !== 0) {
-          changes.push(`${shortName(playerName)} ${delta >= 0 ? "+" : ""}${delta}`);
+          changes.push(`${playerLabel} ${delta >= 0 ? "+" : ""}${delta}`);
+          changeItems.push({ player: playerLabel, delta });
         } else {
-          changes.push(`${shortName(playerName)} updated`);
+          changes.push(`${playerLabel} updated`);
+        }
+
+        for (const playKey of scoringPlayKeysForIncrease(
+          scoringPlays,
+          playerName,
+          oldGoals,
+          goals,
+          oldAssists,
+          assists,
+        )) {
+          changedPlayKeys.add(playKey);
         }
 
         if (!oldHadBonus && newHasBonus) {
@@ -1400,7 +1527,11 @@ Deno.serve(async (req) => {
         slot2,
       });
 
-      const updateKey = `update-${game.id}-${changedKeys.sort().join("|")}-${newA}-${newJ}`;
+      const playKey = changedPlayKeys.size === 1
+        ? [...changedPlayKeys][0]
+        : `snapshot-${changedKeys.sort().join("-")}`;
+
+      const updateKey = `scoring-${game.id}-${playKey}`;
 
       notification = await emitNotificationOnce(
         game.id,
@@ -1412,7 +1543,9 @@ Deno.serve(async (req) => {
           triggeredBy: "auto-sync",
           triggeredByName: "Auto Sync",
           scoringUpdate: {
+            play_key: playKey,
             changes,
+            change_items: changeItems,
             score: `${String(slot1.display_name || "Player 1").trim()} ${newA} – ${String(slot2.display_name || "Player 2").trim()} ${newJ}`,
             first_goal_bonus_hit: firstGoalBonusHit,
           },
