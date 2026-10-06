@@ -972,6 +972,9 @@ function buildNotification({
   const slot2Name = String(slot2?.display_name || "Player 2").trim();
 
   const score = `${slot1Name} ${newA} – ${slot2Name} ${newJ}`;
+  const changeSummary = changes.length
+    ? changes.join(" • ")
+    : "Score updated";
 
   if (state === "FINAL" || state === "OFF") {
     if (newW === "Tie") {
@@ -990,27 +993,27 @@ function buildNotification({
   if (oldW !== newW && newW !== "Tie") {
     return {
       title: "LEAD CHANGE 👀",
-      body: `${newW} takes it. ${score}.`,
+      body: `${changeSummary}. ${score}.`,
     };
   }
 
   if (firstGoalBonusHit) {
     return {
       title: "FIRST GOAL BONUS 💰",
-      body: `Bonus hits. ${score}.`,
+      body: `${changeSummary}. ${score}.`,
     };
   }
 
   if (changes.length > 1) {
     return {
       title: "Rivalry Update 🔥",
-      body: `${changes.join(" • ")}. ${score}.`,
+      body: `${changeSummary}. ${score}.`,
     };
   }
 
   return {
     title: "Rivalry Update 🔥",
-    body: `${changes[0] || "Score updated"}. ${score}.`,
+    body: `${changeSummary}. ${score}.`,
   };
 }
 
