@@ -8,10 +8,6 @@
   backdrop-filter: blur(26px) saturate(180%);
 }
 
-.bottom-nav.bottom-nav::before {
-  display: none;
-}
-
 .bottom-nav button {
   background: transparent;
   box-shadow: none;
