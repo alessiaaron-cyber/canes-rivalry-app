@@ -137,7 +137,8 @@ window.CR = window.CR || {};
   }
 
   async function markActive(options = {}) {
-    if (document.hidden && !options.force) return null;
+    const isActive = options.inactive !== true;
+    if (isActive && document.hidden) return null;
 
     try {
       const email = await getEmail();
@@ -146,7 +147,10 @@ window.CR = window.CR || {};
       if (!email && !userId && !endpoint) return null;
 
       const db = await CR.getSupabase();
-      const payload = { last_seen_at: new Date().toISOString() };
+      if (isActive && document.hidden) return null;
+      const payload = isActive
+        ? { last_seen_at: new Date().toISOString(), is_active: true }
+        : { is_active: false };
       let updatedRows = [];
 
       if (endpoint) {
@@ -173,7 +177,7 @@ window.CR = window.CR || {};
 
       lastStatus = {
         ok: true,
-        lastSeenAt: payload.last_seen_at,
+        lastSeenAt: payload.last_seen_at || lastStatus?.lastSeenAt || null,
         updatedRows: updatedRows.length,
         error: ''
       };
@@ -215,6 +219,7 @@ window.CR = window.CR || {};
       user_email: email || null,
       user_id: userId || null,
       last_seen_at: new Date().toISOString(),
+      is_active: !document.hidden,
       updated_at: new Date().toISOString()
     };
 
@@ -324,7 +329,7 @@ window.CR = window.CR || {};
 
   function start() {
     if (timer) return;
-    markActive({ force: true });
+    markActive();
     timer = setInterval(markActive, INTERVAL_MS);
   }
 
@@ -339,10 +344,11 @@ window.CR = window.CR || {};
     CR.__activeDeviceBound = true;
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) markActive({ force: true });
+      markActive(document.hidden ? { inactive: true } : {});
     });
-    window.addEventListener('focus', () => markActive({ force: true }));
-    window.addEventListener('pageshow', () => markActive({ force: true }));
+    window.addEventListener('pagehide', () => markActive({ inactive: true }));
+    window.addEventListener('focus', () => markActive());
+    window.addEventListener('pageshow', () => markActive());
     window.addEventListener('pointerdown', markActiveFromActivity, { passive: true });
     window.addEventListener('touchstart', markActiveFromActivity, { passive: true });
   }
