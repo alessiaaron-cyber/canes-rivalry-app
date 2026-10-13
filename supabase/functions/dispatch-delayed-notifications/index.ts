@@ -37,7 +37,9 @@ function cleanEmail(value: unknown) {
   return String(value || "").toLowerCase().trim();
 }
 
-function isRecentlyActive(lastSeenAt: unknown) {
+function isRecentlyActive(lastSeenAt: unknown, isActive: unknown) {
+  if (isActive !== true) return false;
+
   if (!lastSeenAt) return false;
 
   const lastSeenMs = new Date(String(lastSeenAt)).getTime();
@@ -156,7 +158,7 @@ async function sendPush(
     }
 
     // Important: active-device suppression stays at actual send time.
-    if (isRecentlyActive(sub.last_seen_at)) {
+    if (isRecentlyActive(sub.last_seen_at, sub.is_active)) {
       skippedActive += 1;
       continue;
     }
