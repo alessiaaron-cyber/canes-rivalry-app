@@ -74,7 +74,9 @@ async function requireAllowedUser(user: any) {
   return { ok: true, email: userEmail };
 }
 
-function isRecentlyActive(lastSeenAt: unknown) {
+function isRecentlyActive(lastSeenAt: unknown, isActive: unknown) {
+  if (isActive !== true) return false;
+
   if (!lastSeenAt) return false;
 
   const lastSeenMs = new Date(String(lastSeenAt)).getTime();
@@ -293,7 +295,7 @@ async function sendPushToRecipient(
       continue;
     }
 
-    if (!bypassActiveDeviceCheck && isRecentlyActive(sub.last_seen_at)) {
+    if (!bypassActiveDeviceCheck && isRecentlyActive(sub.last_seen_at, sub.is_active)) {
       skippedActive += 1;
       continue;
     }
