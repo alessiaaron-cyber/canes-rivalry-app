@@ -134,12 +134,8 @@
 .manage-color-option.is-selected .manage-color-copy small { color: var(--profile-color); font-weight: var(--font-heavy, 900); }
 
 @media (max-width: 430px) {
-  .manage-option-grid,
   .manage-meta-grid,
-  .manage-health-grid,
-  .manage-score-rule-row,
-  .manage-readonly-grid,
-  .manage-color-grid { grid-template-columns: 1fr; }
+  .manage-score-rule-row { grid-template-columns: 1fr; }
   .manage-card-header { flex-direction: column; align-items: flex-start; }
   .manage-card-header .cr-card-actions { align-self: flex-end; margin-top: -42px; }
   .manage-watch-card .manage-card-header { flex-direction: row; align-items: flex-start; }
