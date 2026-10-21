@@ -554,11 +554,7 @@
 @media (max-width: 430px) {
   .rivalry-board-title { font-size: clamp(24px, 6.4vw, 32px); }
   .history-scoreboard-team strong { font-size: clamp(52px, 15vw, 68px); }
-  .history-recap-sides,
-  .history-sheet-sides,
-  .history-sheet-score-grid,
-  .history-sheet-field-grid,
-  .history-sheet-score-preview-grid { grid-template-columns: 1fr; }
+  .history-sheet-field-grid { grid-template-columns: 1fr; }
   .history-recap-footer,
   .history-all-games-head,
   .history-sheet-summary { flex-direction: column; align-items: stretch; }
@@ -580,10 +576,8 @@
   .history-scoreboard-team strong { font-size: 50px; }
 }
 
-@media (min-width: 431px) {
-  .rivalry-highlight-grid.compact-grid,
-  .history-player-spotlights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-}
+ .rivalry-highlight-grid.compact-grid,
+.history-player-spotlights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 /* Current season polish */
 .history-hq-card .history-hq-topline {
