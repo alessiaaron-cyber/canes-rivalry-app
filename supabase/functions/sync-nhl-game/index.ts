@@ -209,8 +209,11 @@ function parseScoring(playByPlay: any, boxscore: any) {
   }
 
   const goalPlays = plays.filter((p: any) =>
-    String(p?.typeDescKey || "").toLowerCase() === "goal" ||
-    Number(p?.typeCode) === 505
+    p?.periodDescriptor?.periodType !== "SO" &&
+    (
+      String(p?.typeDescKey || "").toLowerCase() === "goal" ||
+      Number(p?.typeCode) === 505
+    )
   );
 
   const allGoalsDebug: any[] = [];
